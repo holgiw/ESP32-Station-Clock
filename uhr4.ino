@@ -127,6 +127,8 @@
                                // automatic rotation via the motion sensor (ESP32-S3 only)
 #include "ota_update.h"        // Firmware-Update ueber WLAN (nur ESP32-S3)
                                // firmware update over WiFi (ESP32-S3 only)
+#include "mqtt_status.h"       // MQTT-Meldung des Status (z. B. fuer openHAB)
+                               // MQTT status report (e.g. for openHAB)
 #include "webserver_routes.h"  // Webinterface (alle HTTP-Routen)
                                // web interface (all HTTP routes)
 #include "system_utils.h"      // Tasten, Logging, Reset, Neustart
@@ -557,6 +559,7 @@ void setup() {
         // the dimensions.
 
         loadDisplayType();
+        loadMqttSettings();
 
         // Build-Version aus der Kompilierzeit - DateTime (RTClib) liest __DATE__ ("Oct  1 2026") und __TIME__
         // Build version from the compile time - DateTime (RTClib) parses __DATE__ ("Oct  1 2026") and __TIME__
@@ -566,7 +569,7 @@ void setup() {
                  built.year(), built.month(), built.day(), built.hour(), built.minute(), built.second());
 
         DEBUG_PRINTLN("[SETUP] start");
-        DEBUG_PRINTLN(String("[SETUP] Build-Version: ") + version);
+        DEBUG_PRINTLN(String("[SETUP] Build-Version: ") + version + " (" + (fwBuildMarker + 14) + ")");
 
         // Diese drei Migrationsschritte muessen nur EINMAL laufen (neu hochgeladene
         // Dateien werden bereits beim Upload RLE-komprimiert/maskiert) - ohne Flag
@@ -1620,6 +1623,7 @@ void setup() {
 
         checkButton();
         updateBrightness();
+        mqttTick();
         checkLogFlush();
 
         // Nach 15 Minuten im AP-Modus neu starten, damit die Uhr wieder einen WLAN-Versuch macht (z.B. Router

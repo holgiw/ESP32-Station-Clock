@@ -13,7 +13,7 @@ $bin = Join-Path $PSScriptRoot 'esp32s3\uhr4.ino.bin'
 if (-not (Test-Path $bin)) { throw "Not found: $bin" }
 
 $bytes = [System.IO.File]::ReadAllBytes($bin)
-$text = [System.Text.Encoding]::Latin1.GetString($bytes)
+$text = [System.Text.Encoding]::GetEncoding(28591).GetString($bytes)
 $at = $text.IndexOf('UHR4_FW_BUILD=')
 if ($at -lt 0) { throw 'Marker UHR4_FW_BUILD= not found - the .bin was built without the update function' }
 $end = $text.IndexOf([char]0, $at)

@@ -850,6 +850,7 @@
 
             {"/dcf77", "DCF77", ""},
             {"/backup", translate("Backup"), ""},
+            {"/mqtt", "MQTT", ""},
             {"/factoryReset", translate("Factory&nbsp;Reset"), ""}
         };
 
@@ -1689,6 +1690,7 @@
         chunk += "<li>WiFi Mode: " + String(WiFi.getMode() == WIFI_AP ? "WIFI_AP" : (WiFi.getMode() == WIFI_STA ? "WIFI_STA" : "AP_STA")) + "</li>";
         chunk += "<li>WiFi Channel: " + String(WiFi.channel()) + "</li>";
         chunk += "<li>WiFi TX Power: " + String(WiFi.getTxPower() / 4.0f, 1) + " dBm</li>";
+        chunk += "<li>MQTT: " + mqttStatusText() + "</li>";
 #if HAS_OTA
         if (fwRemoteBuild.length()) chunk += "<li>Firmware on GitHub: " + fwRemoteBuild + (firmwareUpdateState() > 0 ? " (newer)" : "") + "</li>";
 #endif
@@ -7544,6 +7546,7 @@
         // Firmware update over WiFi, ESP32-S3 only (ota_update.h)
 
         setupOtaRoutes();
+        setupMqttRoutes();
 
         webserver.on("/factoryReset", HTTP_GET, []() {
             String html = beginPage();

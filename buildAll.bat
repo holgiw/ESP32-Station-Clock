@@ -7,7 +7,8 @@ rem Die Zwischenstaende liegen in %TEMP%\uhr4-build\[chip] (spaetere Laeufe sind
 rem %TEMP%\uhr4-build\[chip].log. Die Chips werden nacheinander gebaut: parallele Laeufe teilen sich Zwischenordner im
 rem Sketch-Cache und stoeren einander. S2 und S3 brauchen -mtext-section-literals (sonst Linkerfehler "l32r: literal
 rem target out of range"). Der C6 braucht die Partitionstabelle uhr4_c6: die Datei boards.local.txt und uhr4_c6.csv aus
-rem diesem Ordner werden dafuer bei Bedarf in den Arduino-Core kopiert. Beim S3 muss PSRAM an sein (PSRAM=enabled).
+rem diesem Ordner werden dafuer bei Bedarf in den Arduino-Core kopiert. Beim S3 muss PSRAM an sein (PSRAM=enabled). Der S2 hat
+rem DebugLevel=none ("Core Debug Level: None" in Visual Micro): spart 56 KB, die S2-App ist fast voll (2 MB).
 rem
 rem Builds the firmware with arduino-cli (from the Arduino IDE) for ESP32-S3, ESP32-S2 and ESP32-C6 one after another.
 rem   buildAll.bat              all three chips (order s3, s2, c6)
@@ -17,7 +18,8 @@ rem The intermediate state is in %TEMP%\uhr4-build\[chip] (later runs are faster
 rem %TEMP%\uhr4-build\[chip].log. The chips are built one after another: parallel runs share intermediate folders in
 rem the sketch cache and disturb each other. S2 and S3 need -mtext-section-literals (otherwise linker error "l32r:
 rem literal target out of range"). The C6 needs the partition table uhr4_c6: boards.local.txt and uhr4_c6.csv from this
-rem folder are copied into the Arduino core if needed. On the S3 PSRAM must be on (PSRAM=enabled).
+rem folder are copied into the Arduino core if needed. On the S3 PSRAM must be on (PSRAM=enabled). The S2 has DebugLevel=none
+rem ("Core Debug Level: None" in Visual Micro): saves 56 KB, the S2 app is almost full (2 MB).
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
@@ -81,7 +83,7 @@ if /i "%CHIP%"=="s3" (
 )
 if /i "%CHIP%"=="s2" (
     set "DIR=esp32s2"
-    set "FQBN=esp32:esp32:lolin_s2_pico:CDCOnBoot=default,MSCOnBoot=default,DFUOnBoot=default,PartitionScheme=no_ota,DebugLevel=error"
+    set "FQBN=esp32:esp32:lolin_s2_pico:CDCOnBoot=default,MSCOnBoot=default,DFUOnBoot=default,PartitionScheme=no_ota,DebugLevel=none"
     set "PROP=--build-property compiler.cpp.extra_flags=-mtext-section-literals"
 )
 if /i "%CHIP%"=="c6" (

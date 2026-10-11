@@ -53,7 +53,7 @@
 
     bool isBackupExcludedKey(const String& key) {
         return key == PK_VERSION || key == PK_FIRST_START || key == PK_MIGRATIONS_DONE || key == PK_SUBDIAL_SET || key == PK_RENUM_PLAN ||
-               key == PK_LOG_FILE_NUMBER || key == PK_LAST_RESET_WEEK || key.startsWith("wtx") || isObsoletePrefKey(key);
+               key == PK_LOG_FILE_NUMBER || key == PK_LAST_RESET_WEEK || key == PK_MQTT_PASS || key.startsWith("wtx") || isObsoletePrefKey(key);
     }
 
 

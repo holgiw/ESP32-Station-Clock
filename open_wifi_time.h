@@ -60,7 +60,24 @@
             note = "Date unreadable (" + line.substring(0, 40) + ")";
             int day, year, hh, mm, ss;
             char mon[4] = "";
-            if (sscanf(line.c_str() + 5, " %*[A-Za-z], %d %3s %d %d:%d:%d", &day, mon, &year, &hh, &mm, &ss) != 6) break;
+
+            // Von Hand gelesen statt sscanf(): spart die scanf-Funktionen (ca. 17 KB) im Flash
+            // Read by hand instead of sscanf(): saves the scanf functions (about 17 KB) in flash
+
+            const char* comma = strchr(line.c_str() + 5, ',');
+            if (!comma) break;
+            char* e = nullptr;
+            day = (int)strtol(comma + 1, &e, 10);
+            while (*e == ' ') e++;
+            if (strlen(e) < 4) break;
+            memcpy(mon, e, 3);
+            mon[3] = '\0';
+            year = (int)strtol(e + 3, &e, 10);
+            hh = (int)strtol(e, &e, 10);
+            if (*e != ':') break;
+            mm = (int)strtol(e + 1, &e, 10);
+            if (*e != ':') break;
+            ss = (int)strtol(e + 1, &e, 10);
             const char* months = "JanFebMarAprMayJunJulAugSepOctNovDec";
             const char* p = strstr(months, mon);
             if (!p || strlen(mon) != 3) break;

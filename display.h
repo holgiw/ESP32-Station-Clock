@@ -3491,6 +3491,24 @@
             backgroundSprite.fillSmoothCircle(CLOCK_WIDTH / 2, CLOCK_HEIGHT / 2, hubSize, setPixelBrightness(hubColor));
         }
 
+        // Solange die Zeit noch nicht bestaetigt ist (Zeiger stehen auf 12): kleiner Hinweis im unteren Teil des
+        // Zifferblatts. Er steht nur im vollen Bild; mit der Zeit fuehrt firstRun das Zifferblatt neu aus.
+
+        // As long as the time is not confirmed yet (hands rest at 12): a small hint in the lower part of the clock
+        // face. It is only in the full frame; with the time, firstRun redraws the clock face.
+
+        if (noTimeYet && !partial) {
+            const char* hint = currentLanguage == "de" ? "warte auf Zeit" : "waiting for time";
+            backgroundSprite.setFont(&fonts::Font2);
+            backgroundSprite.setTextSize(1);
+            backgroundSprite.setTextDatum(lgfx::middle_center);
+            int hintW = backgroundSprite.textWidth(hint), hintH = backgroundSprite.fontHeight();
+            int hintX = CLOCK_WIDTH / 2, hintY = CLOCK_HEIGHT * 3 / 4;
+            backgroundSprite.fillRoundRect(hintX - hintW / 2 - 6, hintY - hintH / 2 - 2, hintW + 12, hintH + 4, 4, setPixelBrightness(TFT_DARKGREY));
+            backgroundSprite.setTextColor(setPixelBrightness(TFT_WHITE), setPixelBrightness(TFT_DARKGREY));
+            backgroundSprite.drawString(hint, hintX, hintY);
+        }
+
         if (partial) {
 
             // Nur das Rechteck senden (siehe pushBackgroundRect())

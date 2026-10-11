@@ -39,6 +39,16 @@
     String otaUploadError = ""; // Fehler beim Hochladen ueber die Weboberflaeche, leer = ok
                                 // error while uploading via the web interface, empty = ok
 
+    // Kennung der Build-Zeit in der .bin (wie version, nur als Text "Oct  1 2026 12:00:00"): publish_s3_update.ps1
+    // und checkClocks.ps1 lesen sie aus der Datei. Alle Chips; sie wird beim Start ins Log geschrieben (sonst wirft
+    // der Linker sie weg).
+
+    // Marker of the build time in the .bin (like version, only as text "Oct  1 2026 12:00:00"): publish_s3_update.ps1
+    // and checkClocks.ps1 read it from the file. All chips; it is written to the log at start (otherwise the linker
+    // drops it).
+
+    const char fwBuildMarker[] __attribute__((used)) = "UHR4_FW_BUILD=" __DATE__ " " __TIME__;
+
     // Zeiger fahren auf ihre Position (animateHand() in display.h, Start und Zeitkorrektur, ca. 3 s): in dieser Zeit ruht
     // alle Hintergrundarbeit, die den Takt stoeren koennte (Log in den Flash schreiben, Webserver, NTP-Antworten,
     // Rocrail). Nach HANDS_ANIMATION_MAX_DEFER_MS gilt die Pause nicht mehr, damit nie etwas haengen bleibt.

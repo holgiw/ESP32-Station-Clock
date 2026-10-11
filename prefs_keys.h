@@ -82,6 +82,12 @@
     constexpr const char* PK_BRIGHT_END_HOUR   = "brightEnd";
     constexpr const char* PK_DISPLAY_TYPE      = "displayType";  // DISPLAY_TYPE_* (config.h), wirkt nach Neustart
                                                                  // DISPLAY_TYPE_* (config.h), takes effect after a restart
+    constexpr const char* PK_MQTT_ENABLED     = "mqttOn";       // MQTT-Meldung an/aus (Default aus) / MQTT report on/off (default off)
+    constexpr const char* PK_MQTT_HOST        = "mqttHost";     // Broker-Adresse / broker address
+    constexpr const char* PK_MQTT_PORT        = "mqttPort";     // Broker-Port (Default 1883) / broker port (default 1883)
+    constexpr const char* PK_MQTT_USER        = "mqttUser";     // Benutzer (leer = ohne Anmeldung) / user (empty = no login)
+    constexpr const char* PK_MQTT_PASS        = "mqttPass";     // Passwort - nicht in der Sicherung / password - not in the backup
+    constexpr const char* PK_MQTT_PREFIX      = "mqttPrefix";   // Basis-Topic (Default uhr4) / base topic (default uhr4)
     constexpr const char* PK_RENUM_PLAN        = "renumPlan";    // laufende Neunummerierung der Zeigersaetze (Stufe|alt>neu,...)
     constexpr const char* PK_SUBDIAL_SET       = "subdialSet";   // Nummer des erzeugten Zeigersatzes fuers Sekundenfeld
                                                                  // number of the generated hand set for the subdial

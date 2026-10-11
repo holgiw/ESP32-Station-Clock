@@ -14,14 +14,6 @@
 #include <HTTPClient.h>
 #include <mbedtls/sha256.h>
 
-    // Kennung der Build-Zeit in der .bin (wie version, nur als Text "Oct  1 2026 12:00:00"): build_uhr4/publish_s3_update.ps1
-    // liest sie aus der Datei und schreibt daraus uhr4-s3.txt
-
-    // Marker of the build time in the .bin (like version, only as text "Oct  1 2026 12:00:00"): build_uhr4/publish_s3_update.ps1
-    // reads it from the file and writes uhr4-s3.txt from it
-
-    const char fwBuildMarker[] __attribute__((used)) = "UHR4_FW_BUILD=" __DATE__ " " __TIME__;
-
     bool arduinoOtaStarted = false;
     int otaShownPercent = -1;
 #endif

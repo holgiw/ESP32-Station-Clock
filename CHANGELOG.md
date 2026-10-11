@@ -5,6 +5,21 @@
 ## 2026-10-08
 
 ### Hinzugefügt
+- MQTT-Meldung (alle Chips, ab Werk aus, Seite „MQTT“ in der Navigation): Die Uhr veröffentlicht ihren Status als
+  retained-Nachrichten an einen MQTT-Broker, z. B. den von openHAB - einmal nach dem Start, einmal um Mitternacht und wenn
+  sich ihre IP-Adresse ändert: `<Basis-Topic>/<Hostname>/` mit `info` (JSON mit `host`, `ip`, `chip`, `display`, `version`; daraus kann openHAB eine
+  Uhrenliste mit Links bauen), `ip`, `host`, `chip`, `display`, `version`, `time_ok`, `heap_kb`, `rssi` und `uptime_s`
+  (ohne Uhrzeit). Ein schlanker Client ohne Bibliothek (MQTT 3.1.1, QoS 0); das Passwort
+  steht nicht in der Sicherung. Schlägt eine Meldung fehl, folgt der nächste Versuch nach 2, 4, 8 und dann alle
+  15 Minuten. Die Statusseite zeigt das letzte Ergebnis.
+- `flashAll.bat` (Projektordner, ruft `flashAll.ps1` auf) prüft alle Uhren im Netz und bringt veraltete auf den Stand
+  der Builds in `build_uhr4`: ESP32-S3 per WLAN (OTA), ESP32-S2 und -C6 (kein OTA) nur, wenn sie am USB hängen.
+  Vor jedem Flash wird gefragt; `-CheckOnly` prüft nur, `-Yes` fragt nicht, `-Force` spielt auch aktuelle S3 neu ein.
+  `checkClocks.ps1` hat dafür den Schalter `-PassThru`.
+- `checkClocks.ps1` (Projektordner) sucht alle uhr4-Uhren im Netz und zeigt Adresse, Name, Chip, Display, laufende
+  Firmware, ob sie dem neuesten Build in `build_uhr4` entspricht, ob die Uhrzeit stimmt und den freien Speicher.
+  Mit `-All` (auch über `checkClocks.bat`) listet es vorher alle Geräte im Netz auf, auch Nicht-Uhren (Adresse, MAC,
+  Name, Hinweis wie Seitentitel oder Espressif).
 - Steht ein Update auf GitHub bereit, zeigt die Seite „Sicherung“ einen Link zum Changelog (neueste Einträge oben):
   Was seit der installierten Version neu ist.
 - Update von GitHub (nur ESP32-S3): Auf der Seite „Sicherung“ → „Firmware von GitHub“
@@ -95,6 +110,11 @@
     vorhandener Uhren Sets zu deren Zifferblättern.
 
 ### Geändert
+- Der ESP32-S2-Build ist kleiner: Mit „Core Debug Level: None“ (Visual Micro) bzw. `DebugLevel=none` sind es 56 KB
+  weniger, dazu liest das Datum der offenen WLANs ohne `sscanf`. Die App belegt statt 98,7 % nur noch etwa 95 % des
+  2-MB-Platzes. Beim Selbstbauen mit Visual Micro die Option für den S2 auf „None“ stellen.
+- Solange die Zeit nach dem Start noch nicht bestätigt ist (Zeiger auf 12), steht ein kleiner Hinweis
+  „warte auf Zeit“ bzw. „waiting for time“ im unteren Teil des Zifferblatts.
 - Hochgeladene Zifferblätter und Streifengrafiken werden beim Skalieren gemittelt (jedes Zielpixel ist der Durchschnitt
   der Quellpixel, die es überdeckt) statt nur ein Quellpixel zu übernehmen: Große Bilder (z. B. 480 × 480) werden
   ohne Aliasing verkleinert, einfarbige Flächen bleiben exakt gleich. Gilt für alle Chips, auch ohne PSRAM. Zeiger
@@ -354,6 +374,21 @@
 ## 2026-10-08
 
 ### Added
+- MQTT report (all chips, off by default, page "MQTT" in the navigation): the clock publishes its status as retained
+  messages to an MQTT broker, e.g. that of openHAB - once after the start, once at midnight and when its IP address
+  changes: `<base topic>/<host name>/` with `info` (JSON with `host`, `ip`, `chip`, `display`, `version`; openHAB can build a
+  clock list with links from it), `ip`, `host`, `chip`, `display`, `version`, `time_ok`, `heap_kb`, `rssi` and
+  `uptime_s` (no time of day). A slim client without a library (MQTT 3.1.1, QoS 0); the password is not part of the backup.
+  If a report fails, the next attempt follows after 2, 4, 8 and then every 15 minutes. The status page shows the last
+  result.
+- `flashAll.bat` (project folder, calls `flashAll.ps1`) checks all clocks on the network and brings outdated ones to
+  the state of the builds in `build_uhr4`: ESP32-S3 over WiFi (OTA), ESP32-S2 and -C6 (no OTA) only if they are
+  connected via USB. It asks before every flash; `-CheckOnly` only checks, `-Yes` does not ask, `-Force` also
+  re-flashes up-to-date S3. `checkClocks.ps1` got the switch `-PassThru` for it.
+- `checkClocks.ps1` (project folder) finds all uhr4 clocks on the network and shows address, name, chip, display,
+  running firmware, whether it matches the newest build in `build_uhr4`, whether the time is right and the free memory.
+  With `-All` (also via `checkClocks.bat`) it first lists all devices on the network, also non-clocks (address, MAC,
+  name, note such as page title or Espressif).
 - If an update is available on GitHub, the "Backup" page shows a link to the changelog (newest entries on top):
   what is new since the installed version.
 - Update from GitHub (ESP32-S3 only): on the "Backup" page → "Firmware from GitHub"
@@ -442,6 +477,11 @@
     their clock faces.
 
 ### Changed
+- The ESP32-S2 build is smaller: with "Core Debug Level: None" (Visual Micro) or `DebugLevel=none` it is 56 KB less,
+  and the date of the open WiFis is read without `sscanf`. The app now uses about 95 % instead of 98.7 % of the 2 MB
+  space. When building with Visual Micro, set the option for the S2 to "None".
+- As long as the time is not confirmed after the start (hands at 12), a small hint "warte auf Zeit" / "waiting for
+  time" is shown in the lower part of the clock face.
 - Uploaded clock faces and strip graphics are averaged when scaled (every target pixel is the mean of the source
   pixels it covers) instead of taking just one source pixel: large images (e.g. 480 x 480) are shrunk without
   aliasing, solid areas stay exactly the same. Applies to all chips, also without PSRAM. Hands scale as before
