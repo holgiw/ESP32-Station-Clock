@@ -110,6 +110,8 @@
     vorhandener Uhren Sets zu deren Zifferblättern.
 
 ### Geändert
+- ESP32-S3 (Waveshare ESP32-S3-LCD-1.28): Der SPI-Takt zum Display steigt von 40 auf 80 MHz. Die Startanimation
+  läuft damit etwas flüssiger (in einer Messung 55 statt 47 Bilder in 3 s); die übrigen Chips bleiben bei 40 MHz.
 - Der ESP32-S2-Build ist kleiner: Mit „Core Debug Level: None“ (Visual Micro) bzw. `DebugLevel=none` sind es 56 KB
   weniger, dazu liest das Datum der offenen WLANs ohne `sscanf`. Die App belegt statt 98,7 % nur noch etwa 95 % des
   2-MB-Platzes. Beim Selbstbauen mit Visual Micro die Option für den S2 auf „None“ stellen.
@@ -477,6 +479,8 @@
     their clock faces.
 
 ### Changed
+- ESP32-S3 (Waveshare ESP32-S3-LCD-1.28): the SPI clock to the display rises from 40 to 80 MHz. The start animation
+  runs a bit smoother with it (55 instead of 47 frames in 3 s in one measurement); the other chips stay at 40 MHz.
 - The ESP32-S2 build is smaller: with "Core Debug Level: None" (Visual Micro) or `DebugLevel=none` it is 56 KB less,
   and the date of the open WiFis is read without `sscanf`. The app now uses about 95 % instead of 98.7 % of the 2 MB
   space. When building with Visual Micro, set the option for the S2 to "None".
