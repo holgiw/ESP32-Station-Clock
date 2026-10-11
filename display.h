@@ -5315,6 +5315,130 @@
     }
 
 
+    // Quellzeile (RGB565 oder RGB555 als 16 Bit, BGR 24 Bit, BGRA 32 Bit) in RGB888 wandeln. kind: 0 = RGB565,
+    // 1 = RGB555, 2 = BGR24, 3 = BGRA32. 5/6-Bit-Werte werden durch Bitwiederholung auf 8 Bit gebracht, so bleiben
+    // einfarbige Flaechen beim Rueckwandeln nach RGB565 exakt gleich.
+
+    // Convert a source row (RGB565 or RGB555 as 16 bit, BGR 24 bit, BGRA 32 bit) to RGB888. kind: 0 = RGB565,
+    // 1 = RGB555, 2 = BGR24, 3 = BGRA32. 5/6-bit values are brought to 8 bit by bit repetition, so solid areas stay
+    // exactly the same when converting back to RGB565.
+
+    void rowToRgb888(const uint8_t* raw, int n, int kind, uint8_t* d) {
+        for (int i = 0; i < n; i++, d += 3) {
+            if (kind >= 2) {
+                const uint8_t* p = raw + i * (kind == 2 ? 3 : 4);
+                d[0] = p[2]; d[1] = p[1]; d[2] = p[0];
+            }
+            else {
+                uint16_t p = ((const uint16_t*)raw)[i];
+                if (kind == 1) {
+                    uint8_t r = (p >> 10) & 31, g = (p >> 5) & 31, b = p & 31;
+                    d[0] = (r << 3) | (r >> 2); d[1] = (g << 3) | (g >> 2); d[2] = (b << 3) | (b >> 2);
+                }
+                else {
+                    uint8_t r = (p >> 11) & 31, g = (p >> 5) & 63, b = p & 31;
+                    d[0] = (r << 3) | (r >> 2); d[1] = (g << 2) | (g >> 4); d[2] = (b << 3) | (b >> 2);
+                }
+            }
+        }
+    }
+
+    // Skalieren durch Flaechenmittelung: jedes Zielpixel ist der gewichtete Mittelwert aller Quellpixel, die es
+    // ueberdeckt (auch Bruchteile an den Raendern). Beim Verkleinern entsteht so kein Aliasing, beim Vergroessern
+    // ein weicher Uebergang. Quellzeilen werden nacheinander angefordert (getRow(Zeile, rgb888) -> true bei Erfolg);
+    // je Zielzeile genuegen ein Zeilenpuffer, eine horizontal gemittelte Zeile und eine Summenzeile. Festkomma 16.16
+    // (Positionen) und 8.8 (Gewichte), ohne Gleitkomma.
+
+    // Scaling by area averaging: every target pixel is the weighted mean of all source pixels it covers (including
+    // fractions at the edges). Shrinking gives no aliasing, enlarging a soft transition. Source rows are requested
+    // one after another (getRow(row, rgb888) -> true on success); per target row a row buffer, one horizontally
+    // averaged row and one sum row are enough. Fixed point 16.16 (positions) and 8.8 (weights), no floating point.
+
+    struct AreaScaler {
+        int inW = 0, inH = 0, outW = 0, outH = 0;
+        uint32_t sx = 0, sy = 0;     // Quellpixel je Zielpixel (16.16) / source pixels per target pixel (16.16)
+        uint8_t* rgb = nullptr;      // aktuelle Quellzeile, RGB888 / current source row, RGB888
+        uint16_t* hRow = nullptr;    // horizontal gemittelte Zeile, outW * 3, Werte 0..255*256 / horizontally averaged row
+        uint32_t* acc = nullptr;     // Summe ueber die Quellzeilen, outW * 3 / sum over the source rows
+        int hRowIdx = -1;            // Quellzeile in hRow, -1 = keine / source row in hRow, -1 = none
+        bool failed = false;
+
+        void end() {
+            free(rgb); free(hRow); free(acc);
+            rgb = nullptr; hRow = nullptr; acc = nullptr;
+        }
+
+        bool begin(int iw, int ih, int ow, int oh) {
+            inW = iw; inH = ih; outW = ow; outH = oh;
+            sx = (uint32_t)(((uint64_t)iw << 16) / ow);
+            sy = (uint32_t)(((uint64_t)ih << 16) / oh);
+            rgb = (uint8_t*)preferPsramMalloc((size_t)iw * 3);
+            hRow = (uint16_t*)preferPsramMalloc((size_t)ow * 3 * sizeof(uint16_t));
+            acc = (uint32_t*)preferPsramMalloc((size_t)ow * 3 * sizeof(uint32_t));
+            hRowIdx = -1;
+            failed = false;
+            if (!rgb || !hRow || !acc) { end(); return false; }
+            return true;
+        }
+
+        // aktuelle Quellzeile (rgb) auf outW Spalten mitteln / average the current source row (rgb) to outW columns
+        void horizontal() {
+            for (int x = 0; x < outW; x++) {
+                uint32_t x0 = (uint32_t)x * sx;
+                uint32_t x1 = (x == outW - 1) ? ((uint32_t)inW << 16) : (uint32_t)(x + 1) * sx;
+                uint32_t s0 = 0, s1 = 0, s2 = 0, wt = 0;
+                for (uint32_t i = x0 >> 16; i < (uint32_t)inW && (i << 16) < x1; i++) {
+                    uint32_t a = (i << 16) > x0 ? (i << 16) : x0;
+                    uint32_t e = ((i + 1) << 16) < x1 ? ((i + 1) << 16) : x1;
+                    uint32_t w = (e - a) >> 8;
+                    if (!w) continue;
+                    const uint8_t* p = rgb + i * 3;
+                    s0 += p[0] * w; s1 += p[1] * w; s2 += p[2] * w;
+                    wt += w;
+                }
+                if (!wt) wt = 1;
+                hRow[x * 3] = (uint16_t)(s0 * 256 / wt);
+                hRow[x * 3 + 1] = (uint16_t)(s1 * 256 / wt);
+                hRow[x * 3 + 2] = (uint16_t)(s2 * 256 / wt);
+            }
+        }
+
+        // Zielzeile y als RGB565 nach out (outW Werte). Zeilen laufen vorwaerts; y == 0 beginnt von vorn.
+        // Target row y as RGB565 into out (outW values). Rows advance; y == 0 starts over.
+        template <typename RowFn>
+        void row(int y, uint16_t* out, RowFn&& getRow) {
+            if (y == 0) hRowIdx = -1;
+            uint32_t y0 = (uint32_t)y * sy;
+            uint32_t y1 = (y == outH - 1) ? ((uint32_t)inH << 16) : (uint32_t)(y + 1) * sy;
+            memset(acc, 0, (size_t)outW * 3 * sizeof(uint32_t));
+            uint32_t wTotal = 0;
+            for (uint32_t r = y0 >> 16; r < (uint32_t)inH && (r << 16) < y1; r++) {
+                uint32_t a = (r << 16) > y0 ? (r << 16) : y0;
+                uint32_t e = ((r + 1) << 16) < y1 ? ((r + 1) << 16) : y1;
+                uint32_t w = (e - a) >> 8;
+                if (!w) continue;
+                if ((int)r != hRowIdx) {
+                    if (!getRow((int)r, rgb)) { failed = true; memset(out, 0, (size_t)outW * 2); return; }
+                    horizontal();
+                    hRowIdx = (int)r;
+                }
+                for (int i = 0; i < outW * 3; i++) acc[i] += (uint32_t)hRow[i] * w;
+                wTotal += w;
+            }
+            if (!wTotal) wTotal = 1;
+            for (int x = 0; x < outW; x++) {
+                uint32_t r8 = (acc[x * 3] / wTotal + 128) >> 8;
+                uint32_t g8 = (acc[x * 3 + 1] / wTotal + 128) >> 8;
+                uint32_t b8 = (acc[x * 3 + 2] / wTotal + 128) >> 8;
+                if (r8 > 255) r8 = 255;
+                if (g8 > 255) g8 = 255;
+                if (b8 > 255) b8 = 255;
+                out[x] = (uint16_t)(((r8 & 0xF8) << 8) | ((g8 & 0xFC) << 3) | (b8 >> 3));
+            }
+        }
+    };
+
+
     // Wie scaleAndSaveBmp(), aber ohne Vollbild im RAM (ohne PSRAM): jede Zielzeile entsteht aus der passenden
     // Quellzeile und geht ueber writeRleImage() bzw. direkt als BMP in eine Zwischendatei, die danach das Ziel
     // ersetzt - Quelle und Ziel duerfen gleich sein. Braucht dafuer kurz Platz fuer beide Dateien.
@@ -5397,7 +5521,62 @@
         RleFaceReader reader;
         int decodedRow = -1;
 
+        // Zifferblaetter und Streifengrafiken werden durch Flaechenmittelung skaliert (AreaScaler), Zeiger nicht:
+        // gemittelte Raender gaeben dort Mischfarben zur Transparenzfarbe und einen Saum.
+        // Clock faces and strip graphics are scaled by area averaging (AreaScaler), hands are not: averaged edges
+        // would give mixed colours to the transparency colour there and a fringe.
+
+        bool useArea = isFace || target.startsWith("/strip_");
+        AreaScaler area;
+        if (useArea && !area.begin(inW, inH, outW, outH)) {
+            src.close();
+            free(srcRow);
+            DEBUG_PRINTLN("[BMP Scale] Memory allocation failed (area scaler)");
+            return false;
+        }
+        int areaKind = rle ? 0 : (bpp == 16 ? (rgb555 ? 1 : 0) : (bpp == 24 ? 2 : 3));
+        auto areaRow = [&](int r, uint8_t* rgb) -> bool {
+            if (rle) {
+                uint16_t* row16 = (uint16_t*)srcRow;
+                while (decodedRow < r) {
+                    for (int x = 0; x < inW; x++) {
+                        uint16_t px = 0xFFFF;
+                        if (!reader.nextPixel(px)) readError = true;
+                        row16[x] = px;
+                    }
+                    decodedRow++;
+                }
+            }
+            else {
+                src.seek(offset + inRowSize * (flip ? inH - 1 - r : r));
+                if (src.read(srcRow, inRowSize) != inRowSize) { readError = true; return false; }
+            }
+            rowToRgb888(srcRow, inW, areaKind, rgb);
+            return !readError;
+        };
+
         auto rowFn = [&](int y, uint16_t* out) {
+            if (useArea) {
+                if (y == 0 && rle) {
+
+                    // Zeilen laufen nur vorwaerts - je Durchgang von writeRleImage() von vorn
+                    // Rows only advance - from the start for every pass of writeRleImage()
+
+                    src.seek(20);
+                    reader = RleFaceReader();
+                    reader.file = src;
+                    reader.remaining = rleSize;
+                    decodedRow = -1;
+                }
+                area.row(y, out, areaRow);
+                if (isFace && displayGeom->round) {
+                    for (int x = 0; x < outW; x++) {
+                        float dx = (x + 0.5f) - cx, dy = (y + 0.5f) - cy;
+                        if (dx * dx + dy * dy > radius * radius) out[x] = 0xFFFF;
+                    }
+                }
+                return;
+            }
             int srcY = min(inH - 1, (int)(y * scaleY));
             uint16_t* row16 = (uint16_t*)srcRow;
             if (rle) {
@@ -5469,7 +5648,8 @@
         }
         src.close();
         free(srcRow);
-        if (!ok || readError) {
+        area.end();
+        if (!ok || readError || area.failed) {
             LittleFS.remove(TMP_PATH);
             DEBUG_PRINTLN("[BMP Scale] Low-memory scaling failed for " + target);
             return false;
@@ -5629,7 +5809,50 @@
             return false;
         }
 
-        for (int y = 0; y < outH; y++) {
+        // Zifferblaetter und Streifengrafiken: Flaechenmittelung (AreaScaler). Zeiger bleiben beim Verfahren
+        // "ein Quellpixel je Zielpixel": gemittelte Raender gaeben dort Mischfarben zur Transparenzfarbe und einen Saum.
+        // Clock faces and strip graphics: area averaging (AreaScaler). Hands keep "one source pixel per target
+        // pixel": averaged edges would give mixed colours to the transparency colour there and a fringe.
+
+        String scaleTarget = String(targetPath);
+        if (!scaleTarget.startsWith("/")) scaleTarget = "/" + scaleTarget;
+        bool useArea = scaleTarget.startsWith("/face_") || scaleTarget.startsWith("/strip_");
+        if (useArea) {
+            AreaScaler area;
+            if (!area.begin(inW, inH, outW, outH)) {
+                if (rowBuf) { bmp.close(); free(rowBuf); }
+                if (rleSrcBuf) free(rleSrcBuf);
+                delete[] outImage;
+                DEBUG_PRINTLN("[BMP Scale] Memory allocation failed (area scaler)");
+                return false;
+            }
+            int areaKind = rleSrcBuf ? 0 : (bpp == 16 ? (rgb555 ? 1 : 0) : (bpp == 24 ? 2 : 3));
+            auto areaRow = [&](int r, uint8_t* rgb) -> bool {
+                if (rleSrcBuf) {
+                    rowToRgb888((const uint8_t*)&rleSrcBuf[(size_t)r * inW], inW, 0, rgb);
+                    return true;
+                }
+                bmp.seek(offset + (size_t)inRowSize * (flip ? inH - 1 - r : r));
+                if (bmp.read(rowBuf, inRowSize) != inRowSize) return false;
+                rowToRgb888(rowBuf, inW, areaKind, rgb);
+                return true;
+            };
+            for (int y = 0; y < outH && !area.failed; y++) {
+                if (y % 20 == 0) yield(); // Watchdog-Reset vermeiden / avoid watchdog reset
+                area.row(y, &outImage[(size_t)y * outW], areaRow);
+            }
+            bool areaFailed = area.failed;
+            area.end();
+            if (areaFailed) {
+                if (rowBuf) { bmp.close(); free(rowBuf); }
+                if (rleSrcBuf) free(rleSrcBuf);
+                delete[] outImage;
+                DEBUG_PRINTLN("[BMP Scale] Read error while scaling");
+                return false;
+            }
+        }
+
+        for (int y = 0; !useArea && y < outH; y++) {
             if (y % 20 == 0) yield(); // Watchdog-Reset vermeiden (Flash-I/O je Zeile kann laenger dauern)
                                       // avoid watchdog reset (flash I/O per row can take longer)
             int srcY = flip ? (inH - 1 - int(y * scaleY)) : int(y * scaleY);

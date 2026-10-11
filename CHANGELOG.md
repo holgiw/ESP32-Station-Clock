@@ -95,6 +95,10 @@
     vorhandener Uhren Sets zu deren Zifferblättern.
 
 ### Geändert
+- Hochgeladene Zifferblätter und Streifengrafiken werden beim Skalieren gemittelt (jedes Zielpixel ist der Durchschnitt
+  der Quellpixel, die es überdeckt) statt nur ein Quellpixel zu übernehmen: Große Bilder (z. B. 480 × 480) werden
+  ohne Aliasing verkleinert, einfarbige Flächen bleiben exakt gleich. Gilt für alle Chips, auch ohne PSRAM. Zeiger
+  skalieren wie bisher (gemittelte Ränder würden einen Saum zur Transparenzfarbe ergeben).
 - `flashESP.bat`/`flashESP.sh` laden den Build des erkannten Chips beim Start vom GitHub-Release
   (`uhr4-esp32s2.zip`, `-esp32c6.zip`, `-esp32s3.zip`, je ca. 1,3 MB, mit SHA-256-Prüfung vor dem Flashen) statt ihn
   aus dem ZIP zu nehmen. Das Flash-ZIP enthält nur noch die Werkzeuge (7 statt 15 MB). Der PC braucht dafür Internet;
@@ -438,6 +442,10 @@
     their clock faces.
 
 ### Changed
+- Uploaded clock faces and strip graphics are averaged when scaled (every target pixel is the mean of the source
+  pixels it covers) instead of taking just one source pixel: large images (e.g. 480 x 480) are shrunk without
+  aliasing, solid areas stay exactly the same. Applies to all chips, also without PSRAM. Hands scale as before
+  (averaged edges would give a fringe towards the transparency colour).
 - `flashESP.bat`/`flashESP.sh` download the build of the detected chip from the GitHub release when they start
   (`uhr4-esp32s2.zip`, `-esp32c6.zip`, `-esp32s3.zip`, about 1.3 MB each, with a SHA-256 check before flashing)
   instead of taking it from the ZIP. The flash ZIP now contains only the tools (7 instead of 15 MB). The PC needs
