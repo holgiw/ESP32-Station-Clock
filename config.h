@@ -352,8 +352,13 @@
 #define FW_UPDATE_URL "https://github.com/" GITHUB_REPO_OWNER "/" GITHUB_REPO_NAME "/releases/latest/download/" FW_UPDATE_ASSET
 
 #define HAS_DISPLAY2 (CS_2 >= 0)
+#if BOARD_WAVESHARE_S3_GC9A01
+#define TFT_SPI_FREQUENCY 80000000 // Waveshare ESP32-S3-LCD-1.28: GC9A01 fest am Chip, kurze Leitung - halbiert die Sendezeit
+                                   // Waveshare ESP32-S3-LCD-1.28: GC9A01 right at the chip, short wires - halves the send time
+#else
 #define TFT_SPI_FREQUENCY 40000000 // hoechster ganzzahliger Teiler von 80 MHz unter den frueheren 60 MHz
                                    // highest integer divider of 80 MHz below the former 60 MHz
+#endif
 
     // Rotationswert "nicht angeschlossen (n.a.)": fuer die Uhranzeige wird das Display
     // dann weder angesteuert noch berechnet (Zifferblatt/Zeiger entfallen). Status- und
