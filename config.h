@@ -20,7 +20,8 @@
 #define DISPLAY_TYPE_ILI9341 2
 #define DISPLAY_TYPE_ST7789  3   // Waveshare ESP32-C6-LCD-1.47 (172x320)
 #define DISPLAY_TYPE_ST7789_240 4 // Waveshare ESP32-C6-LCD-1.3 (240x240)
-#define DISPLAY_TYPE_COUNT   5
+#define DISPLAY_TYPE_ST7701_480 5 // Waveshare ESP32-S3-Touch-LCD-4 (480x480, RGB-Bus)
+#define DISPLAY_TYPE_COUNT   6
 
     // Board, erkannt am Chip: ESP32-S2 (Lolin S2 Pico) mit wechselbarem Display, Waveshare ESP32-C6-LCD mit
     // fest verbautem ST7789 (1.47 = 172x320 oder 1.3 = 240x240, welches waehlt der Displaytyp) oder Waveshare
@@ -34,7 +35,11 @@
     // Short name of the chip for display and file names (header of the web interface, backup)
 
 #if CONFIG_IDF_TARGET_ESP32S3
+#ifdef UHR4_BOARD_S3_LCD4
+#define CHIP_SHORT_NAME "S3-480"
+#else
 #define CHIP_SHORT_NAME "S3"
+#endif
 #elif CONFIG_IDF_TARGET_ESP32C6
 #define CHIP_SHORT_NAME "C6"
 #elif CONFIG_IDF_TARGET_ESP32S2
@@ -43,19 +48,38 @@
 #define CHIP_SHORT_NAME "ESP32"
 #endif
 
+    // Der ESP32-S3 kommt auf zwei Boards vor: Waveshare ESP32-S3-LCD-1.28 (GC9A01, SPI) und Waveshare
+    // ESP32-S3-Touch-LCD-4 (ST7701, 480x480, RGB-Bus). Das zweite waehlt der Build mit
+    // -DUHR4_BOARD_S3_LCD4 (buildAll.bat s3lcd4; Visual Micro: Compiler-Flag eintragen). BOARD_S3_ANY gilt
+    // fuer beide (OTA, Partitionstabelle, WLAN-Sendeleistung).
+
+    // The ESP32-S3 is used on two boards: Waveshare ESP32-S3-LCD-1.28 (GC9A01, SPI) and Waveshare
+    // ESP32-S3-Touch-LCD-4 (ST7701, 480x480, RGB bus). The build selects the second one with
+    // -DUHR4_BOARD_S3_LCD4 (buildAll.bat s3lcd4; Visual Micro: add the compiler flag). BOARD_S3_ANY applies to
+    // both (OTA, partition table, WiFi transmit power).
+
 #if CONFIG_IDF_TARGET_ESP32C6
 #define BOARD_WAVESHARE_C6_ST7789 1
 #define BOARD_WAVESHARE_S3_GC9A01 0
+#define BOARD_WAVESHARE_S3_LCD4 0
 #define DISPLAY_TYPE_DEFAULT DISPLAY_TYPE_ST7789
+#elif CONFIG_IDF_TARGET_ESP32S3 && defined(UHR4_BOARD_S3_LCD4)
+#define BOARD_WAVESHARE_C6_ST7789 0
+#define BOARD_WAVESHARE_S3_GC9A01 0
+#define BOARD_WAVESHARE_S3_LCD4 1
+#define DISPLAY_TYPE_DEFAULT DISPLAY_TYPE_ST7701_480
 #elif CONFIG_IDF_TARGET_ESP32S3
 #define BOARD_WAVESHARE_C6_ST7789 0
 #define BOARD_WAVESHARE_S3_GC9A01 1
+#define BOARD_WAVESHARE_S3_LCD4 0
 #define DISPLAY_TYPE_DEFAULT DISPLAY_TYPE_GC9A01
 #else
 #define BOARD_WAVESHARE_C6_ST7789 0
 #define BOARD_WAVESHARE_S3_GC9A01 0
+#define BOARD_WAVESHARE_S3_LCD4 0
 #define DISPLAY_TYPE_DEFAULT DISPLAY_TYPE_GC9A01
 #endif
+#define BOARD_S3_ANY (BOARD_WAVESHARE_S3_GC9A01 || BOARD_WAVESHARE_S3_LCD4)
 
 #if defined(GC9A01) || defined(GC9D01) || defined(GC9A01_WITH_BACKLIGHT) || defined(ILI9341)
 #error "Displaytyp wird nicht mehr per #define gewaehlt - Einstellung im Zifferblatt-Tab / display type is no longer chosen via #define - setting in the clock face tab"
@@ -73,6 +97,8 @@
 #define BUILD_DISPLAY_MARKER "UHR4_BUILD_DISPLAY=ST7789+ST7789_240"
 #elif BOARD_WAVESHARE_S3_GC9A01
 #define BUILD_DISPLAY_MARKER "UHR4_BUILD_DISPLAY=GC9A01_S3"
+#elif BOARD_WAVESHARE_S3_LCD4
+#define BUILD_DISPLAY_MARKER "UHR4_BUILD_DISPLAY=ST7701_480_S3"
 #else
 #define BUILD_DISPLAY_MARKER "UHR4_BUILD_DISPLAY=GC9A01+GC9D01+ILI9341"
 #endif
@@ -164,6 +190,74 @@
 
 #define DCF77_DATAPIN 20
 #define TFT_Backlight 22
+
+#elif BOARD_WAVESHARE_S3_LCD4
+
+    // Waveshare ESP32-S3-Touch-LCD-4 (V2/V3): 480x480, ST7701 ueber RGB-Bus (Pins in lgfx_config.h), 3-Draht-SPI
+    // zum ST7701 (CS 42, SCK 2, SDA 1) und Port-Expander TCA9554 an I2C 15/7 (LCD-Reset, Touch-Reset, Beleuchtung
+    // an/aus). Das Board nutzt das USB des ESP32-S3 selbst (GPIO 19/20): "USB CDC On Boot: Enabled".
+
+    // Waveshare ESP32-S3-Touch-LCD-4 (V2/V3): 480x480, ST7701 on an RGB bus (pins in lgfx_config.h), 3-wire SPI
+    // to the ST7701 (CS 42, SCK 2, SDA 1) and port expander TCA9554 on I2C 15/7 (LCD reset, touch reset,
+    // backlight on/off). The board uses the ESP32-S3's own USB (GPIO 19/20): "USB CDC On Boot: Enabled".
+
+#if !ARDUINO_USB_CDC_ON_BOOT
+#error "ESP32-S3-Touch-LCD-4: Board-Option USB CDC On Boot auf Enabled stellen / set the board option USB CDC On Boot to Enabled"
+#endif
+
+#ifndef ARDUINO_PARTITION_app3M_fat9M_16MB
+#error "ESP32-S3-Touch-LCD-4: Flash Size 16MB, Partition Scheme '16M Flash (3MB APP/9.9MB FATFS)' waehlen / choose it"
+#endif
+
+    // Das Bild liegt im PSRAM (480x480x2 Byte je Bild): ESP32-S3-N16R8 mit 8 MB OPI-PSRAM ("OPI PSRAM").
+    // The image lives in PSRAM (480x480x2 bytes per image): ESP32-S3-N16R8 with 8 MB OPI PSRAM ("OPI PSRAM").
+
+#ifndef BOARD_HAS_PSRAM
+#error "ESP32-S3-Touch-LCD-4: PSRAM 'OPI PSRAM' waehlen / choose it"
+#endif
+
+    // Platzhalter - die Stiftleisten des Boards (CAN: GPIO 0/6, RS485: GPIO 43/44) sind frei, Lichtsensor, Taster
+    // und DCF77 sind hier nicht vorgesehen; ohne angeschlossenen Sensor meldet die Uhr "Photoresistor not found".
+    // GPIO 0 ist der BOOT-Taster, daher laeuft DCF77 dort nur zum Schein (kein Modul).
+
+    // Placeholders - the board's headers (CAN: GPIO 0/6, RS485: GPIO 43/44) are free, light sensor, button and
+    // DCF77 are not planned here; without a connected sensor the clock reports "Photoresistor not found".
+    // GPIO 0 is the BOOT button, so DCF77 only runs nominally there (no module).
+
+#define LED_BOARD      -1   // keine LED / no LED
+#define LED_BOARD_GPIO -1
+
+#define ADC_3V 6
+#define ADC_PIN 4
+#define ADC_GND 44
+
+#define BUTTON1 43
+#define BOOT_BUTTON 0
+
+    // I2C: Port-Expander TCA9554 (0x20), Touch GT911 und RTC PCF85063 (die Uhr kennt nur den DS3231)
+    // I2C: port expander TCA9554 (0x20), touch GT911 and RTC PCF85063 (the clock only knows the DS3231)
+
+#define SDA_PIN 15
+#define SCL_PIN 7
+
+    // Kein SPI-Display: die Namen bleiben, damit gemeinsamer Code uebersetzt. CS_1 = Chip-Select des ST7701
+    // (3-Draht-SPI, nur waehrend der Startfolge), im Betrieb HIGH.
+
+    // No SPI display: the names stay so that shared code compiles. CS_1 = chip select of the ST7701 (3-wire SPI,
+    // only during the start-up sequence), HIGH during operation.
+
+#define TFT_SCLK  -1
+#define TFT_MOSI  -1
+#define TFT_DC    -1
+#define TFT_RST   -1
+
+#define CS_1    42
+#define CS_2    -1
+#define LGFX_CS_PIN CS_1
+
+#define DCF77_DATAPIN 0
+#define TFT_Backlight -1   // Beleuchtung nur an/aus ueber den Expander (EXIO1), kein PWM-Pin
+                           // backlight only on/off via the expander (EXIO1), no PWM pin
 
 #elif BOARD_WAVESHARE_S3_GC9A01
 
@@ -310,7 +404,7 @@
     // Partition for LittleFS: ESP32-S3 with the scheme "16M Flash (3MB APP/9.9MB FATFS)" (two app partitions
     // for OTA) - the data partition is called "ffat" there, LittleFS uses it anyway. S2/C6 with "No OTA": "spiffs".
 
-#if BOARD_WAVESHARE_S3_GC9A01
+#if BOARD_S3_ANY
 #define LITTLEFS_PARTITION "ffat"
 #else
 #define LITTLEFS_PARTITION "spiffs"
@@ -322,7 +416,7 @@
     // Firmware update over WiFi (ota_update.h) only with two app partitions, so only on the ESP32-S3. If an
     // update hangs, the clock restarts after OTA_TIMEOUT_MS instead of standing still.
 
-#define HAS_OTA BOARD_WAVESHARE_S3_GC9A01
+#define HAS_OTA BOARD_S3_ANY
 
     // Sendeleistung des WLAN automatisch waehlen: Stufen probieren, die klappende je WLAN merken. ESP32-S3: bei voller
     // Leistung (20 dBm) antworten Router nicht (2 AUTH_EXPIRE), daher von unten nach oben; S2 und C6 von oben nach unten.
@@ -331,7 +425,7 @@
     // power (20 dBm) routers do not answer (2 AUTH_EXPIRE), so bottom up; S2 and C6 top down.
 
 #define WIFI_TX_AUTO 1
-#if BOARD_WAVESHARE_S3_GC9A01
+#if BOARD_S3_ANY
 #define WIFI_TX_STEPS { WIFI_POWER_8_5dBm, WIFI_POWER_13dBm, WIFI_POWER_17dBm, WIFI_POWER_19_5dBm }
 #define WIFI_TX_FIRST WIFI_POWER_8_5dBm
 #else
@@ -453,6 +547,13 @@ constexpr DisplayGeometry DISPLAY_GEOMETRY[DISPLAY_TYPE_COUNT] = {
     { "ST7789",   172,  15,  17,  94,  72,   86,  2,  4,  true,  false, 172,   320,   false }, // Meldungen quer (statusLandscape())
                                                                                         // messages in landscape (statusLandscape())
     { "ST7789_240", 240, 21, 25, 131, 100,  120,  2,  6,  true,  false, 240,   240,   false },
+
+    // ST7701_480 (Waveshare ESP32-S3-Touch-LCD-4): das Doppelte des GC9A01-Eintrags, Werte am Geraet noch zu pruefen.
+    // Beleuchtung nur an/aus (BL false), Software-Rotation (Bild im PSRAM), quadratisch ohne Streifen.
+    // ST7701_480 (Waveshare ESP32-S3-Touch-LCD-4): twice the GC9A01 entry, values still to be checked on the device.
+    // Backlight only on/off (BL false), software rotation (image in PSRAM), square without a strip.
+
+    { "ST7701_480", 480,  42,  50, 262, 200,  240,  4, 12,  false, true,  480,   480,   false },
 };
 
     // Obergrenzen ueber alle Typen - fuer fest dimensionierte Puffer
@@ -460,20 +561,25 @@ constexpr DisplayGeometry DISPLAY_GEOMETRY[DISPLAY_TYPE_COUNT] = {
 
     // Upper bounds across all types - for fixed-size buffers (rowBuffer in globals.h).
 
+#if BOARD_WAVESHARE_S3_LCD4
+#define CLOCK_MAX 480
+#else
 #define CLOCK_MAX 240
+#endif
 
-constexpr bool displayGeometryValid(const DisplayGeometry& g) {
+constexpr bool displayGeometryValid(const DisplayGeometry& g, int maxClock = CLOCK_MAX) {
     return g.handPivotY >= g.handLegacyPivotY                                       // HAND_TOP_PAD >= 0
         && g.handWidth >= g.handLegacyWidth && (g.handWidth - g.handLegacyWidth) % 2 == 0 // Drehpunkt-Spalte bleibt mittig / pivot column stays centred
         && g.handPivotY <= g.clock / 2                                              // Drehpunkt innerhalb des Radius / pivot inside the radius
-        && g.clock <= CLOCK_MAX
+        && g.clock <= maxClock
         && g.panelWidth >= g.clock && g.panelHeight >= g.clock;                     // Uhr passt aufs Panel / clock fits the panel
 }
 static_assert(displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_GC9A01]) &&
               displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_GC9D01]) &&
               displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_ILI9341]) &&
               displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_ST7789]) &&
-              displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_ST7789_240]),
+              displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_ST7789_240]) &&
+              displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_ST7701_480], 480), // nur auf dem ESP32-S3-Touch-LCD-4 nutzbar (CLOCK_MAX 480) / only usable on the ESP32-S3-Touch-LCD-4 (CLOCK_MAX 480)
               "DISPLAY_GEOMETRY: hand pivot/width/clock size inconsistent");
 
     // Diese Namen zeigen auf den zur Laufzeit gewaehlten Typ (displayGeom, globals.h) - daher NICHT in

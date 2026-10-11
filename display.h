@@ -84,14 +84,16 @@
 
     bool displayTypeSupported(uint8_t type) {
         bool c6Type = type == DISPLAY_TYPE_ST7789 || type == DISPLAY_TYPE_ST7789_240;
+        if (BOARD_WAVESHARE_S3_LCD4) return type == DISPLAY_TYPE_ST7701_480;
         if (BOARD_WAVESHARE_S3_GC9A01) return type == DISPLAY_TYPE_GC9A01;
-        return BOARD_WAVESHARE_C6_ST7789 ? c6Type : type < DISPLAY_TYPE_COUNT && !c6Type;
+        return BOARD_WAVESHARE_C6_ST7789 ? c6Type : type < DISPLAY_TYPE_ST7701_480 && !c6Type;
     }
 
     // Namen der Displaytypen dieses Boards fuer Fehlermeldungen an flashESP
     // Names of this board's display types for error messages to flashESP
 
     const char* supportedDisplayNames() {
+        if (BOARD_WAVESHARE_S3_LCD4) return "ST7701_480";
         if (BOARD_WAVESHARE_S3_GC9A01) return "GC9A01, GC9A01_WITH_BACKLIGHT";
         return BOARD_WAVESHARE_C6_ST7789 ? "ST7789, ST7789_240" : "GC9A01, GC9A01_WITH_BACKLIGHT, GC9D01, ILI9341";
     }
@@ -111,6 +113,7 @@
         else if (name == "ILI9341") { type = DISPLAY_TYPE_ILI9341; backlight = false; }
         else if (name == "ST7789") { type = DISPLAY_TYPE_ST7789; backlight = true; }
         else if (name == "ST7789_240") { type = DISPLAY_TYPE_ST7789_240; backlight = true; }
+        else if (name == "ST7701_480") { type = DISPLAY_TYPE_ST7701_480; backlight = false; }
         else return false;
         return displayTypeSupported(type);
     }
@@ -126,6 +129,7 @@
         if (type == DISPLAY_TYPE_ILI9341) return "ILI9341";
         if (type == DISPLAY_TYPE_ST7789) return "ST7789";
         if (type == DISPLAY_TYPE_ST7789_240) return "ST7789_240";
+        if (type == DISPLAY_TYPE_ST7701_480) return "ST7701_480";
         return backlight ? "GC9A01_WITH_BACKLIGHT" : "GC9A01";
     }
 
@@ -196,6 +200,14 @@
     // GC9D01 stayed black, hence pin_rst = -1.
 
     void resetPanels() {
+#if BOARD_WAVESHARE_S3_LCD4
+
+        // Reset ueber den Port-Expander und ST7701-Startfolge (lgfx_config.h), kein Reset-Pin am Chip
+        // Reset via the port expander and ST7701 start-up sequence (lgfx_config.h), no reset pin on the chip
+
+        lcd4PanelInit();
+        return;
+#endif
         pinMode(TFT_RST, OUTPUT);
         digitalWrite(TFT_RST, HIGH);
         delay(5);
@@ -889,6 +901,7 @@
     // HIGH at boot too - a floating BL input would otherwise stay dark on some modules.
 
     void applyBacklightPin() {
+        if (TFT_Backlight < 0) return; // Board ohne Beleuchtungs-Pin (ESP32-S3-Touch-LCD-4) / board without a backlight pin
         if (useBacklight) {
             if (!backlightAttached) {
                 backlightAttached = ledcAttach(TFT_Backlight, BACKLIGHT_FREQ, BACKLIGHT_RESOLUTION);
