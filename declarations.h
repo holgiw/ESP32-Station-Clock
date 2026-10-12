@@ -463,6 +463,7 @@
     String logFileHeader() ;
     void flushLogBuffer() ;
     void checkLogFlush() ;
+    void checkLoggingExpiry() ;
     String trim(const String& str) ;
     bool getSmoothSecondPref(bool stationModeFallback) ; // liest PK_SMOOTH_SECOND mit Migrations-Fallback auf stationMode (siehe system_utils.h)
                                                           // reads PK_SMOOTH_SECOND with a migration fallback to stationMode (see system_utils.h)

@@ -621,8 +621,6 @@ void setup() {
         if (preferences.getString(PK_VERSION, "") != String(version)) {
             DEBUG_PRINTLN("[Preferences] Version change detected, updating version in preferences..");
             preferences.putString(PK_VERSION, String(version));
-            preferences.putBool(PK_LOGGING_ENABLED, true); // Logging bei Version-Änderung aktivieren
-                                                           // enable logging on version change
             deleteAllLogFiles();
             logNumberJustReset = true;
         }
@@ -809,7 +807,7 @@ void setup() {
             preferences.putUChar(PK_TFT_ROTATION1, TFT_ROTATION1_DEFAULT);
             preferences.putBool(PK_ADC_INVERTED, false);
 
-            preferences.putBool(PK_LOGGING_ENABLED, true);
+            preferences.putBool(PK_LOGGING_ENABLED, false); // ab Werk aus, siehe checkLoggingExpiry() / off by default, see checkLoggingExpiry()
 
             preferences.end();
             preferences.begin("clock", false);
@@ -1627,6 +1625,7 @@ void setup() {
         updateBrightness();
         mqttTick();
         checkLogFlush();
+        checkLoggingExpiry();
 
         // Nach 15 Minuten im AP-Modus neu starten, damit die Uhr wieder einen WLAN-Versuch macht (z.B. Router
         // wieder da). Nur mit gespeicherten Netzen - ohne gibt es nichts zu versuchen, der Neustart

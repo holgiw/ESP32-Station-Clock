@@ -772,4 +772,16 @@
             for (const char* part : { "hour", "minute", "second" }) LittleFS.remove("/hand_set" + id + "_" + part + ".bmp");
             writeGeneratedHandSet(style, id);
         }
+
+        // Neue Version des erzeugten Sekundenzeigers (Satz 3, Sekundenfeld): nur seine Datei neu anlegen
+        // New version of the generated second hand (set 3, seconds subdial): create only its file anew
+
+        if (preferences.getUChar(PK_SUBDIAL_HAND_VER, 1) < SUBDIAL_HAND_VERSION) {
+            String subId = subdialHandSet();
+            if (handSetExists(subId)) {
+                LittleFS.remove("/hand_set" + subId + "_second.bmp");
+                writeGeneratedHandSet(3, subId);
+            }
+            preferences.putUChar(PK_SUBDIAL_HAND_VER, SUBDIAL_HAND_VERSION);
+        }
     }

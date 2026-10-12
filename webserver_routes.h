@@ -2928,6 +2928,15 @@
             loggingEnabled = webserver.hasArg("loggingEnabled");
             preferences.putBool(PK_LOGGING_ENABLED, loggingEnabled);
 
+            // Beim Einschalten die Startzeit merken (Abschaltung nach 24 Stunden, checkLoggingExpiry()); 0 = noch keine
+            // gueltige Uhrzeit
+
+            // On switching on, remember the start time (switch-off after 24 hours, checkLoggingExpiry()); 0 = no valid
+            // time yet
+
+            if (loggingEnabled && !wasLoggingEnabled) preferences.putUInt(PK_LOGGING_START, timeTrusted() ? (uint32_t)time(nullptr) : 0);
+            if (!loggingEnabled) preferences.putUInt(PK_LOGGING_START, 0);
+
             if (wasLoggingEnabled && !loggingEnabled) {
                 deleteAllLogFiles();
 
@@ -5114,7 +5123,17 @@
             String disabledAttr = loggingEnabled ? "" : " disabled";
 
             chunk += "<div class='card' style='max-width:900px;'>";
-            chunk += "<div style='margin-bottom:8px;'>" + translate("Log file") + ": <select id='logFileSelect' style='width:auto;display:inline-block;margin:0;padding:4px 8px;'" + disabledAttr + "><option>" + escapeHtmlText(currentLogFileName) + "</option></select></div>";
+
+            // Obere Zeile der Karte: Dateiauswahl links, Knopf "Download" rechts oben. Er laedt die gewaehlte
+            // (standardmaessig die aktuelle) Logdatei ueber /download herunter.
+
+            // Top row of the card: file selection on the left, "Download" button at the top right. It downloads
+            // the chosen (by default the current) log file via /download.
+
+            chunk += "<div style='display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;'>";
+            chunk += "<div>" + translate("Log file") + ": <select id='logFileSelect' style='width:auto;display:inline-block;margin:0;padding:4px 8px;'" + disabledAttr + "><option>" + escapeHtmlText(currentLogFileName) + "</option></select></div>";
+            chunk += "<button type='button' id='logDownload' style='width:auto;margin:0;padding:4px 12px;font-size:.8rem;'" + disabledAttr + ">" + translate("Download") + "</button>";
+            chunk += "</div>";
             chunk += "<div style='display:flex;align-items:center;gap:14px;flex-wrap:wrap;'>";
             chunk += "<label style='display:flex;align-items:center;gap:6px;white-space:nowrap;cursor:pointer;'>";
             chunk += "<input type='checkbox' id='logAutoRefresh' style='width:auto;margin:0;'" + disabledAttr + ">";
@@ -5199,6 +5218,9 @@
             chunk += "    }";
             chunk += "  }";
             chunk += "  refreshBtn.addEventListener('click', loadFileList);";
+            chunk += "  document.getElementById('logDownload').addEventListener('click', function() {";
+            chunk += "    if (select.value) window.location.href = '/download?file=' + encodeURIComponent(select.value);";
+            chunk += "  });";
             chunk += "  select.addEventListener('change', function() {";
 
             // Wird eine aeltere Datei gewaehlt, das Auto-Refresh abschalten - fuer eine statische Datei
@@ -5523,7 +5545,7 @@
 
             chunk += checkboxRow("rocrailEnabled", rocrailEnabled, translate("Rocrail"), translate("Take over the model time from a Rocrail server (model railroad control software) for the hands - unlocks the Rocrail tab, where the server address can then be entered"));
 
-            chunk += checkboxRow("loggingEnabled", loggingEnabled, translate("Enable Logging"), translate("Writes up to 9 log files to LittleFS for troubleshooting"));
+            chunk += checkboxRow("loggingEnabled", loggingEnabled, translate("Enable Logging"), translate("Writes up to 9 log files to LittleFS for troubleshooting, switches off after 24 hours"));
 
             // Nur sichtbar mit DCF77-Hardware UND dcf77Confirmed - ohne je
             // erkanntes Signal soll die Option gar nicht erst auftauchen.

@@ -724,6 +724,36 @@
     }
 
 
+    // Schaltet das Logging nach 24 Stunden selbst ab (und nach 9 Logdateien, siehe flushLogBuffer()), damit es nicht
+    // dauernd in den Flash schreibt. Die Startzeit steht in den Preferences (PK_LOGGING_START) und ueberlebt Neustarts;
+    // ohne gueltige Uhrzeit beginnt die Frist erst, wenn die Zeit da ist. Die Logdateien bleiben erhalten.
+
+    // Switches logging off by itself after 24 hours (and after 9 log files, see flushLogBuffer()) so it does not write
+    // to flash all the time. The start time is in the preferences (PK_LOGGING_START) and survives restarts; without a
+    // valid time the period only starts once the time is there. The log files are kept.
+
+    void checkLoggingExpiry() {
+        static unsigned long lastCheck = 0;
+        if (!loggingEnabled || millis() - lastCheck < 60000) return;
+        lastCheck = millis();
+        if (!timeTrusted()) return;
+
+        int64_t now = time(nullptr);
+        int64_t start = preferences.getUInt(PK_LOGGING_START, 0);
+        if (start == 0 || start > now) {
+            preferences.putUInt(PK_LOGGING_START, (uint32_t)now);
+            return;
+        }
+        if (now - start >= 24 * 3600) {
+            DEBUG_PRINTLN("[LOG] Logging switched off after 24 hours");
+            flushLogBuffer();
+            preferences.putBool(PK_LOGGING_ENABLED, false);
+            preferences.putUInt(PK_LOGGING_START, 0);
+            loggingEnabled = false;
+        }
+    }
+
+
     // eigenes trim function
     // Custom trim function
 

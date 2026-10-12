@@ -5,6 +5,7 @@
 ## 2026-10-08
 
 ### Hinzugefügt
+- Seite „Log“: Der Knopf „Herunterladen“ lädt die angezeigte (standardmäßig die aktuelle) Logdatei herunter.
 - Jede neue Logdatei beginnt mit einer Kopfzeile: Uhr (uhr4), Hostname, ESP32-Chip (Modell, Revision, Arduino-Core),
   Display und Kompilierdatum/-zeit.
 - Zifferblatt-Designer: Auch Stunden- und Minutenzeiger (zusammen) lassen sich über das ganze Zifferblatt verschieben
@@ -120,6 +121,13 @@
     vorhandener Uhren Sets zu deren Zifferblättern.
 
 ### Geändert
+- WLAN-Verbindung beim Start: Statt des drehenden Zeichens (/ - \ -) zeigt die Uhr ein animiertes WLAN-Symbol (Punkt und drei Bögen, die nacheinander aufleuchten).
+- Zeigersatz „Sekundenfeld“ (erzeugt, meist Satz 3): Der Sekundenzeiger ist filigraner (halbe Nadelbreite, Scheibe am Drehpunkt nur halb so groß).
+  Die Uhr legt seine Datei einmalig neu an; eigene Zeigersätze bleiben unberührt.
+- Logging ist ab Werk aus und schaltet sich nach 24 Stunden oder nach 9 Logdateien selbst ab (die Logdateien bleiben bei der
+  24-Stunden-Abschaltung erhalten). Es wird auch nach einem Firmware-Update nicht mehr von selbst eingeschaltet.
+- Zifferblätter und Zeiger werden beim Vergrößern (z. B. eine Sicherung mit 240er-Zifferblättern auf einem größeren Display
+  oder ein kleineres hochgeladenes Bild) weich interpoliert statt in Pixelblöcken; bei Zeigern ohne Saum zur Transparenzfarbe.
 - Helligkeitsseite: Das Kästchen „Hintergrundbeleuchtung regeln“ heißt jetzt „Hintergrundbeleuchtung PWM“.
 - Zifferblatt-Designer: Der Knopf „Speichern“ im Kasten „Nabe und Sekundenzeiger“ entfällt. Das Speichern oben legt
   Bild, Nabe, Drehpunkte und Streifen zusammen ab; bei den von der Firmware erzeugten Zifferblättern speichert
@@ -222,6 +230,9 @@
   Zifferblatt-Seite bleibt.
 
 ### Behoben
+- Zeiger-Designer: Die Zeiger des aktiven Designs werden nacheinander geladen (je bis zu dreimal versucht) statt parallel.
+  Zuvor konnte eine abgebrochene Anfrage einen Zeiger leer lassen, der dann als leerer Zeiger in ein neues Design gespeichert
+  wurde. Konnte ein Zeiger nicht geladen werden, zeigt der Designer das an und speichert nicht.
 - Uhrzeit aus offenen WLANs auf dem ESP32-S3: Die Uhr verbindet sich mit den offenen Hotspots mit voller Sendeleistung (sie sind meist
   weit weg), danach gilt wieder die kleinste Stufe. Neuer Diagnosebefehl `UHR4 OPENWIFI` (USB): sucht die Zeit gezielt aus
   einem offenen WLAN (auch ab -95 dBm), jeder Schritt steht im Log, danach Neustart.
@@ -398,6 +409,7 @@
 ## 2026-10-08
 
 ### Added
+- "Log" page: the button "Download" (German: "Herunterladen") downloads the displayed (by default the current) log file.
 - Every new log file starts with a header line: clock (uhr4), hostname, ESP32 chip (model, revision, Arduino core),
   display and compile date/time.
 - Clock face designer: the hour and minute hand (together) can also be moved over the whole clock face ("Hour and
@@ -511,6 +523,13 @@
     their clock faces.
 
 ### Changed
+- WiFi connection at start: instead of the turning character (/ - \ -) the clock shows an animated WiFi symbol (dot and three arcs lighting up one after another).
+- Hand set "seconds subdial" (generated, usually set 3): the second hand is more delicate (half the needle width,
+  disc at the pivot only half the size). The clock creates its file once anew; own hand sets stay untouched.
+- Logging is off by default and switches itself off after 24 hours or after 9 log files (the log files are kept on the
+  24-hour switch-off). It is also no longer switched on by itself after a firmware update.
+- Clock faces and hands are interpolated smoothly instead of in pixel blocks when enlarged (e.g. a backup with 240 clock
+  faces on a larger display, or a small uploaded image); hands without a fringe towards the transparency colour.
 - Brightness page: the German label of the backlight checkbox is now "Hintergrundbeleuchtung PWM".
 - Clock face designer: the "Save" button in the box "Hub and second hand" is gone. Saving at the top stores image,
   hub, pivots and strip together; for the clock faces created by the firmware "Save current clock face" now stores hub,
@@ -610,6 +629,9 @@
   designers or onto the clock via the file manager and the backup; the upload form of the clock face page stays.
 
 ### Fixed
+- Hand designer: the hands of the active design are loaded one after another (each tried up to three times) instead of
+  in parallel. Before, a broken-off request could leave a hand empty, which was then saved as an empty hand into a new
+  design. If a hand cannot be loaded the designer says so and does not save.
 - Time from open WiFis on the ESP32-S3: the clock connects to open hotspots at full transmit power (they are usually far
   away), afterwards the lowest step applies again. New diagnostic command `UHR4 OPENWIFI` (USB): gets the time
   from an open WiFi on demand (also from -95 dBm), every step is in the log, then restart.

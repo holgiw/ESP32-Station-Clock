@@ -1498,9 +1498,16 @@
     // Half width of the short second hand of set 3 (subdial): needle up to just before the subdial rim, short
     // counterweight, its own round disc at the pivot
 
+    // Version der erzeugten Sekundenzeigers von Satz 3: bei einer neuen Version legt die Uhr ihn einmal neu an (siehe
+    // refreshGeneratedAssets()). 2 = filigraner (halbe Nadelbreite, kleinere Scheibe), 3 = Scheibe nochmal halbiert
+    // Version of the generated second hand of set 3: with a new version the clock creates it anew once (see
+    // refreshGeneratedAssets()). 2 = more delicate (half the needle width, smaller disc), 3 = disc halved again
+
+    constexpr uint8_t SUBDIAL_HAND_VERSION = 3;
+
     float subdialSecondHalfWidth(float d) {
-        float c = CLOCK_WIDTH, r = SUBDIAL_R * c, w = 0, rd = 0.03f * c;
-        if (d >= -0.3f * r && d <= 0.92f * r) w = max(0.6f, 0.0083f * c);
+        float c = CLOCK_WIDTH, r = SUBDIAL_R * c, w = 0, rd = 0.011f * c;
+        if (d >= -0.25f * r && d <= 0.92f * r) w = max(0.5f, 0.0045f * c);
         if (fabsf(d) <= rd) w = max(w, sqrtf(rd * rd - d * d));
         return w;
     }
@@ -5574,29 +5581,28 @@
         }
     }
 
-    // Skalieren durch Flaechenmittelung: jedes Zielpixel ist der gewichtete Mittelwert aller Quellpixel, die es
-    // ueberdeckt (auch Bruchteile an den Raendern). Beim Verkleinern entsteht so kein Aliasing, beim Vergroessern
-    // ein weicher Uebergang. Quellzeilen werden nacheinander angefordert (getRow(Zeile, rgb888) -> true bei Erfolg);
-    // je Zielzeile genuegen ein Zeilenpuffer, eine horizontal gemittelte Zeile und eine Summenzeile. Festkomma 16.16
-    // (Positionen) und 8.8 (Gewichte), ohne Gleitkomma.
+    // Skalieren: Flaechenmittelung beim Verkleinern (kein Aliasing), bilineare Interpolation beim Vergroessern (weicher
+    // Verlauf statt Pixelbloecke), je Achse. Quellzeilen werden nacheinander angefordert (getRow(Zeile, rgb888) -> true
+    // bei Erfolg). Festkomma 16.16 (Positionen) und 8.8 (Gewichte), ohne Gleitkomma.
 
-    // Scaling by area averaging: every target pixel is the weighted mean of all source pixels it covers (including
-    // fractions at the edges). Shrinking gives no aliasing, enlarging a soft transition. Source rows are requested
-    // one after another (getRow(row, rgb888) -> true on success); per target row a row buffer, one horizontally
-    // averaged row and one sum row are enough. Fixed point 16.16 (positions) and 8.8 (weights), no floating point.
+    // Scaling: area averaging when shrinking (no aliasing), bilinear interpolation when enlarging (a smooth gradient
+    // instead of pixel blocks), per axis. Source rows are requested one after another (getRow(row, rgb888) -> true on
+    // success). Fixed point 16.16 (positions) and 8.8 (weights), no floating point.
 
     struct AreaScaler {
         int inW = 0, inH = 0, outW = 0, outH = 0;
         uint32_t sx = 0, sy = 0;     // Quellpixel je Zielpixel (16.16) / source pixels per target pixel (16.16)
         uint8_t* rgb = nullptr;      // aktuelle Quellzeile, RGB888 / current source row, RGB888
         uint16_t* hRow = nullptr;    // horizontal gemittelte Zeile, outW * 3, Werte 0..255*256 / horizontally averaged row
+        uint16_t* hRowB = nullptr;   // zweite Zeile fuer das bilineare Vergroessern / second row for bilinear enlarging
+        int hIdx[2] = { -1, -1 };    // Quellzeilen in hRow (gerade) und hRowB (ungerade) / source rows in hRow (even) and hRowB (odd)
         uint32_t* acc = nullptr;     // Summe ueber die Quellzeilen, outW * 3 / sum over the source rows
         int hRowIdx = -1;            // Quellzeile in hRow, -1 = keine / source row in hRow, -1 = none
         bool failed = false;
 
         void end() {
-            free(rgb); free(hRow); free(acc);
-            rgb = nullptr; hRow = nullptr; acc = nullptr;
+            free(rgb); free(hRow); free(hRowB); free(acc);
+            rgb = nullptr; hRow = nullptr; hRowB = nullptr; acc = nullptr;
         }
 
         bool begin(int iw, int ih, int ow, int oh) {
@@ -5605,15 +5611,29 @@
             sy = (uint32_t)(((uint64_t)ih << 16) / oh);
             rgb = (uint8_t*)preferPsramMalloc((size_t)iw * 3);
             hRow = (uint16_t*)preferPsramMalloc((size_t)ow * 3 * sizeof(uint16_t));
+            hRowB = (uint16_t*)preferPsramMalloc((size_t)ow * 3 * sizeof(uint16_t));
             acc = (uint32_t*)preferPsramMalloc((size_t)ow * 3 * sizeof(uint32_t));
             hRowIdx = -1;
             failed = false;
-            if (!rgb || !hRow || !acc) { end(); return false; }
+            if (!rgb || !hRow || !hRowB || !acc) { end(); return false; }
             return true;
         }
 
-        // aktuelle Quellzeile (rgb) auf outW Spalten mitteln / average the current source row (rgb) to outW columns
-        void horizontal() {
+        // aktuelle Quellzeile (rgb) auf outW Spalten bringen (mitteln bzw. bilinear) / bring the current source row (rgb) to outW columns (average or bilinear)
+        void horizontal(uint16_t* dst) {
+            if (sx < 65536) {
+                for (int x = 0; x < outW; x++) {
+                    int64_t p = (((int64_t)(2 * x + 1) * (int64_t)sx) >> 1) - 32768;
+                    if (p < 0) p = 0;
+                    int i0 = (int)(p >> 16), i1;
+                    uint32_t f = (uint32_t)(p & 0xFFFF) >> 8;
+                    if (i0 >= inW - 1) { i0 = i1 = inW - 1; f = 0; } else i1 = i0 + 1;
+                    const uint8_t* a = rgb + i0 * 3;
+                    const uint8_t* b = rgb + i1 * 3;
+                    for (int k = 0; k < 3; k++) dst[x * 3 + k] = (uint16_t)(a[k] * (256 - f) + b[k] * f);
+                }
+                return;
+            }
             for (int x = 0; x < outW; x++) {
                 uint32_t x0 = (uint32_t)x * sx;
                 uint32_t x1 = (x == outW - 1) ? ((uint32_t)inW << 16) : (uint32_t)(x + 1) * sx;
@@ -5628,9 +5648,46 @@
                     wt += w;
                 }
                 if (!wt) wt = 1;
-                hRow[x * 3] = (uint16_t)(s0 * 256 / wt);
-                hRow[x * 3 + 1] = (uint16_t)(s1 * 256 / wt);
-                hRow[x * 3 + 2] = (uint16_t)(s2 * 256 / wt);
+                dst[x * 3] = (uint16_t)(s0 * 256 / wt);
+                dst[x * 3 + 1] = (uint16_t)(s1 * 256 / wt);
+                dst[x * 3 + 2] = (uint16_t)(s2 * 256 / wt);
+            }
+        }
+
+        // Vergroessern in der Hoehe: bilinear aus zwei benachbarten Quellzeilen (Zeile r liegt in hRow bzw. hRowB)
+
+        // Enlarging in height: bilinear from two neighbouring source rows (row r lives in hRow or hRowB)
+
+        template <typename RowFn>
+        uint16_t* fetchRow(int r, RowFn&& getRow) {
+            uint16_t* buf = (r & 1) ? hRowB : hRow;
+            if (hIdx[r & 1] != r) {
+                if (!getRow(r, rgb)) { failed = true; return nullptr; }
+                horizontal(buf);
+                hIdx[r & 1] = r;
+            }
+            return buf;
+        }
+
+        template <typename RowFn>
+        void rowBilinear(int y, uint16_t* out, RowFn&& getRow) {
+            if (y == 0) hIdx[0] = hIdx[1] = -1;
+            int64_t p = (((int64_t)(2 * y + 1) * (int64_t)sy) >> 1) - 32768;
+            if (p < 0) p = 0;
+            int r0 = (int)(p >> 16), r1;
+            uint32_t f = (uint32_t)(p & 0xFFFF) >> 8;
+            if (r0 >= inH - 1) { r0 = r1 = inH - 1; f = 0; } else r1 = r0 + 1;
+            const uint16_t* a = fetchRow(r0, getRow);
+            const uint16_t* b = (a && f) ? fetchRow(r1, getRow) : a;
+            if (!a || !b) { memset(out, 0, (size_t)outW * 2); return; }
+            for (int x = 0; x < outW; x++) {
+                uint32_t c[3];
+                for (int k = 0; k < 3; k++) {
+                    uint32_t v = ((uint32_t)a[x * 3 + k] * (256 - f) + (uint32_t)b[x * 3 + k] * f) >> 8;
+                    c[k] = (v + 128) >> 8;
+                    if (c[k] > 255) c[k] = 255;
+                }
+                out[x] = (uint16_t)(((c[0] & 0xF8) << 8) | ((c[1] & 0xFC) << 3) | (c[2] >> 3));
             }
         }
 
@@ -5638,6 +5695,7 @@
         // Target row y as RGB565 into out (outW values). Rows advance; y == 0 starts over.
         template <typename RowFn>
         void row(int y, uint16_t* out, RowFn&& getRow) {
+            if (sy < 65536) { rowBilinear(y, out, getRow); return; }
             if (y == 0) hRowIdx = -1;
             uint32_t y0 = (uint32_t)y * sy;
             uint32_t y1 = (y == outH - 1) ? ((uint32_t)inH << 16) : (uint32_t)(y + 1) * sy;
@@ -5650,7 +5708,7 @@
                 if (!w) continue;
                 if ((int)r != hRowIdx) {
                     if (!getRow((int)r, rgb)) { failed = true; memset(out, 0, (size_t)outW * 2); return; }
-                    horizontal();
+                    horizontal(hRow);
                     hRowIdx = (int)r;
                 }
                 for (int i = 0; i < outW * 3; i++) acc[i] += (uint32_t)hRow[i] * w;
@@ -5668,6 +5726,71 @@
             }
         }
     };
+
+
+    // Quellzeile (16/24/32 Bit) als RGB565 (kind wie bei rowToRgb888()); RGB565 bleibt unveraendert, damit Transparenzfarben
+    // exakt bleiben.
+
+    // Source row (16/24/32 bit) as RGB565 (kind as in rowToRgb888()); RGB565 stays unchanged so transparency colours stay
+    // exact.
+
+    void rowToRgb565(const uint8_t* raw, int n, int kind, uint16_t* d) {
+        for (int i = 0; i < n; i++) {
+            if (kind >= 2) {
+                const uint8_t* p = raw + i * (kind == 2 ? 3 : 4);
+                d[i] = ((p[2] & 0xF8) << 8) | ((p[1] & 0xFC) << 3) | (p[0] >> 3);
+            }
+            else {
+                uint16_t p = ((const uint16_t*)raw)[i];
+                d[i] = (kind == 1) ? (uint16_t)(((p & 0x7FE0) << 1) | ((p >> 4) & 0x20) | (p & 0x1F)) : p;
+            }
+        }
+    }
+
+
+    // Zeiger vergroessern: bilinear, aber nur ueber deckende Pixel gewichtet. Weiss (0xFFFF) und TRANSPARENT_COLOR gelten
+    // als durchsichtig; ein Zielpixel ist deckend, wenn mindestens die Haelfte seiner Nachbarn deckt, und bekommt dann die
+    // Mischfarbe der deckenden - so entsteht kein Saum zur Transparenzfarbe. Transparent wird 0xFFFF wie bei hochgeladenen Zeigern.
+
+    // Enlarge hands: bilinear, but weighted over opaque pixels only. White (0xFFFF) and TRANSPARENT_COLOR count as see-through;
+    // a target pixel is opaque when at least half of its neighbours are, and then gets the blended colour of the opaque
+    // ones - so there is no fringe towards the transparency colour. Transparent becomes 0xFFFF as with uploaded hands.
+
+    void scaleHandAlpha(const uint16_t* src, int inW, int inH, uint16_t* dst, int outW, int outH) {
+        const int64_t sx = (int64_t)(((uint64_t)inW << 16) / outW), sy = (int64_t)(((uint64_t)inH << 16) / outH);
+        for (int y = 0; y < outH; y++) {
+            int64_t py = (((int64_t)(2 * y + 1) * sy) >> 1) - 32768;
+            if (py < 0) py = 0;
+            int y0 = (int)(py >> 16), y1;
+            uint32_t fy = (uint32_t)(py & 0xFFFF) >> 8;
+            if (y0 >= inH - 1) { y0 = y1 = inH - 1; fy = 0; } else y1 = y0 + 1;
+            for (int x = 0; x < outW; x++) {
+                int64_t px = (((int64_t)(2 * x + 1) * sx) >> 1) - 32768;
+                if (px < 0) px = 0;
+                int x0 = (int)(px >> 16), x1;
+                uint32_t fx = (uint32_t)(px & 0xFFFF) >> 8;
+                if (x0 >= inW - 1) { x0 = x1 = inW - 1; fx = 0; } else x1 = x0 + 1;
+                const uint16_t c[4] = { src[(size_t)y0 * inW + x0], src[(size_t)y0 * inW + x1],
+                                        src[(size_t)y1 * inW + x0], src[(size_t)y1 * inW + x1] };
+                const uint32_t w[4] = { (256 - fx) * (256 - fy), fx * (256 - fy), (256 - fx) * fy, fx * fy };
+                uint32_t wa = 0, r = 0, g = 0, b = 0;
+                for (int i = 0; i < 4; i++) {
+                    if (c[i] == 0xFFFF || c[i] == TRANSPARENT_COLOR) continue;
+                    wa += w[i];
+                    r += ((c[i] >> 11) & 31) * w[i];
+                    g += ((c[i] >> 5) & 63) * w[i];
+                    b += (c[i] & 31) * w[i];
+                }
+                uint16_t o = 0xFFFF;
+                if (wa * 2 >= 65536) {
+                    o = (uint16_t)((((r + wa / 2) / wa) << 11) | (((g + wa / 2) / wa) << 5) | ((b + wa / 2) / wa));
+                    if (o == 0xFFFF) o = 0xFFDF;
+                    if (o == TRANSPARENT_COLOR) o = TRANSPARENT_COLOR + 1;
+                }
+                dst[(size_t)y * outW + x] = o;
+            }
+        }
+    }
 
 
     // Wie scaleAndSaveBmp(), aber ohne Vollbild im RAM (ohne PSRAM): jede Zielzeile entsteht aus der passenden
@@ -6083,7 +6206,40 @@
             }
         }
 
-        for (int y = 0; !useArea && y < outH; y++) {
+        // Zeiger vergroessern (z.B. 240er-Sicherung auf dem 480er-Display): alphabewusst bilinear statt "ein Quellpixel je
+        // Zielpixel", siehe scaleHandAlpha(). Die Quelle ist klein (Zeigerdatei) und wird ganz als RGB565 eingelesen.
+
+        // Enlarge hands (e.g. a 240 backup on the 480 display): alpha-aware bilinear instead of "one source pixel per target
+        // pixel", see scaleHandAlpha(). The source is small (a hand file) and is read completely as RGB565.
+
+        bool handUp = !useArea && scaleTarget.startsWith("/hand_set") && (outW > inW || outH > inH);
+        if (handUp) {
+            uint16_t* handSrc = (uint16_t*)preferPsramMalloc((size_t)inW * inH * 2);
+            bool handOk = handSrc != nullptr;
+            for (int r = 0; handOk && r < inH; r++) {
+                uint16_t* d = handSrc + (size_t)r * inW;
+                if (rleSrcBuf) {
+                    memcpy(d, &rleSrcBuf[(size_t)r * inW], (size_t)inW * 2);
+                }
+                else {
+                    bmp.seek(offset + (size_t)inRowSize * (flip ? inH - 1 - r : r));
+                    if (bmp.read(rowBuf, inRowSize) != inRowSize) { handOk = false; break; }
+                    rowToRgb565(rowBuf, inW, bpp == 16 ? (rgb555 ? 1 : 0) : (bpp == 24 ? 2 : 3), d);
+                }
+            }
+            if (!handOk) {
+                if (handSrc) free(handSrc);
+                if (rowBuf) { bmp.close(); free(rowBuf); }
+                if (rleSrcBuf) free(rleSrcBuf);
+                delete[] outImage;
+                DEBUG_PRINTLN("[BMP Scale] Failed to read the hand for scaling");
+                return false;
+            }
+            scaleHandAlpha(handSrc, inW, inH, outImage, outW, outH);
+            free(handSrc);
+        }
+
+        for (int y = 0; !useArea && !handUp && y < outH; y++) {
             if (y % 20 == 0) yield(); // Watchdog-Reset vermeiden (Flash-I/O je Zeile kann laenger dauern)
                                       // avoid watchdog reset (flash I/O per row can take longer)
             int srcY = flip ? (inH - 1 - int(y * scaleY)) : int(y * scaleY);
