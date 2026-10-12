@@ -507,7 +507,7 @@
 
 
     void startAP() {
-        if (useBacklight && backlightAttached) ledcWrite(TFT_Backlight, BACKLIGHT_SETUP_LEVEL); // Einrichtung: 50 %
+        if (useBacklight && backlightAttached) backlightWrite(BACKLIGHT_SETUP_LEVEL); // Einrichtung: 50 %
                                                                                                 // setup: 50 %
 
 
@@ -719,7 +719,7 @@
         }
 
         if (verboseMode && useBacklight && backlightAttached) {
-            ledcWrite(TFT_Backlight, BACKLIGHT_SETUP_LEVEL);
+            backlightWrite(BACKLIGHT_SETUP_LEVEL);
         }
         if (wifiSsid[number] == "") {
            // DEBUG_PRINTLN("[WiFi] SSID " + String(number + 1) + " is empty, skipping");

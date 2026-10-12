@@ -901,13 +901,21 @@
     // HIGH at boot too - a floating BL input would otherwise stay dark on some modules.
 
     void applyBacklightPin() {
-        if (TFT_Backlight < 0) return; // Board ohne Beleuchtungs-Pin (ESP32-S3-Touch-LCD-4) / board without a backlight pin
+#if BOARD_WAVESHARE_S3_LCD4
+        // Kein Pin: die PWM sitzt im Port-Expander (lcd4SetBacklight()); ohne Haken volle Helligkeit
+        // No pin: the PWM is in the port expander (lcd4SetBacklight()); without the checkbox full brightness
+
+        backlightAttached = useBacklight;
+        backlightWrite(useBacklight ? currentBrightness : 255);
+        return;
+#endif
+        if (TFT_Backlight < 0) return; // Board ohne Beleuchtungs-Pin / board without a backlight pin
         if (useBacklight) {
             if (!backlightAttached) {
                 backlightAttached = ledcAttach(TFT_Backlight, BACKLIGHT_FREQ, BACKLIGHT_RESOLUTION);
                 if (!backlightAttached) DEBUG_PRINTLN("[Display] Error: couldnt attach backlight PWM");
             }
-            if (backlightAttached) ledcWrite(TFT_Backlight, currentBrightness);
+            if (backlightAttached) backlightWrite(currentBrightness);
             return;
         }
         if (backlightAttached) {
@@ -5228,7 +5236,7 @@
         }
 
         if (useBacklight && backlightAttached) {
-            ledcWrite(TFT_Backlight, currentBrightness);  // 0–255
+            backlightWrite(currentBrightness);  // 0–255
                                                           // 0-255
         }
 

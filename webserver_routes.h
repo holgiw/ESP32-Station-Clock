@@ -946,7 +946,7 @@
     // Inserts the backlight pin into a translated text ("{pin}", different per board)
 
     String withBacklightPin(String text) {
-        text.replace("{pin}", String(TFT_Backlight));
+        text.replace("{pin}", TFT_Backlight < 0 ? String("CH32V003") : String(TFT_Backlight)); // Board ohne Pin: PWM im Port-Expander / board without a pin: PWM in the port expander
         return text;
     }
 
@@ -1535,7 +1535,7 @@
         // tells /save_brightness it was in the form. All checkboxes in one table, lined up below each other.
 
         bool showBacklight = displayType == DISPLAY_TYPE_GC9D01 || displayType == DISPLAY_TYPE_ST7789 ||
-                             displayType == DISPLAY_TYPE_ST7789_240 || useBacklight;
+                             displayType == DISPLAY_TYPE_ST7789_240 || displayType == DISPLAY_TYPE_ST7701_480 || useBacklight;
         if (showBacklight || photoresistorFound) {
             html += "<table style='margin:auto;text-align:left;'>";
             if (showBacklight) {

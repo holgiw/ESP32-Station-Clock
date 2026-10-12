@@ -566,7 +566,7 @@ constexpr DisplayGeometry DISPLAY_GEOMETRY[DISPLAY_TYPE_COUNT] = {
     // ST7701_480 (Waveshare ESP32-S3-Touch-LCD-4): twice the GC9A01 entry, values still to be checked on the device.
     // Backlight only on/off (BL false), software rotation (image in PSRAM), square without a strip.
 
-    { "ST7701_480", 480,  42,  50, 262, 200,  240,  4, 12,  false, true,  480,   480,   false },
+    { "ST7701_480", 480,  42,  50, 262, 200,  240,  4, 12,  true,  true,  480,   480,   false },
 };
 
     // Obergrenzen ueber alle Typen - fuer fest dimensionierte Puffer

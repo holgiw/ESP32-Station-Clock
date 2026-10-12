@@ -349,13 +349,25 @@ inline void lcd4BuzzerOff() {
     // calls this only every 300 ms. Catches a disturbance or a short voltage dip.
     // (a read changes the registers, see above).
 
+inline volatile uint8_t lcd4BacklightPwm = LCD4_BACKLIGHT_PWM; // aktueller PWM-Wert (Register 0x05) / current PWM value (register 0x05)
+
+    // Helligkeit 0-255 (255 = hell) in den umgekehrten Registerwert 247..LCD4_BACKLIGHT_PWM umrechnen; geschrieben
+    // wird der Wert vom naechsten lcd4ExpanderRefresh() (I2C-Schreibzugriffe brauchen Abstand).
+
+    // Convert brightness 0-255 (255 = bright) to the inverted register value 247..LCD4_BACKLIGHT_PWM; the value is
+    // written by the next lcd4ExpanderRefresh() (I2C writes need spacing).
+
+inline void lcd4SetBacklight(uint8_t level) {
+    lcd4BacklightPwm = (uint8_t)(247 - ((247 - LCD4_BACKLIGHT_PWM) * (int)level + 127) / 255);
+}
+
 inline void lcd4ExpanderRefresh() {
     static uint8_t next = 0;
     const uint8_t outAll = (1 << LCD4_EXIO_BL_EN) | (1 << LCD4_EXIO_LCD_RST) | (1 << LCD4_EXIO_TP_RST) | (1 << LCD4_EXIO_SD_CS);
-    if (next == 0) lcd4ExpanderSafeWrite(LCD4_EXP_REG_OUT, outAll);
-    else if (next == 1) lcd4ExpanderSafeWrite(LCD4_EXP_REG_DIR, 0xFF);
-    else lcd4ExpanderSafeWrite(LCD4_EXP_REG_PWM, LCD4_BACKLIGHT_PWM);
-    next = (next + 1) % 3;
+    if (next == 1) lcd4ExpanderSafeWrite(LCD4_EXP_REG_OUT, outAll);
+    else if (next == 3) lcd4ExpanderSafeWrite(LCD4_EXP_REG_DIR, 0xFF);
+    else lcd4ExpanderSafeWrite(LCD4_EXP_REG_PWM, lcd4BacklightPwm); // doppelt so oft: die Helligkeit soll zuegig folgen / twice as often: the brightness should follow quickly
+    next = (next + 1) % 4;
 }
 
     // Vor tft.init(): LCD-Reset und Beleuchtung ueber den Port-Expander, danach die ST7701-Startfolge. Wire muss
@@ -371,7 +383,7 @@ inline void lcd4PanelInit() {
     delay(20);
     out |= (1 << LCD4_EXIO_LCD_RST);
     lcd4ExpanderWrite(LCD4_EXP_REG_OUT, out);
-    lcd4ExpanderWrite(LCD4_EXP_REG_PWM, LCD4_BACKLIGHT_PWM);
+    lcd4ExpanderWrite(LCD4_EXP_REG_PWM, lcd4BacklightPwm);
     delay(120);
 
     pinMode(CS_1, OUTPUT);
@@ -723,6 +735,7 @@ inline void lcd4Resync() {}
 inline void lcd4StaticText(const String&, const String&, bool = false) {}
 inline void lcd4StaticBegin() {}
 inline void lcd4ExpanderRefresh() {}
+inline void lcd4SetBacklight(uint8_t) {}
 
 class UhrLGFX : public lgfx::LGFX_Device {
     Panel_UhrGC9A01 _panel_gc9a01;
@@ -846,3 +859,18 @@ public:
 };
 
 #endif // BOARD_WAVESHARE_S3_LCD4
+
+
+    // Beleuchtung per PWM setzen (0-255): ESP32-S3-Touch-LCD-4 ueber den Port-Expander, sonst ledcWrite() am
+    // Beleuchtungs-Pin.
+
+    // Set the backlight via PWM (0-255): ESP32-S3-Touch-LCD-4 via the port expander, otherwise ledcWrite() on the
+    // backlight pin.
+
+inline void backlightWrite(uint8_t level) {
+#if BOARD_WAVESHARE_S3_LCD4
+    lcd4SetBacklight(level);
+#else
+    ledcWrite(TFT_Backlight, level);
+#endif
+}
