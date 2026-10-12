@@ -830,7 +830,7 @@
                                     // button/boot button also during this wait
             if (loggingEnabled) Serial.print("");
             if (verboseMode) {
-                animateCursor(statusWidth() / 2 - 3 * TFT_TEXT_SIZE, (int)(CLOCK_HEIGHT * 0.70f), 100);
+                animateCursor(statusWidth() / 2, (int)(CLOCK_HEIGHT * 0.84f), 170);
             }
             else {
                 updateClock();
@@ -1066,14 +1066,26 @@
     // Animation during connection attempts. No 'tft' parameter, since
     // DRAW_ON_BOTH_DISPLAYS() redirects it internally itself.
 
-    void animateCursor(int x, int y, int delayMs) {
-        const char* frames[] = { "/", "-", "\\", "-" };
-        for (int i = 0; i < 4; i++) {
+    // Animiertes WLAN-Symbol (Punkt und drei Boegen, gruen auf schwarz): Der Punkt steht bei (cx, cy), die Boegen oeffnen sich
+    // nach oben. Je Aufruf ein voller Durchlauf: nur der Punkt, dann leuchten die Boegen von innen nach aussen auf; nicht
+    // leuchtende Boegen bleiben dunkelgrau sichtbar. Groesse folgt der Zifferblattbreite.
+
+    // Animated WiFi symbol (dot and three arcs, green on black): the dot sits at (cx, cy), the arcs open upwards. One full run
+    // per call: only the dot, then the arcs light up from the inside outwards; arcs that are not lit stay visible in dark
+    // grey. The size follows the clock face width.
+
+    void animateCursor(int cx, int cy, int delayMs) {
+        const float w = CLOCK_WIDTH;
+        const int dotR = max(2, (int)lroundf(w * 0.019f));
+        const int gap = max(3, (int)lroundf(w * 0.044f)), thick = max(2, (int)lroundf(w * 0.018f));
+        const int firstR = max(dotR + 3, (int)lroundf(w * 0.06f));
+        for (int lit = 0; lit <= 3; lit++) {
             DRAW_ON_BOTH_DISPLAYS(
-                tft.setTextSize(TFT_TEXT_SIZE);
-                tft.setTextColor(TFT_GREEN, TFT_BLACK);
-                tft.setCursor(x, y);
-                tft.print(frames[i]);
+                for (int arc = 1; arc <= 3; arc++) {
+                    int r0 = firstR + (arc - 1) * gap;
+                    tft.fillArc(cx, cy, r0, r0 + thick, 225.0f, 315.0f, arc <= lit ? TFT_GREEN : tft.color565(30, 36, 30));
+                }
+                tft.fillSmoothCircle(cx, cy, dotR, TFT_GREEN);
             );
             delay(delayMs);
         }

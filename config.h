@@ -194,12 +194,12 @@
 #elif BOARD_WAVESHARE_S3_LCD4
 
     // Waveshare ESP32-S3-Touch-LCD-4 (V2/V3): 480x480, ST7701 ueber RGB-Bus (Pins in lgfx_config.h), 3-Draht-SPI
-    // zum ST7701 (CS 42, SCK 2, SDA 1) und Port-Expander TCA9554 an I2C 15/7 (LCD-Reset, Touch-Reset, Beleuchtung
-    // an/aus). Das Board nutzt das USB des ESP32-S3 selbst (GPIO 19/20): "USB CDC On Boot: Enabled".
+    // zum ST7701 (CS 42, SCK 2, SDA 1) und Port-Expander (V3: CH32V003 auf 0x24) an I2C 15/7 (LCD-Reset, Touch-Reset,
+    // Beleuchtung, Beeper). Das Board nutzt das USB des ESP32-S3 selbst (GPIO 19/20): "USB CDC On Boot: Enabled".
 
     // Waveshare ESP32-S3-Touch-LCD-4 (V2/V3): 480x480, ST7701 on an RGB bus (pins in lgfx_config.h), 3-wire SPI
-    // to the ST7701 (CS 42, SCK 2, SDA 1) and port expander TCA9554 on I2C 15/7 (LCD reset, touch reset,
-    // backlight on/off). The board uses the ESP32-S3's own USB (GPIO 19/20): "USB CDC On Boot: Enabled".
+    // to the ST7701 (CS 42, SCK 2, SDA 1) and port expander (V3: CH32V003 at 0x24) on I2C 15/7 (LCD reset, touch
+    // reset, backlight, buzzer). The board uses the ESP32-S3's own USB (GPIO 19/20): "USB CDC On Boot: Enabled".
 
 #if !ARDUINO_USB_CDC_ON_BOOT
 #error "ESP32-S3-Touch-LCD-4: Board-Option USB CDC On Boot auf Enabled stellen / set the board option USB CDC On Boot to Enabled"
@@ -227,15 +227,21 @@
 #define LED_BOARD      -1   // keine LED / no LED
 #define LED_BOARD_GPIO -1
 
-#define ADC_3V 6
+    // BUTTON1 ist high-aktiv mit Pull-down: GPIO 43 (UART-TX) liegt im Leerlauf high und loeste einen Dauer-Tastendruck
+    // aus, deshalb GPIO 6 (CAN-Stiftleiste, unbelegt). Die Pins 43/44 dienen nur dem Platzhalter der Messbruecke.
+
+    // BUTTON1 is active high with a pull-down: GPIO 43 (UART TX) idles high and caused a permanent button press, so
+    // GPIO 6 (CAN header, unused) is used. Pins 43/44 serve only as the placeholder of the measuring bridge.
+
+#define ADC_3V 43
 #define ADC_PIN 4
 #define ADC_GND 44
 
-#define BUTTON1 43
+#define BUTTON1 6
 #define BOOT_BUTTON 0
 
-    // I2C: Port-Expander TCA9554 (0x20), Touch GT911 und RTC PCF85063 (die Uhr kennt nur den DS3231)
-    // I2C: port expander TCA9554 (0x20), touch GT911 and RTC PCF85063 (the clock only knows the DS3231)
+    // I2C: Port-Expander CH32V003 (0x24), Touch GT911 (0x14 nach dem Reset) und RTC PCF85063 (0x51; die Uhr kennt nur den DS3231)
+    // I2C: port expander CH32V003 (0x24), touch GT911 (0x14 after the reset) and RTC PCF85063 (0x51; the clock only knows the DS3231)
 
 #define SDA_PIN 15
 #define SCL_PIN 7

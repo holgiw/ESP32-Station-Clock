@@ -177,22 +177,65 @@ protected:
 
     // Waveshare ESP32-S3-Touch-LCD-4 (V2/V3): ST7701 ueber RGB-Bus. Pins, Timings und Startfolge stammen aus dem
     // Demo-Code von Waveshare (ESP32-S3-Touch-LCD-4_democode_V2.zip) und dem Treibertest tools/lcd4_test. Auf dem
-    // Geraet noch nicht erprobt. Der Touch (GT911) ist hier noch nicht eingebunden: LovyanGFX braucht dafuer einen
-    // eigenen I2C-Port auf denselben Pins wie Wire (RTC, Expander) - das ist noch zu loesen.
+    // Geraet: Bild und Touch funktionieren im Treibertest. Der Touch (GT911) ist hier noch nicht eingebunden:
+    // LovyanGFX meldete nichts, im Test liest Wire ihn direkt (Adresse 0x14, Register 0x814E/0x8150).
 
     // Waveshare ESP32-S3-Touch-LCD-4 (V2/V3): ST7701 on an RGB bus. Pins, timings and start-up sequence come from
     // Waveshare's demo code (ESP32-S3-Touch-LCD-4_democode_V2.zip) and the driver test tools/lcd4_test. Not yet
-    // tried on the device. The touch (GT911) is not integrated here yet: LovyanGFX needs its own I2C port on the
-    // same pins as Wire (RTC, expander) for it - still to be solved.
+    // device: image and touch work in the driver test. The touch (GT911) is not integrated here yet: LovyanGFX
+    // reported nothing, in the test Wire reads it directly (address 0x14, registers 0x814E/0x8150).
 
 #include <Wire.h>
 #include <lgfx/v1/platforms/esp32s3/Panel_RGB.hpp>
 #include <lgfx/v1/platforms/esp32s3/Bus_RGB.hpp>
+#include <esp_lcd_panel_ops.h>
+#include <esp_lcd_panel_rgb.h>
 
-constexpr uint8_t LCD4_TCA9554_ADDR = 0x20;                       // Port-Expander / port expander
+    // Port-Expander der V3: Waveshare-Chip CH32V003 (nicht TCA9554) mit eigenen Registern: Richtung (1 = Ausgang),
+    // Ausgang, PWM-Helligkeit der Beleuchtung (1..247). EXIO5 ist der Beeper (high = an).
+
+    // Port expander of the V3: Waveshare chip CH32V003 (not TCA9554) with its own registers: direction (1 = output),
+    // output, PWM brightness of the backlight (1..247). EXIO5 is the buzzer (high = on).
+
+constexpr uint8_t LCD4_EXPANDER_ADDR = 0x24;
+constexpr uint8_t LCD4_EXP_REG_DIR = 0x02, LCD4_EXP_REG_OUT = 0x03, LCD4_EXP_REG_PWM = 0x05;
+
+    // Beleuchtung per PWM-Register: INVERTIERT, ein kleiner Wert ist hell, 247 fast dunkel (Waveshare gibt 1..247 als
+    // sicheren Bereich an). 10 = hell. ACHTUNG: Schon ein Lesezugriff auf ein Expander-Register (Register-Nummer ohne
+    // Daten schreiben) ueberschreibt es mit dem zuletzt gesendeten Wert - Register nie zur Kontrolle auslesen.
+
+    // Backlight via the PWM register: INVERTED, a small value is bright, 247 almost dark (Waveshare gives 1..247 as the
+    // safe range). 10 = bright. CAUTION: even a read access to an expander register (writing the register number without
+    // data) overwrites it with the last value sent - never read registers back to check them.
+
+constexpr uint8_t LCD4_BACKLIGHT_PWM = 10;
 constexpr uint8_t LCD4_EXIO_BL_EN = 1, LCD4_EXIO_LCD_RST = 2;     // Beleuchtung an/aus, LCD-Reset
 constexpr uint8_t LCD4_EXIO_TP_RST = 0, LCD4_EXIO_SD_CS = 3;      // Touch-Reset (hier nur HIGH), SD-Chip-Select
 constexpr int LCD4_PIN_SPI_SCK = 2, LCD4_PIN_SPI_SDA = 1;         // 3-Draht-SPI zum ST7701 (CS = CS_1) / 3-wire SPI to the ST7701
+
+    // Pixeltakt des RGB-Busses: 12 MHz = 42 Bilder/s. Das Nachfuellen der Bounce-Puffer aus dem PSRAM schafft bei den
+    // 16 MHz des Waveshare-Demos (32 MB/s) nur knapp - bei jeder weiteren Speicherlast fehlten Zeilen und das Bild rollte.
+
+    // Pixel clock of the RGB bus: 12 MHz = 42 frames/s. Refilling the bounce buffers from PSRAM only just manages the
+    // 16 MHz of the Waveshare demo (32 MB/s) - with any further memory load lines were missing and the picture rolled.
+
+constexpr uint32_t LCD4_PCLK_HZ = 12000000;
+
+    // Zeilen je Bounce-Puffer (zwei Puffer, je 480 x Zeilen x 2 Byte internes RAM): so lange darf die CPU den
+    // Speicherzugriff blockieren, ohne dass das Bild zuckt.
+
+    // Lines per bounce buffer (two buffers, each 480 x lines x 2 bytes of internal RAM): the CPU may block memory
+    // access this long without the image twitching.
+
+constexpr int LCD4_BOUNCE_LINES = 16;
+
+    // Pause nach jedem Schreibblock bei Firmware-Update und Sicherung einspielen. Seit das Display dabei auf eine feste
+    // Farbe schaltet (lcd4StaticOn) nicht mehr noetig, daher 0; der Wert bleibt zum Einstellen.
+
+    // Pause after every write block when updating the firmware or restoring a backup. Not needed any more since the display
+    // switches to a fixed colour then (lcd4StaticOn), hence 0; the value stays for tuning.
+
+constexpr uint32_t LCD4_FLASH_PAUSE_MS = 0;
 
     // ST7701-Startfolge als Liste: Befehl, Anzahl Daten (Bit 7 = danach 120 ms warten), Daten; Ende mit Anzahl 0xFF.
     // ST7701 start-up sequence as a list: command, number of data bytes (bit 7 = wait 120 ms afterwards), data; the
@@ -253,10 +296,66 @@ inline void lcd4SpiByte(bool isData, uint8_t b) {
 }
 
 inline void lcd4ExpanderWrite(uint8_t reg, uint8_t value) {
-    Wire.beginTransmission(LCD4_TCA9554_ADDR);
+    Wire.beginTransmission(LCD4_EXPANDER_ADDR);
     Wire.write(reg);
     Wire.write(value);
     Wire.endTransmission();
+}
+
+    // Ganz am Anfang von setup(): Beeper ausschalten. Der Expander startet mit allen Ausgaengen high, der Beeper
+    // (EXIO5) piept sonst, bis resetPanels() laeuft. Startet auch Wire (I2C 15/7).
+
+    // Very first thing in setup(): switch the buzzer off. The expander starts with all outputs high, so the buzzer
+    // (EXIO5) would sound until resetPanels() runs. Also starts Wire (I2C 15/7).
+
+inline bool lcd4ExpanderSafeWrite(uint8_t reg, uint8_t value) {
+    Wire.beginTransmission(LCD4_EXPANDER_ADDR);
+    Wire.write(reg);
+    Wire.write(value);
+    return Wire.endTransmission() == 0;
+}
+
+    // Beeper aus, mehrfach: erst das Ausgangsregister (Beeper low), dann die Richtung (Pins werden Ausgang) - so gibt der Pin nie
+    // kurz "an" aus. Nach dem Einschalten braucht der Expander evtl. einen Moment, einzelne Zugriffe gehen auch verloren, daher
+    // bis zu 20 Versuche und danach zwei Wiederholungen.
+
+    // Buzzer off, several times: first the output register (buzzer low), then the direction (pins become outputs) - so the pin
+    // never briefly outputs "on". After power-up the expander may need a moment and single accesses get lost, hence up to 20
+    // attempts and two repetitions afterwards.
+
+inline void lcd4BuzzerOff() {
+    Wire.begin(SDA_PIN, SCL_PIN, 400000);
+    const uint8_t outAll = (1 << LCD4_EXIO_BL_EN) | (1 << LCD4_EXIO_LCD_RST) | (1 << LCD4_EXIO_TP_RST) | (1 << LCD4_EXIO_SD_CS);
+    for (int tries = 0; tries < 20; tries++) {
+        bool ok = lcd4ExpanderSafeWrite(LCD4_EXP_REG_OUT, outAll);
+        ok = lcd4ExpanderSafeWrite(LCD4_EXP_REG_DIR, 0xFF) && ok;
+        if (ok) break;
+        delay(10);
+    }
+    for (int rep = 0; rep < 2; rep++) {
+        delay(5);
+        lcd4ExpanderSafeWrite(LCD4_EXP_REG_OUT, outAll);
+        lcd4ExpanderSafeWrite(LCD4_EXP_REG_DIR, 0xFF);
+    }
+}
+
+    // Im Betrieb erneuern: je Aufruf EIN Register, reihum Ausgaenge (Beeper aus), Richtung und Helligkeit. Zwei Zugriffe dicht
+    // hintereinander verwechselt der Expander - der Wert landet dann im falschen Register (Beeper an, Display dunkel) -, daher
+    // ruft checkTouch() das nur alle 300 ms auf. Faengt eine Stoerung oder einen kurzen Spannungseinbruch ab.
+    // Nur schreiben, nie lesen (ein Lesezugriff veraendert die Register, siehe oben).
+
+    // Renew during operation: ONE register per call, in turn outputs (buzzer off), direction and brightness. The expander mixes
+    // up two accesses close together - the value then lands in the wrong register (buzzer on, display dark) - so checkTouch()
+    // calls this only every 300 ms. Catches a disturbance or a short voltage dip.
+    // (a read changes the registers, see above).
+
+inline void lcd4ExpanderRefresh() {
+    static uint8_t next = 0;
+    const uint8_t outAll = (1 << LCD4_EXIO_BL_EN) | (1 << LCD4_EXIO_LCD_RST) | (1 << LCD4_EXIO_TP_RST) | (1 << LCD4_EXIO_SD_CS);
+    if (next == 0) lcd4ExpanderSafeWrite(LCD4_EXP_REG_OUT, outAll);
+    else if (next == 1) lcd4ExpanderSafeWrite(LCD4_EXP_REG_DIR, 0xFF);
+    else lcd4ExpanderSafeWrite(LCD4_EXP_REG_PWM, LCD4_BACKLIGHT_PWM);
+    next = (next + 1) % 3;
 }
 
     // Vor tft.init(): LCD-Reset und Beleuchtung ueber den Port-Expander, danach die ST7701-Startfolge. Wire muss
@@ -266,12 +365,13 @@ inline void lcd4ExpanderWrite(uint8_t reg, uint8_t value) {
     // must be running (setup()). The RGB signals only start with tft.init().
 
 inline void lcd4PanelInit() {
-    lcd4ExpanderWrite(0x03, 0xF0);                  // EXIO0..3 als Ausgang / EXIO0..3 as outputs
-    uint8_t out = 0xFF & ~(1 << LCD4_EXIO_LCD_RST); // LCD-Reset aktiv / LCD reset active
-    lcd4ExpanderWrite(0x01, out);
+    lcd4ExpanderWrite(LCD4_EXP_REG_DIR, 0xFF);      // alle Pins als Ausgang (sonst schwebt der Beeper-Pin hoch) / all pins as outputs (otherwise the buzzer pin floats high)
+    uint8_t out = (1 << LCD4_EXIO_BL_EN) | (1 << LCD4_EXIO_TP_RST) | (1 << LCD4_EXIO_SD_CS); // LCD-Reset aktiv, Beeper aus / LCD reset active, buzzer off
+    lcd4ExpanderWrite(LCD4_EXP_REG_OUT, out);
     delay(20);
-    out |= (1 << LCD4_EXIO_LCD_RST) | (1 << LCD4_EXIO_BL_EN) | (1 << LCD4_EXIO_TP_RST) | (1 << LCD4_EXIO_SD_CS);
-    lcd4ExpanderWrite(0x01, out);
+    out |= (1 << LCD4_EXIO_LCD_RST);
+    lcd4ExpanderWrite(LCD4_EXP_REG_OUT, out);
+    lcd4ExpanderWrite(LCD4_EXP_REG_PWM, LCD4_BACKLIGHT_PWM);
     delay(120);
 
     pinMode(CS_1, OUTPUT);
@@ -303,9 +403,261 @@ inline void lcd4PanelInit() {
     digitalWrite(CS_1, HIGH);
 }
 
+    // RGB-Bus ueber den ESP-IDF-Treiber (esp_lcd) im Bounce-Betrieb ohne eigenen Bildspeicher des Treibers: Das Bild liegt
+    // in einem eigenen Speicher im PSRAM (LovyanGFX zeichnet dorthin), der DMA liest aus zwei kleinen Puffern im internen RAM,
+    // die lcd4BounceEmpty() daraus nachfuellt. Flash-Zugriffe (WLAN, Dateien, Einstellungen) sperren den Cache und damit
+    // auch die Unterbrechungen des Displays; dabei verpasst der Treiber Pufferwechsel und das Bild bleibt dauerhaft
+    // verschoben. Ein Neustart des Treibers (lcd4Reinit()) behebt das, ohne den eigenen Bildspeicher zu beruehren; ihn
+    // loest lcd4VsyncEvent() aus, sobald ein Bild ungewoehnlich lang gedauert hat. Pins, Takt und Zeiten kommen aus der
+    // Bus_RGB-Konfiguration.
+
+    // RGB bus via the ESP-IDF driver (esp_lcd) in bounce mode without a frame buffer of the driver's own: the image lives in
+    // a memory of its own in PSRAM (LovyanGFX draws there), the DMA reads from two small buffers in internal RAM which
+    // lcd4BounceEmpty() refills from it. Flash accesses (WiFi, files, settings) lock the cache and with it the display's
+    // interrupts; the driver then misses buffer switches and the picture stays shifted permanently. Restarting the driver
+    // (lcd4Reinit()) fixes that without touching the own frame buffer; lcd4VsyncEvent() triggers it as soon as a frame took
+    // unusually long. Pins, clock and timings come from the Bus_RGB configuration.
+
+#include <esp_timer.h>
+
+inline esp_lcd_panel_handle_t lcd4PanelHandle = nullptr;
+inline uint8_t* lcd4Fb = nullptr;                       // Bildspeicher im PSRAM / frame buffer in PSRAM
+inline esp_lcd_rgb_panel_config_t lcd4PanelCfg = {};    // einmal aufgebaut, fuer jeden Neustart wiederverwendet / built once, reused for every restart
+inline int lcd4BounceLines = LCD4_BOUNCE_LINES;
+inline uint32_t lcd4FramePeriodUs = 0;
+inline volatile int64_t lcd4VsyncLastUs = 0;
+inline volatile int64_t lcd4BounceLastUs = 0;
+inline int64_t lcd4LineNs = 0;                         // Dauer einer Zeile / duration of one line
+inline int64_t lcd4BounceGapUs = 0;                    // Abstand der Bounce-Unterbrechungen, ab dem eine verpasst wurde / interval of the bounce interrupts above which one was missed
+inline volatile bool lcd4StallSeen = false;
+inline volatile bool lcd4StaticOn = false;             // Update/Sicherung laeuft: feste Farbe statt Bild / update or backup running: fixed colour instead of the image
+inline volatile int64_t lcd4TextStartUs = 0;           // Beginn der festen Farbe: der Text steht nur kurz / start of the fixed colour: the text stays only briefly
+inline volatile uint32_t lcd4LastPauseMs = 0;          // Zeitpunkt des letzten Schreibblocks / time of the last write block
+inline volatile uint32_t lcd4StallCount = 0, lcd4ReinitCount = 0, lcd4MaxGapUs = 0, lcd4VsyncStalls = 0; // Zaehler fuer /api/lcdstats / counters for /api/lcdstats
+
+    // Textkachel fuer die feste Farbe waehrend Update/Sicherung: 480 x 32 Punkte, 1 Bit je Punkt, im internen RAM (rund 2 KB),
+    // ueber den ganzen Bildschirm wiederholt. 32 Zeilen = zwei Bounce-Puffer: Spielt der DMA bei gesperrter Unterbrechung einen
+    // alten Puffer noch einmal ab, zeigt er dasselbe wie der richtige - der Text kann nicht springen oder flimmern.
+
+    // Text tile for the fixed colour during update/backup: 480 x 32 dots, 1 bit per dot, in internal RAM (about 2 KB), repeated
+    // over the whole screen. 32 lines = two bounce buffers: if the DMA replays an old buffer while the interrupt is locked it
+    // shows the same as the right one - the text cannot jump or flicker.
+
+inline lgfx::LGFX_Sprite lcd4Banner;
+inline const uint8_t* lcd4BannerBuf = nullptr;
+inline volatile bool lcd4BannerRot180 = false;         // Kachel um 180 Grad gedreht lesen / read the tile rotated by 180 degrees
+constexpr int LCD4_TILE_H = 32;
+
+    // Text und Fortschritt (aus line2, zum Beispiel "45 %") in die Kachel: oben eine Textzeile, unten ein 4 Punkte hoher Balken
+    // Text and progress (from line2, for example "45 %") into the tile: a text line on top, a bar 4 dots high at the bottom
+
+inline void lcd4StaticText(const String& line1, const String& line2, bool rot180 = false) {
+    if (!lcd4BannerBuf) {
+        lcd4Banner.setPsram(false);
+        lcd4Banner.setColorDepth(lgfx::palette_1bit);
+        if (!lcd4Banner.createSprite(480, LCD4_TILE_H)) return;
+        lcd4Banner.setPaletteColor(0, 0, 0, 0);
+        lcd4Banner.setPaletteColor(1, 255, 255, 255);
+        lcd4BannerBuf = (const uint8_t*)lcd4Banner.getBuffer();
+    }
+    lcd4BannerRot180 = rot180;
+    lcd4Banner.fillSprite(0);
+    lcd4Banner.setFont(&fonts::FreeSansBold9pt7b);
+    lcd4Banner.setTextColor(1, 0);
+    lcd4Banner.setTextDatum(lgfx::top_center);
+    lcd4Banner.drawString(line1 + " " + line2, 240, 1);
+    int pct = line2.toInt();
+    if (pct > 0) lcd4Banner.fillRect(0, LCD4_TILE_H - 4, 480 * min(pct, 100) / 100, 4, 1);
+}
+
+    // Bounce-Puffer aus dem eigenen Bildspeicher fuellen (laeuft in der Display-Unterbrechung). Die Pause ums Bildende (Austastung,
+    // rund 2,7 ms) ist normal und zaehlt nicht. Kommt die Unterbrechung
+    // spaeter als 2 Pufferzeiten nach der vorigen, wurde ein Pufferwechsel verpasst: Der Treiber zaehlt dann falsch und das
+    // Bild bleibt verschoben - Neustart vormerken (lcd4Reinit()).
+
+    // Fill the bounce buffer from the own frame buffer (runs in the display interrupt). The pause around the frame end
+    // (blanking, about 2.7 ms) is normal and does not count. If the interrupt arrives later than
+    // 2 buffer times after the previous one, a buffer switch was missed: the driver then counts wrongly and the picture
+    // stays shifted - note a restart (lcd4Reinit()).
+
+inline bool lcd4BounceEmpty(esp_lcd_panel_handle_t, void* buf, int posPx, int lenBytes, void*) {
+    if (lcd4StaticOn) {
+
+        // Feste Farbe (dunkelblau, RGB565 byteweise vertauscht: Bytes 0x00 0x08): kein Zugriff auf das PSRAM, bleibt auch
+        // bei gesperrter Unterbrechung eine ruhige Flaeche
+        // Fixed colour (dark blue, RGB565 byte-swapped: bytes 0x00 0x08): no PSRAM access, stays a calm area even when
+        // the interrupt is locked
+
+        uint16_t* d = (uint16_t*)buf;
+        int y0 = posPx / 480, lines = lenBytes / 960;
+        bool rot = lcd4BannerRot180;
+        for (int l = 0; l < lines; l++, d += 480) {
+            if (lcd4BannerBuf && esp_timer_get_time() - lcd4TextStartUs < 1000000) { // Text nur die erste Sekunde / text only the first second
+                int ty = (y0 + l) & (LCD4_TILE_H - 1);
+                if (rot) ty = LCD4_TILE_H - 1 - ty;
+                const uint8_t* row = lcd4BannerBuf + ty * 60;
+                for (int x = 0; x < 480; x++) {
+                    int xs = rot ? 479 - x : x;
+                    d[x] = (row[xs >> 3] & (0x80 >> (xs & 7))) ? 0xFFFF : 0x0800;
+                }
+            }
+            else {
+                for (int x = 0; x < 480; x++) d[x] = 0x0800;
+            }
+        }
+        return false;
+    }
+    int64_t now = esp_timer_get_time();
+    int64_t phase = lcd4FramePeriodUs ? (now - lcd4VsyncLastUs) % (int64_t)lcd4FramePeriodUs : 0; // Lage im Bild / position in the frame
+    bool nearFrameEnd = phase < 3500 || phase > (int64_t)lcd4FramePeriodUs - 600;
+    if (lcd4BounceLastUs && !nearFrameEnd) {
+        uint32_t gap = (uint32_t)(now - lcd4BounceLastUs);
+        if (gap > lcd4MaxGapUs) lcd4MaxGapUs = gap;
+        if (gap > lcd4BounceGapUs) { lcd4StallSeen = true; lcd4StallCount++; }
+    }
+    lcd4BounceLastUs = now;
+    memcpy(buf, lcd4Fb + (size_t)posPx * 2, lenBytes);
+    return false;
+}
+
+    // Bildende: dauert ein Bild deutlich laenger oder kuerzer als vorgesehen, war die Unterbrechung gesperrt - Neustart vormerken
+    // End of frame: if a frame takes clearly longer or shorter than planned the interrupt was locked - note a restart
+
+inline bool lcd4VsyncEvent(esp_lcd_panel_handle_t, const esp_lcd_rgb_panel_event_data_t*, void*) {
+    int64_t now = esp_timer_get_time();
+    if (lcd4VsyncLastUs) {
+        int64_t dt = now - lcd4VsyncLastUs;
+        if (dt > (int64_t)lcd4FramePeriodUs * 5 / 4 || dt < (int64_t)lcd4FramePeriodUs * 3 / 4) { lcd4StallSeen = true; lcd4VsyncStalls++; }
+    }
+    lcd4VsyncLastUs = now;
+    return false;
+}
+
+    // Treiber anlegen und starten. Der Bounce-Betrieb ohne Treiber-Bildspeicher braucht Puffer: reicht das freie RAM nicht
+    // fuer zwei am Stueck, mit weniger Zeilen versuchen.
+
+    // Create and start the driver. Bounce mode without a driver frame buffer needs buffers: if the free RAM does not hold two
+    // in one piece, try fewer lines.
+
+inline bool lcd4CreatePanel() {
+    esp_lcd_rgb_panel_config_t p = lcd4PanelCfg;
+    const int tries[] = { lcd4BounceLines, 16, 8 };
+    lcd4PanelHandle = nullptr;
+    for (int lines : tries) {
+        p.bounce_buffer_size_px = 480 * lines;
+        esp_err_t err = esp_lcd_new_rgb_panel(&p, &lcd4PanelHandle);
+        if (err == ESP_OK) { lcd4BounceLines = lines; lcd4BounceGapUs = (int64_t)lines * lcd4LineNs * 205 / 100 / 1000; break; }
+        Serial.printf("[LCD] RGB panel with %d bounce lines failed: %s (free heap %u, largest block %u)\n", lines, esp_err_to_name(err),
+                      (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA));
+        lcd4PanelHandle = nullptr;
+    }
+    if (!lcd4PanelHandle) return false;
+
+    esp_lcd_rgb_panel_event_callbacks_t cb = {};
+    cb.on_bounce_empty = lcd4BounceEmpty;
+    cb.on_vsync = lcd4VsyncEvent;
+    lcd4VsyncLastUs = 0;
+    lcd4BounceLastUs = 0;
+    lcd4StallSeen = false;
+    if (esp_lcd_rgb_panel_register_event_callbacks(lcd4PanelHandle, &cb, nullptr) != ESP_OK) return false;
+    if (esp_lcd_panel_reset(lcd4PanelHandle) != ESP_OK) return false;
+    return esp_lcd_panel_init(lcd4PanelHandle) == ESP_OK;
+}
+
+    // Treiber neu starten (Bildspeicher bleibt): behebt ein dauerhaft verschobenes Bild nach Flash-Schreibzugriffen
+    // Restart the driver (the frame buffer stays): fixes a permanently shifted picture after flash writes
+
+inline void lcd4Reinit() {
+    if (!lcd4PanelHandle) return;
+    lcd4ReinitCount++;
+    esp_lcd_panel_del(lcd4PanelHandle);
+    lcd4CreatePanel();
+}
+
+inline void lcd4Resync() { lcd4Reinit(); }
+
+    // Nach jedem Schreibblock aufgerufen (Firmware-Update, Sicherung): schaltet das Display beim ersten Aufruf auf eine
+    // feste Farbe. checkTouch() schaltet nach 1,5 s ohne Schreibblock zurueck.
+
+    // Called after every write block (firmware update, backup): switches the display to a fixed colour on the first call.
+    // checkTouch() switches back after 1.5 s without a write block.
+
+inline void lcd4StaticBegin() {
+    lcd4LastPauseMs = millis();
+    if (!lcd4StaticOn) {
+
+        // Ab jetzt feste Farbe, Treiber sauber neu starten
+        // Fixed colour from now on, restart the driver cleanly
+
+        lcd4TextStartUs = esp_timer_get_time();
+        lcd4StaticOn = true;
+        lcd4Reinit();
+    }
+}
+
+inline void lcd4FlashPause() {
+    lcd4StaticBegin();
+    if (LCD4_FLASH_PAUSE_MS) delay(LCD4_FLASH_PAUSE_MS);
+}
+
+class Bus_EspLcdRGB : public lgfx::Bus_RGB {
+public:
+    bool init(void) override {
+        const auto& c = config();
+        esp_lcd_rgb_panel_config_t& p = lcd4PanelCfg;
+        p = {};
+        p.clk_src = LCD_CLK_SRC_DEFAULT;
+        p.timings.pclk_hz = c.freq_write;
+        p.timings.h_res = 480;
+        p.timings.v_res = 480;
+        p.timings.hsync_pulse_width = c.hsync_pulse_width;
+        p.timings.hsync_back_porch = c.hsync_back_porch;
+        p.timings.hsync_front_porch = c.hsync_front_porch;
+        p.timings.vsync_pulse_width = c.vsync_pulse_width;
+        p.timings.vsync_back_porch = c.vsync_back_porch;
+        p.timings.vsync_front_porch = c.vsync_front_porch;
+        p.timings.flags.hsync_idle_low = !c.hsync_polarity;
+        p.timings.flags.vsync_idle_low = !c.vsync_polarity;
+        p.timings.flags.de_idle_high = c.de_idle_high;
+        p.timings.flags.pclk_active_neg = 0;
+        p.timings.flags.pclk_idle_high = c.pclk_idle_high;
+        p.data_width = 16;
+        p.bits_per_pixel = 16;
+        p.num_fbs = 0;
+        p.dma_burst_size = 64;
+        p.hsync_gpio_num = c.pin_hsync;
+        p.vsync_gpio_num = c.pin_vsync;
+        p.de_gpio_num = c.pin_henable;
+        p.pclk_gpio_num = c.pin_pclk;
+        p.disp_gpio_num = -1;
+        p.flags.no_fb = 1;
+
+        // LovyanGFX legt die Farbe byteweise vertauscht ab (hohes Byte zuerst): Datenleitung j traegt Farbbit (j + 8) % 16
+        // LovyanGFX stores the colour byte-swapped (high byte first): data line j carries colour bit (j + 8) % 16
+
+        for (int j = 0; j < 16; j++) p.data_gpio_nums[j] = c.pin_data[(j + 8) & 15];
+
+        uint64_t totalPx = (uint64_t)(c.hsync_pulse_width + c.hsync_back_porch + 480 + c.hsync_front_porch) *
+                           (c.vsync_pulse_width + c.vsync_back_porch + 480 + c.vsync_front_porch);
+        lcd4FramePeriodUs = (uint32_t)(totalPx * 1000000ULL / c.freq_write);
+        lcd4LineNs = (int64_t)(c.hsync_pulse_width + c.hsync_back_porch + 480 + c.hsync_front_porch) * 1000000000LL / c.freq_write;
+
+        lcd4Fb = (uint8_t*)heap_caps_aligned_calloc(64, 1, 480 * 480 * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!lcd4Fb) return false;
+        return lcd4CreatePanel();
+    }
+
+    uint8_t* getDMABuffer(uint32_t) override { return lcd4Fb; }
+
+    void release(void) override {
+        if (lcd4PanelHandle) { esp_lcd_panel_del(lcd4PanelHandle); lcd4PanelHandle = nullptr; }
+        if (lcd4Fb) { heap_caps_free(lcd4Fb); lcd4Fb = nullptr; }
+    }
+};
+
 class UhrLGFX : public lgfx::LGFX_Device {
     lgfx::Panel_RGB _panel_rgb;
-    lgfx::Bus_RGB _bus_rgb;
+    Bus_EspLcdRGB _bus_rgb;
 
 public:
     UhrLGFX() {
@@ -337,7 +689,7 @@ public:
             cfg.pin_vsync = 39;
             cfg.pin_hsync = 38;
             cfg.pin_pclk = 41;
-            cfg.freq_write = 16000000;
+            cfg.freq_write = LCD4_PCLK_HZ;
             cfg.hsync_polarity = 1;
             cfg.hsync_front_porch = 10;
             cfg.hsync_pulse_width = 8;
@@ -362,6 +714,15 @@ public:
 };
 
 #else
+
+    // Nur auf dem ESP32-S3-Touch-LCD-4 sinnvoll (Pause nach Flash-Schreibbloecken, Display neu synchronisieren)
+    // Only useful on the ESP32-S3-Touch-LCD-4 (pause after flash write blocks, re-synchronise the display)
+
+inline void lcd4FlashPause() {}
+inline void lcd4Resync() {}
+inline void lcd4StaticText(const String&, const String&, bool = false) {}
+inline void lcd4StaticBegin() {}
+inline void lcd4ExpanderRefresh() {}
 
 class UhrLGFX : public lgfx::LGFX_Device {
     Panel_UhrGC9A01 _panel_gc9a01;

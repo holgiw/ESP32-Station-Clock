@@ -52,8 +52,8 @@
     // change) and obsolete keys (isObsoletePrefKey()) - "ssid"/"pass" held the WiFi in plain text.
 
     bool isBackupExcludedKey(const String& key) {
-        return key == PK_VERSION || key == PK_FIRST_START || key == PK_MIGRATIONS_DONE || key == PK_SUBDIAL_SET || key == PK_RENUM_PLAN ||
-               key == PK_LOG_FILE_NUMBER || key == PK_LAST_RESET_WEEK || key == PK_MQTT_PASS || key.startsWith("wtx") || isObsoletePrefKey(key);
+        return key == PK_VERSION || key == PK_FIRST_START || key == PK_MIGRATIONS_DONE || key == PK_SUBDIAL_SET || key == PK_SUBDIAL_HAND_VER || key == PK_RENUM_PLAN ||
+               key == PK_LOG_FILE_NUMBER || key == PK_LOGGING_START || key == PK_LAST_RESET_WEEK || key == PK_MQTT_PASS || key.startsWith("wtx") || isObsoletePrefKey(key);
     }
 
 
@@ -1378,6 +1378,7 @@
                         backupRestoreFail("clock storage full while restoring files");
                         return;
                     }
+                    lcd4FlashPause();
                 }
                 s.remaining -= n; data += n; len -= n;
                 if (s.remaining == 0) {
@@ -1412,6 +1413,14 @@
             delete backupRestore;
             backupRestore = new (std::nothrow) BackupRestoreState();
             if (!backupRestore) return;
+#if BOARD_WAVESHARE_S3_LCD4
+
+            // Schwarzer Hinweisbildschirm: Verschiebungen durch die Flash-Schreibzugriffe fallen darauf kaum auf
+            // Black notice screen: shifts caused by the flash writes are hardly visible on it
+
+            lcd4StaticText("Backup", "restoring...", tftRotation1 == 2);
+            lcd4StaticBegin();
+#endif
             if (!isPrivateNetworkIp(webserver.client().remoteIP())) {
                 backupRestoreFail("only allowed from a private network");
                 return;

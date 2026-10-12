@@ -2914,6 +2914,15 @@
             loggingEnabled = webserver.hasArg("loggingEnabled");
             preferences.putBool(PK_LOGGING_ENABLED, loggingEnabled);
 
+            // Beim Einschalten die Startzeit merken (Abschaltung nach 24 Stunden, checkLoggingExpiry()); 0 = noch keine
+            // gueltige Uhrzeit
+
+            // On switching on, remember the start time (switch-off after 24 hours, checkLoggingExpiry()); 0 = no valid
+            // time yet
+
+            if (loggingEnabled && !wasLoggingEnabled) preferences.putUInt(PK_LOGGING_START, timeTrusted() ? (uint32_t)time(nullptr) : 0);
+            if (!loggingEnabled) preferences.putUInt(PK_LOGGING_START, 0);
+
             if (wasLoggingEnabled && !loggingEnabled) {
                 deleteAllLogFiles();
 
@@ -4710,6 +4719,40 @@
             delete[] bmpBytes;
             });
 
+#if BOARD_WAVESHARE_S3_LCD4
+        webserver.on("/api/lcdstats", HTTP_GET, []() {
+            String r = "{\"bounceLines\":" + String(lcd4BounceLines) + ",\"gapLimitUs\":" + String((uint32_t)lcd4BounceGapUs) +
+                       ",\"maxGapUs\":" + String(lcd4MaxGapUs) + ",\"stallsBounce\":" + String(lcd4StallCount) +
+                       ",\"stallsVsync\":" + String(lcd4VsyncStalls) + ",\"reinits\":" + String(lcd4ReinitCount) +
+                       ",\"uptimeS\":" + String(millis() / 1000) + "}";
+            lcd4MaxGapUs = 0;
+            webserver.send(200, "application/json", r);
+            });
+        webserver.on("/api/lcdtest", HTTP_GET, []() {
+
+            // Test: feste Farbe mit Textstreifen fuer 6 s zeigen (/api/lcdtest?a=Zeile1&b=Zeile2)
+            // Test: show the fixed colour with the text banner for 6 s (/api/lcdtest?a=line1&b=line2)
+
+            lcd4StaticText(webserver.arg("a").length() ? webserver.arg("a") : String("Test"), webserver.arg("b").length() ? webserver.arg("b") : String("12 %"), tftRotation1 == 2);
+            webserver.send(200, "text/plain", "OK");
+            for (int i = 0; i < 60; i++) { lcd4StaticBegin(); delay(100); }
+            });
+        webserver.on("/api/lcdwifi", HTTP_GET, []() {
+
+            // Test: das animierte WLAN-Symbol 4 Durchlaeufe lang zeigen, danach zeichnet die Uhr neu
+            // Test: show the animated WiFi symbol for 4 runs, then the clock redraws
+
+            webserver.send(200, "text/plain", "OK");
+            clearTFT();
+            for (int i = 0; i < 4; i++) animateCursor(statusWidth() / 2, (int)(CLOCK_HEIGHT * 0.84f), 170);
+            firstRun = true;
+            });
+        webserver.on("/api/lcdresync", HTTP_GET, []() {
+            lcd4Resync();
+            webserver.send(200, "text/plain", "OK");
+            });
+#endif
+
         webserver.on("/currentpreview", HTTP_GET, []() {
             String face = preferences.getString(PK_BACKGROUND, "/face_default.bmp");
             String handSet = preferences.getString(PK_HANDSET, "");
@@ -5493,7 +5536,7 @@
 
             chunk += checkboxRow("rocrailEnabled", rocrailEnabled, translate("Rocrail"), translate("Take over the model time from a Rocrail server (model railroad control software) for the hands - unlocks the Rocrail tab, where the server address can then be entered"));
 
-            chunk += checkboxRow("loggingEnabled", loggingEnabled, translate("Enable Logging"), translate("Writes up to 9 log files to LittleFS for troubleshooting"));
+            chunk += checkboxRow("loggingEnabled", loggingEnabled, translate("Enable Logging"), translate("Writes up to 9 log files to LittleFS for troubleshooting, switches off after 24 hours"));
 
             // Nur sichtbar mit DCF77-Hardware UND dcf77Confirmed - ohne je
             // erkanntes Signal soll die Option gar nicht erst auftauchen.

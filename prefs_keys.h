@@ -14,6 +14,7 @@
     constexpr const char* PK_LANGUAGE          = "language";
     constexpr const char* PK_LOGGING_ENABLED   = "loggingEnabled";
     constexpr const char* PK_LOG_FILE_NUMBER   = "logFileNumber";
+    constexpr const char* PK_LOGGING_START     = "loggingStart"; // Unix-Zeit, ab der das Logging laeuft (0 = noch unbekannt), fuer die 24-h-Abschaltung
     constexpr const char* PK_PREVIEW_SIZE      = "previewSize"; // Groesse der Web-Vorschau (/preview) in px,
                                                                 // vom Nutzer per Schieberegler eingestellt (siehe webserver_routes.h)
                                                                 // size of the web preview (/preview) in px, set by the
@@ -89,6 +90,7 @@
     constexpr const char* PK_MQTT_PASS        = "mqttPass";     // Passwort - nicht in der Sicherung / password - not in the backup
     constexpr const char* PK_MQTT_PREFIX      = "mqttPrefix";   // Basis-Topic (Default uhr4) / base topic (default uhr4)
     constexpr const char* PK_RENUM_PLAN        = "renumPlan";    // laufende Neunummerierung der Zeigersaetze (Stufe|alt>neu,...)
+    constexpr const char* PK_SUBDIAL_HAND_VER  = "subdialHandVer"; // Version des erzeugten Sekundenzeigers von Satz 3 (SUBDIAL_HAND_VERSION)
     constexpr const char* PK_SUBDIAL_SET       = "subdialSet";   // Nummer des erzeugten Zeigersatzes fuers Sekundenfeld
                                                                  // number of the generated hand set for the subdial
     constexpr const char* PK_STRIP_CFG_DONE    = "stripCfgDone"; // Streifen-Einstellungen in stripcfg_*.txt uebernommen

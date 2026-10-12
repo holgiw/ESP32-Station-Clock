@@ -14,7 +14,7 @@
       genBtn: 'Erzeugen', preview: 'Vorschau', live: 'Live-Uhrzeit', bgFace: 'Zifferblatt', bgDark: 'dunkel',
       bgLight: 'hell', saving: 'Speichere...', saved: 'Als neues Design Satz {0} gespeichert', activated: ' und aktiviert',
       saveCurBtn: 'Aktuelles Design speichern und anwenden', savedCur: 'Satz {0} gespeichert und angewendet',
-      loading: 'Lade...', loaded: 'Aktives Design geladen', failed: 'Fehler: ', missing: 'fehlt - Standard verwendet',
+      loading: 'Lade...', loaded: 'Aktives Design geladen', failed: 'Fehler: ', missing: 'fehlt - Standard verwendet', loadFailed: 'Nicht geladen (leer): ', noSave: 'Nicht gespeichert - Zeiger konnten nicht geladen werden: ',
       confirmReset: 'Alle \u00c4nderungen verwerfen und das aktive Design neu laden?', confirmClear: 'Diesen Zeiger komplett leeren?',
       confirmGen: 'Aktuellen Zeiger durch die erzeugte Form ersetzen?',
       whiteHint: 'Reines Wei\u00df ist transparent - wird automatisch zu Fast-Wei\u00df.',
@@ -48,7 +48,7 @@
       genBtn: 'Generate', preview: 'Preview', live: 'Live time', bgFace: 'Clock face', bgDark: 'dark',
       bgLight: 'light', saving: 'Saving...', saved: 'Saved as new design, set {0}', activated: ' and activated',
       saveCurBtn: 'Save and apply current design', savedCur: 'Set {0} saved and applied',
-      loading: 'Loading...', loaded: 'Active design loaded', failed: 'Error: ', missing: 'missing - default used',
+      loading: 'Loading...', loaded: 'Active design loaded', failed: 'Error: ', missing: 'missing - default used', loadFailed: 'Not loaded (empty): ', noSave: 'Not saved - hands could not be loaded: ',
       confirmReset: 'Discard all changes and reload the active design?', confirmClear: 'Clear this hand completely?',
       confirmGen: 'Replace the current hand with the generated shape?',
       whiteHint: 'Pure white is transparent - automatically becomes near-white.',
@@ -636,21 +636,42 @@
       return r.arrayBuffer();
     }).then(decodeBmp);
   }
+  // Zeiger nacheinander laden und je dreimal versuchen: Die Uhr beantwortet nur eine Anfrage zugleich, parallele Anfragen
+  // brachen ab und der Zeiger blieb leer - das Speichern haette ihn dann leer als neues Design abgelegt.
+
+  // Load the hands one after another and try each three times: the clock answers only one request at a time, parallel
+  // requests broke off and the hand stayed empty - saving would then have stored it empty as a new design.
+
+  var loadFailed = [];
   function loadActive() {
-    var id = activeBase(), notes = [];
+    var id = activeBase(), notes = [], failed = [];
     showMsg(t('loading'));
-    Promise.all(PARTS.map(function (p) {
+    function attempt(u, tries) {
+      return fetchHand(u).catch(function (e) {
+        if (tries <= 1) throw e;
+        return new Promise(function (res) { setTimeout(res, 300); }).then(function () { return attempt(u, tries - 1); });
+      });
+    }
+    function loadOne(p) {
       var def = '/file?name=' + encodeURIComponent('/hand_set0_' + p + '.bmp');
       var url = '/file?name=' + encodeURIComponent('/hand_set' + id + '_' + p + '.bmp');
-      return fetchHand(url).catch(function () {
+      return attempt(url, 3).catch(function () {
         notes.push(t(p) + ' ' + t('missing'));
-        return fetchHand(def);
-      }).then(function (buf) { pix[p] = buf; }).catch(function () { pix[p] = new Int32Array(N).fill(TRANSPARENT); });
-    })).then(function () {
+        return attempt(def, 3);
+      }).then(function (buf) { pix[p] = buf; }).catch(function () {
+        failed.push(t(p));
+        pix[p] = new Int32Array(N).fill(TRANSPARENT);
+      });
+    }
+    var chain = Promise.resolve();
+    PARTS.forEach(function (p) { chain = chain.then(function () { return loadOne(p); }); });
+    chain.then(function () {
+      loadFailed = failed;
       PARTS.forEach(function (p) { undoSt[p] = []; redoSt[p] = []; });
       setDirty(false);
       showBase(); drawEditor(); schedulePreview();
-      showMsg(t('loaded') + (notes.length ? ' - ' + notes.join(', ') : ''), true);
+      if (failed.length) showMsg(t('loadFailed') + failed.join(', '), false);
+      else showMsg(t('loaded') + (notes.length ? ' - ' + notes.join(', ') : ''), true);
     });
   }
   $('resetBtn').onclick = function () {
@@ -665,6 +686,7 @@
   // then activate - /sethandset reloads the hands on the clock.
 
   function saveSet(id, isNew) {
+    if (loadFailed.length) { showMsg(t('noSave') + loadFailed.join(', '), false); return; }
     $('saveBtn').disabled = true; $('saveCurBtn').disabled = true;
     showMsg(t('saving'));
 

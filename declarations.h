@@ -417,6 +417,7 @@
     void showButtonMessage(uint16_t color, const String& title, const String& line2, const String& hint, uint16_t hintColor) ;
     void updateButtonLine(uint16_t color, const String& line2) ;
     void checkButton() ;
+    void checkTouch() ;
     String factoryResetActionLabel(const String& action) ; // kurze Beschriftung fuer Display + Web-Eingabeseite (siehe system_utils.h)
                                                             // short label for display + web entry page (see system_utils.h)
     void requestConfirmationCode(const String& action) ; // erzeugt/zeigt einen neuen Bestaetigungscode (siehe system_utils.h)
@@ -454,6 +455,7 @@
     void logToFile(const String& message) ;
     void flushLogBuffer() ;
     void checkLogFlush() ;
+    void checkLoggingExpiry() ;
     String trim(const String& str) ;
     bool getSmoothSecondPref(bool stationModeFallback) ; // liest PK_SMOOTH_SECOND mit Migrations-Fallback auf stationMode (siehe system_utils.h)
                                                           // reads PK_SMOOTH_SECOND with a migration fallback to stationMode (see system_utils.h)

@@ -72,7 +72,7 @@
         { "The minute hand moves smoothly instead of jumping in 1-minute steps", "Der Minutenzeiger bewegt sich gleichm&auml;&szlig;ig, statt in 1-Minuten-Schritten zu springen" },
         { "The second hand moves smoothly instead of jumping in 1-second steps", "Der Sekundenzeiger bewegt sich gleichm&auml;&szlig;ig, statt in 1-Sekunden-Schritten zu springen" },
         { "Automatically tries to reconnect if the WiFi connection is lost", "Versucht automatisch, die WLAN-Verbindung bei Verbindungsverlust wiederherzustellen" },
-        { "Writes up to 9 log files to LittleFS for troubleshooting", "Schreibt bis zu 9 Logdateien zur Fehlersuche in LittleFS" },
+        { "Writes up to 9 log files to LittleFS for troubleshooting, switches off after 24 hours", "Schreibt bis zu 9 Logdateien zur Fehlersuche in LittleFS, schaltet sich nach 24 Stunden ab" },
         { "DCF77 Sync LED Blink", "DCF77-Sync-LED-Blinken" },
         { "Flashes the LED for every received DCF77 pulse while the clock is still acquiring the time signal", "L&auml;sst die LED bei jedem empfangenen DCF77-Impuls aufblitzen, solange die Uhr das Zeitsignal noch sucht" },
         { "Rotates the clock face by the selected number of degrees, useful if the display is mounted rotated in its housing", "Dreht das Zifferblatt um den gew&auml;hlten Winkel - n&uuml;tzlich, falls das Display gedreht im Geh&auml;use verbaut ist" },
