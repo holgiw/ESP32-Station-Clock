@@ -107,7 +107,7 @@ Soll die Uhr komplett neu eingerichtet werden (z.B. Umzug, neuer Router), gibt e
 
 ## 4. Uhren-Sets (Presets) erstellen und verwalten
 
-Ein „Uhren-Set" (Preset) speichert die **aktuell aktive Kombination** aus Zifferblatt, Zeigersatz, Nabenfarbe/-größe, Sekundenzeiger (sichtbar und Stil), Bahnhofsmodus, sanftem Minutenzeiger, Zeitzone und Helligkeitseinstellungen unter einem Namen, um sie später mit einem Klick wieder abzurufen.
+Ein „Uhren-Set" (Preset) speichert die **aktuell aktive Kombination** aus Zifferblatt, Zeigersatz, Nabenfarbe/-größe, Sekundenzeiger (sichtbar und Stil), Bahnhofsmodus, sanftem Minutenzeiger, Zeitzone und automatischer Helligkeit (ohne die Helligkeitswerte, die zur Uhr gehören) unter einem Namen, um sie später mit einem Klick wieder abzurufen.
 
 ### 4.1 Ein neues Uhren-Set anlegen
 
@@ -264,7 +264,7 @@ If the clock needs to be set up from scratch (e.g. a move, a new router), there 
 
 ## 4. Creating and Managing Presets
 
-A preset stores the **currently active combination** of clock face, hand set, hub color/size, second hand (visibility and style), station mode, smooth minute hand, time zone and brightness settings under a name, so it can be recalled later with a single click.
+A preset stores the **currently active combination** of clock face, hand set, hub color/size, second hand (visibility and style), station mode, smooth minute hand, time zone and automatic brightness (without the brightness values, which belong to the clock) under a name, so it can be recalled later with a single click.
 
 ### 4.1 Creating a new preset
 
