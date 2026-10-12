@@ -1506,6 +1506,24 @@
     // Builds the shared inner part of the brightness form - the surrounding <form>/<div> and the save button
     // stay with the callers.
 
+    // Testknopf neben den Helligkeitsfeldern: zeigt den eingetragenen Wert (auch ungespeichert) BRIGHTNESS_TEST_MS lang
+    // auf der Uhr (/api/testBrightness), der Knopf zaehlt die Sekunden herunter
+
+    // Test button next to the brightness fields: shows the entered value (even unsaved) on the clock for
+    // BRIGHTNESS_TEST_MS (/api/testBrightness), the button counts down the seconds
+
+    String brightnessTestButton(const char* field) {
+        return String("<button type='button' onclick=\"testBrightness(this,'") + field + "')\" style='width:auto;margin:0;padding:3px 10px;' title='" +
+               translate("Shows the value in the field on the clock for 10 seconds, then the normal brightness applies again") + "'>Test " + String(BRIGHTNESS_TEST_MS / 1000) + " s</button>";
+    }
+
+    String brightnessTestScript() {
+        return String("<script>function testBrightness(b,n){var i=document.querySelector(\"[name='\"+n+\"']\");var v=parseInt(i.value);if(isNaN(v))return;")
+               + "v=Math.max(0,Math.min(255,v));var t=b.textContent;b.disabled=true;fetch('/api/testBrightness',{method:'POST',body:new URLSearchParams({value:v})})"
+               + ".then(function(r){if(!r.ok)throw 0;var s=" + String(BRIGHTNESS_TEST_MS / 1000) + ";(function tick(){b.textContent=s+' s';if(s--<=0){b.textContent=t;b.disabled=false;return;}setTimeout(tick,1000);})();})"
+               + ".catch(function(){b.textContent=t;b.disabled=false;});}</script>";
+    }
+
     String brightnessFormFieldsHtml() {
         String html = "";
 
@@ -1533,10 +1551,10 @@
         html += "<div style='display:flex;align-items:center;gap:6px;white-space:nowrap;'><label style='width:280px;display:inline-block;white-space:normal;'>" + translate("Full brightness from (hour, 0-23)") + ":</label><input name = 'brightStart' type = 'number' min = '0' max = '23' value = '" + String(brightStartHour) + "' style='width:70px;'> " + infoTip(translate("Start of the daily time window during which the display always uses full brightness, regardless of ambient light")) + "</div>";
         html += "<div style='display:flex;align-items:center;gap:6px;white-space:nowrap;'><label style='width:280px;display:inline-block;white-space:normal;'>" + translate("Full brightness until (hour, 0-23)") + ":</label><input name = 'brightEnd' type = 'number' min = '0' max = '23' value = '" + String(brightEndHour) + "' style='width:70px;'> " + infoTip(translate("End of the daily time window during which the display always uses full brightness, regardless of ambient light")) + "</div><br>";
 
-        html += "<div style='display:flex;align-items:center;gap:6px;white-space:nowrap;'><label style='width:280px;display:inline-block;white-space:normal;'>" + translate("Min Brightness") + " (0 - 255) : </label><input name = 'minBrightness' type = 'number' min = '0' max = '255' value = '" + String(minBrightness) + "' style='width:70px;'> " + infoTip(translate("Display brightness used at or below the low threshold")) + "</div>";
+        html += "<div style='display:flex;align-items:center;gap:6px;white-space:nowrap;'><label style='width:280px;display:inline-block;white-space:normal;'>" + translate("Min Brightness") + " (0 - 255) : </label><input name = 'minBrightness' type = 'number' min = '0' max = '255' value = '" + String(minBrightness) + "' style='width:70px;'> " + infoTip(translate("Display brightness used at or below the low threshold")) + " " + brightnessTestButton("minBrightness") + "</div>";
         html += "<div style='display:flex;align-items:center;gap:6px;white-space:nowrap;'><label style='width:280px;display:inline-block;white-space:normal;'>" + translate("Max Brightness") + " (0 - 255) : </label><input name = 'maxBrightness' type = 'number' min = '0' max = '255' value = '" + String(maxBrightness) + "' style='width:70px;'" +
                 (BOARD_WAVESHARE_C6_ST7789 ? String(" oninput=\"document.getElementById('maxBrightWarn').style.display=this.value>" + String(BACKLIGHT_C6_MAX_SAFE) + "?'':'none'\"") : String("")) +
-                "> " + infoTip(translate("Display brightness used at or above the high threshold")) + "</div>";
+                "> " + infoTip(translate("Display brightness used at or above the high threshold")) + " " + brightnessTestButton("maxBrightness") + "</div>";
 
         // ESP32-C6: Warnung ueber BACKLIGHT_C6_MAX_SAFE (Hinweis von Waveshare zur Ueberhitzung), live beim Tippen
         // ESP32-C6: warning above BACKLIGHT_C6_MAX_SAFE (Waveshare's note on overheating), live while typing
@@ -1557,6 +1575,7 @@
         html += "<div style='display:flex;align-items:center;gap:6px;white-space:nowrap;'><label style='width:280px;display:inline-block;white-space:normal;'>" + translate("Gamma Correction") + " (0.1 - 3.0) : </label><input type='number' name='gamma' step='0.1' min='0.1' max='3.0' value='" + String(gammaBrightness) + "' required style='width:70px;'> " + infoTip(translate("Adjusts how brightness ramps between minimum and maximum - higher values keep the display darker for longer before brightening")) + "</div>";
         }
 
+        html += brightnessTestScript();
         return html;
     }
 
@@ -2606,11 +2625,6 @@
 
             applyNtpServerDefaultsIfNoneConfigured();
 
-            // Uhrzeit aus offenen WLANs beim Start (Kaestchen im selben Formular, siehe fetchTimeFromOpenWifi())
-            // Time from open WiFis at boot (checkbox in the same form, see fetchTimeFromOpenWifi())
-
-            preferences.putBool(PK_OPEN_WIFI_TIME, webserver.hasArg("openWifiTime"));
-
             if (webserver.hasArg("timezone")) {
                 String tz = webserver.arg("timezone");
                 preferences.putString(PK_TIMEZONE, tz);
@@ -2944,6 +2958,11 @@
 
             wifiActive = webserver.hasArg("wifiActive");
             preferences.putBool(PK_WIFI_ACTIVE, wifiActive);
+
+            // Uhrzeit aus offenen WLANs beim Start (Kaestchen im Tab Uhr Einstellungen, siehe fetchTimeFromOpenWifi())
+            // Time from open WiFis at boot (checkbox in the Clock Setup tab, see fetchTimeFromOpenWifi())
+
+            preferences.putBool(PK_OPEN_WIFI_TIME, webserver.hasArg("openWifiTime"));
 
             // Rocrail-Master-Schalter: schaltet Nutzung und Sichtbarkeit des
             // Rocrail-Tabs frei (siehe generateSettingsTabNav()). Beim
@@ -4172,24 +4191,33 @@
             if (stripBefore) chunk += stripCanvas;
             chunk += "<div style='width:" + String(previewSize) + "px;height:" + String(previewSize) + "px;box-sizing:border-box;" + String(stripPrevH > 0 ? "" : "border:3px solid #333;") + String(displayGeom->round ? "border-radius:50%;" : "") + "background:#fff url(/currentfacebg) center/cover no-repeat;overflow:hidden;position:relative;'>";
 
-            // Sekundenfeld: Sekundenzeiger an seinem Drehpunkt und unter den grossen Zeigern (wie renderClockFrame())
-            // Seconds subdial: second hand at its pivot and below the large hands (as in renderClockFrame())
+            // Drehpunkte wie in renderClockFrame(): Stunde/Minute auf ihrem Drehpunkt oder in der Mitte, der Sekundenzeiger
+            // auf seinem eigenen (Sekundenfeld) oder dem der anderen, darunter oder darueber je nach Lage
+
+            // Pivots as in renderClockFrame(): hour/minute on their pivot or in the centre, the second hand on its own
+            // (seconds subdial) or that of the others, below or above depending on the position
 
             ensureFaceSettings();
-            bool subdial = showSecond && secPivotX >= 0;
-            if (subdial) {
-                chunk += "<div style='position:absolute;left:" + String((secPivotX + 0.5f) * scaleFactor, 2) + "px;top:" +
-                         String((secPivotY + 0.5f) * scaleFactor, 2) + "px;width:0;height:0;'>" + handImg("liveSecondHandFull", "second", secondW) + "</div>";
+            const HandPlan plan = makeHandPlan(showSecond);
+            auto pivotPos = [&](float x, float y) {
+                return "position:absolute;left:" + String((x + 0.5f) * scaleFactor, 2) + "px;top:" + String((y + 0.5f) * scaleFactor, 2) + "px;width:0;height:0;";
+            };
+            const bool secSeparate = showSecond && (plan.secOwn || plan.secUnder);
+            if (showSecond && plan.secUnder) {
+                chunk += "<div style='" + pivotPos(plan.secX, plan.secY) + "'>" + handImg("liveSecondHandFull", "second", secondW) + "</div>";
             }
-            chunk += "<div id='liveHandsPivotFull' style='position:absolute;left:50%;top:50%;width:0;height:0;'>";
+            chunk += "<div id='liveHandsPivotFull' style='" + String(plan.hmCustom ? pivotPos(plan.hmX, plan.hmY) : String("position:absolute;left:50%;top:50%;width:0;height:0;")) + "'>";
             chunk += handImg("liveHourHandFull", "hour", hourW);
             chunk += handImg("liveMinuteHandFull", "minute", minuteW);
-            if (showSecond && !subdial) {
+            if (showSecond && !secSeparate) {
                 chunk += handImg("liveSecondHandFull", "second", secondW);
             }
             chunk += "<div id='liveHubFull' style='position:absolute;left:-" + String(scaledHubSize / 2) + "px;top:-" + String(scaledHubSize / 2) + "px;width:" + String(scaledHubSize) + "px;height:" + String(scaledHubSize) + "px;border-radius:50%;background:" + String(hubHex) + ";'></div>";
             chunk += "</div>"; // Ende Zeiger-Drehpunkt
                                // end hand pivot
+            if (showSecond && plan.secOwn && !plan.secUnder) {
+                chunk += "<div style='" + pivotPos(plan.secX, plan.secY) + "'>" + handImg("liveSecondHandFull", "second", secondW) + "</div>";
+            }
             chunk += "</div>"; // Ende Zifferblatt-Kreis
                                // end clock-face circle
             if (!stripBefore) chunk += stripCanvas;
@@ -5484,6 +5512,8 @@
             chunk += "c.disabled=!show.checked;c.parentNode.style.opacity=show.checked?'':'0.45';});}show.addEventListener('change',upd);upd();})();</script>";
 
             chunk += checkboxRow("wifiActive", wifiActive, translate("Reconnect WiFi"), translate("Automatically tries to reconnect if the WiFi connection is lost"));
+            chunk += checkboxRow("openWifiTime", preferences.getBool(PK_OPEN_WIFI_TIME, true), translate("Get the time from open WiFis"),
+                                 translate("Only at boot, if the clock cannot connect to any stored WiFi (out of range or no access, e.g. a wrong password) and there is no RTC: the clock briefly connects to up to six open WiFis nearby (60 seconds at most) and gets the time via NTP or from the login page of the hotspot (also via HTTPS), then disconnects again. Every step is written to the log. These are networks of others - only use it if allowed"));
 
             // Default aus - schaltet Nutzung und Sichtbarkeit des separaten
             // Rocrail-Tabs frei (siehe generateSettingsTabNav()).
@@ -5823,8 +5853,6 @@
 
                 chunk += "<input type='text' id='tz_input' name='timezone' style='width: 400px;' value='" + timezone + "'><br><br>";
                 chunk += "<small>" + translate("For custom timezones, select a preset or enter your own value above") + "</small><br><br>";
-                chunk += checkboxRow("openWifiTime", preferences.getBool(PK_OPEN_WIFI_TIME, true), translate("Get the time from open WiFis"),
-                                     translate("Only at boot, if the clock cannot connect to any stored WiFi (out of range or no access, e.g. a wrong password) and there is no RTC: the clock briefly connects to up to six open WiFis nearby (60 seconds at most) and gets the time via NTP or from the login page of the hotspot (also via HTTPS), then disconnects again. Every step is written to the log. These are networks of others - only use it if allowed"));
                 chunk += "<button type='submit'>" + translate("Save Timezone") + "</button><br><br>";
                 chunk += "</form>";
 
@@ -6738,24 +6766,42 @@
             uint8_t b = rgb & 0xFF;
             hubColor = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
 
-            // Drehpunkt des Sekundenzeigers (secx/secy, -1 = Mitte) gehoert zum Zifferblatt: gespeichert in dessen
-            // facecfg_*.txt - face = Zifferblatt, das der Designer gerade speichert, sonst das aktive
+            // Drehpunkte (secx/secy Sekundenzeiger, hmx/hmy Stunde und Minute, -1 = Mitte) und Lage des Sekundenzeigers
+            // (secorder: 0 automatisch, 1 ueber, 2 unter den anderen) gehoeren zum Zifferblatt: gespeichert in dessen
+            // Datei (Anhang) - face = Zifferblatt, das der Designer gerade speichert, sonst das aktive
 
-            // Pivot of the second hand (secx/secy, -1 = centre) belongs to the clock face: stored in its
-            // facecfg_*.txt - face = clock face the designer is saving right now, otherwise the active one
+            // Pivots (secx/secy second hand, hmx/hmy hour and minute, -1 = centre) and position of the second hand
+            // (secorder: 0 automatic, 1 over, 2 below the others) belong to the clock face: stored in its file
+            // (trailer) - face = clock face the designer is saving right now, otherwise the active one
 
             bool pivotArg = webserver.hasArg("secx") && webserver.hasArg("secy");
-            if (pivotArg) {
+            bool hmArg = webserver.hasArg("hmx") && webserver.hasArg("hmy");
+            bool orderArg = webserver.hasArg("secorder");
+            if (pivotArg || hmArg || orderArg) {
                 ensureFaceSettings();
-                secPivotX = (int16_t)constrain(webserver.arg("secx").toInt(), -1L, (long)CLOCK_WIDTH - 1);
-                secPivotY = (int16_t)constrain(webserver.arg("secy").toInt(), -1L, (long)CLOCK_HEIGHT - 1);
-                if (secPivotX < 0 || secPivotY < 0) secPivotX = secPivotY = -1;
+                if (pivotArg) {
+                    secPivotX = (int16_t)constrain(webserver.arg("secx").toInt(), -1L, (long)CLOCK_WIDTH - 1);
+                    secPivotY = (int16_t)constrain(webserver.arg("secy").toInt(), -1L, (long)CLOCK_HEIGHT - 1);
+                    if (secPivotX < 0 || secPivotY < 0) secPivotX = secPivotY = -1;
+                }
+                if (hmArg) {
+                    hmPivotX = (int16_t)constrain(webserver.arg("hmx").toInt(), -1L, (long)CLOCK_WIDTH - 1);
+                    hmPivotY = (int16_t)constrain(webserver.arg("hmy").toInt(), -1L, (long)CLOCK_HEIGHT - 1);
+                    if (hmPivotX < 0 || hmPivotY < 0) hmPivotX = hmPivotY = -1;
+                }
+                if (orderArg) secOrder = (uint8_t)argToIntClamped("secorder", secOrder, 0, 2);
                 clockFrameDirty[0] = clockFrameDirty[1] = true;
             }
             if (webserver.arg("save") == "1") {
                 preferences.putUInt(PK_CENTER_SIZE, hubSize);
                 preferences.putLong(PK_CENTER_COLOR, rgb);
-                if (pivotArg) saveFaceSettings(webserver.hasArg("face") ? "/" + webserver.arg("face") : selectedBackground, secPivotX, secPivotY);
+                if (pivotArg || hmArg || orderArg) {
+                    FacePivots fp;
+                    fp.secX = secPivotX; fp.secY = secPivotY;
+                    fp.hmX = hmPivotX; fp.hmY = hmPivotY;
+                    fp.order = secOrder;
+                    saveFacePivots(webserver.hasArg("face") ? "/" + webserver.arg("face") : selectedBackground, fp);
+                }
                 DEBUG_PRINTLN("[WEB] Hub saved: radius " + String(hubSize) + ", color " + String(rgb, HEX));
             }
             webserver.send(200, "application/json", "{\"ok\":true}");
@@ -6944,7 +6990,8 @@
                      ",px:" + String(HAND_WIDTH / 2) + ",py:" + String(HAND_PIVOT_Y) +
                      ",cw:" + String(CLOCK_WIDTH) + ",active:'" + jsSafe(handSetFileId(preferences.getString(PK_HANDSET, ""))) +
                      "',face:'" + jsSafe(selectedBackground) + "',hub:" + String(hubSize) + ",hubColor:'" + String(hubHex) +
-                     "',sec:[" + String(secPivotX) + "," + String(secPivotY) + "],prot:[" + protectedSetsJs() + "]" +
+                     "',sec:[" + String(secPivotX) + "," + String(secPivotY) + "],hm:[" + String(hmPivotX) + "," + String(hmPivotY) + "],order:" + String(secOrder) +
+                     ",prot:[" + protectedSetsJs() + "]" +
                      ",lang:'" + jsSafe(currentLanguage) + "',sets:[" + setsJs + "]" +
                      ",widths:{hour:" + String(hourHandWidth) + ",minute:" + String(minuteHandWidth) + ",second:" + String(secondHandWidth) + "}" + modeJs + "};</script>";
             webserver.sendContent(chunk);
@@ -7073,7 +7120,8 @@
                      ",set:'" + jsSafe(handSetFileId(preferences.getString(PK_HANDSET, ""))) + "'" +
                      ",widths:{hour:" + String(hourHandWidth) + ",minute:" + String(minuteHandWidth) + ",second:" + String(secondHandWidth) + "}}" +
                      ",hub:" + String(hubSize) + ",hubColor:'" + String(hubHex) + "',showSec:" + String(showSecondHand ? "true" : "false") +
-                     ",sec:[" + String(secPivotX) + "," + String(secPivotY) + "],prot:[" + protectedFacesJs() + "]" +
+                     ",sec:[" + String(secPivotX) + "," + String(secPivotY) + "],hm:[" + String(hmPivotX) + "," + String(hmPivotY) + "],order:" + String(secOrder) +
+                     ",prot:[" + protectedFacesJs() + "]" +
                      ",lang:'" + jsSafe(currentLanguage) + "'" + modeJs + ",strip:" + stripJs + ",fonts:[" + fontsJs + "]};</script>";
             webserver.sendContent(chunk);
             webserver.sendContent_P(FACE_DESIGNER_HTML);
@@ -7546,6 +7594,35 @@
         // Firmware update over WiFi, ESP32-S3 only (ota_update.h)
 
         setupOtaRoutes();
+
+        // Helligkeitstest: Wert 0-255 fuer BRIGHTNESS_TEST_MS auf der Uhr zeigen (updateBrightness() in display.h)
+        // Brightness test: show a value 0-255 on the clock for BRIGHTNESS_TEST_MS (updateBrightness() in display.h)
+
+        webserver.on("/api/testBrightness", HTTP_POST, []() {
+            int v = argToIntClamped("value", -1, 0, 255);
+            if (v < 0) { webserver.send(400, "application/json", "{\"ok\":false}"); return; }
+            brightnessTestValue = (uint8_t)v;
+            brightnessTestUntil = millis() + BRIGHTNESS_TEST_MS;
+            if (brightnessTestUntil == 0) brightnessTestUntil = 1;
+            webserver.send(200, "application/json", "{\"ok\":true}");
+            });
+
+#if HAS_IMU
+
+        // Lagesensor: aktuelle Beschleunigung in g (X/Y in der Displayebene, Z senkrecht), erkannte Lage und Rotation -
+        // zum Pruefen der automatischen Rotation (liegt die Uhr flach: x und y nahe 0, z nahe +-1)
+
+        // Motion sensor: current acceleration in g (X/Y in the display plane, Z perpendicular), detected position and
+        // rotation - for checking the automatic rotation (clock lying flat: x and y near 0, z near +-1)
+
+        webserver.on("/api/imu", HTTP_GET, []() {
+            int8_t q = imuReadQuadrant();
+            String json = "{\"x\":" + String(imuLastG[0], 3) + ",\"y\":" + String(imuLastG[1], 3) + ",\"z\":" + String(imuLastG[2], 3) +
+                          ",\"quadrant\":" + String(q) + ",\"auto\":" + String(autoRotation ? "true" : "false") +
+                          ",\"rotation\":" + String(tftRotation1) + "}";
+            webserver.send(200, "application/json", json);
+            });
+#endif
         setupMqttRoutes();
 
         webserver.on("/factoryReset", HTTP_GET, []() {

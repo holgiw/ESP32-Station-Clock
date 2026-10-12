@@ -389,6 +389,13 @@
 #define TFT_ROTATION1_DEFAULT 0
 #define TFT_ROTATION2_DEFAULT TFT_ROTATION_NA
 
+    // Testknopf auf der Helligkeitsseite: zeigt den eingetragenen Wert so lange auf der Uhr, danach gilt wieder
+    // die normale Regelung
+
+    // Test button on the brightness page: shows the entered value on the clock for this long, then the normal
+    // control applies again
+
+#define BRIGHTNESS_TEST_MS 10000
 #define BACKLIGHT_FREQ 5000
 #define BACKLIGHT_RESOLUTION 8
 

@@ -807,17 +807,17 @@
     // Sekundenfeld des Zifferblatts (HD.sec): Sekundenzeiger zuerst und an seinem Drehpunkt, unter den grossen Zeigern
     // Seconds subdial of the clock face (HD.sec): second hand first and at its pivot, below the large hands
 
-    var sub = HD.sec && HD.sec[0] >= 0;
-    (sub ? ['second', 'hour', 'minute'] : PARTS).forEach(function (p) {
+    var plan = handPlan(HD.sec, HD.hm, HD.order, true, S / 2, OY + S / 2, OY);
+    (plan.under ? ['second', 'hour', 'minute'] : PARTS).forEach(function (p) {
       pctx.save();
-      if (sub && p === 'second') pctx.translate(HD.sec[0], OY + HD.sec[1]); else pctx.translate(S / 2, OY + S / 2);
+      if (p === 'second') pctx.translate(plan.sx, plan.sy); else pctx.translate(plan.hx, plan.hy);
       pctx.rotate(ang[p] * Math.PI / 180);
       pctx.drawImage(handCanvas(pix[p], p), -((spriteWidth(p) >> 1) + 0.5), -(PY + 0.5));
       pctx.restore();
     });
     if (HD.hub > 0) {
       pctx.fillStyle = HD.hubColor;
-      pctx.beginPath(); pctx.arc(S / 2, OY + S / 2, HD.hub, 0, Math.PI * 2); pctx.fill();
+      pctx.beginPath(); pctx.arc(plan.hx, plan.hy, HD.hub, 0, Math.PI * 2); pctx.fill();
     }
   }
 

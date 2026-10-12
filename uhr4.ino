@@ -1102,6 +1102,8 @@ void setup() {
                             // generate missing clock faces, hand sets and presets of the starter set (presets_manager.h)
         renumberHandSets(); // Zeigersaetze fortlaufend nummerieren, Uhren Sets ziehen mit
                             // number the hand sets consecutively, presets follow
+        migrateFaceCfgFiles(); // Drehpunkte aus facecfg_*.txt in die Zifferblaetter uebernehmen (display.h)
+                               // move pivots from facecfg_*.txt into the clock faces (display.h)
         refreshGeneratedAssets(); // erzeugte Dateien im Mass eines anderen Displaytyps neu erzeugen
                                   // regenerate generated files in the size of another display type
         completeHandSets();       // jeder Zeigersatz mit allen drei Zeigern (fehlende aus Satz 0)

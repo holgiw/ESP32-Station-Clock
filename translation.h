@@ -121,6 +121,7 @@
         { "Smooth Minute Hand", "Sanfter Minutenzeiger" },
         { "Smooth Second Hand", "Sanfter Sekundenzeiger" },
         { "Min Brightness", "Minimale Helligkeit" },
+        { "Shows the value in the field on the clock for 10 seconds, then the normal brightness applies again", "Zeigt den Wert im Feld 10 Sekunden lang auf der Uhr, danach gilt wieder die normale Helligkeit" },
         { "Max Brightness", "Maximale Helligkeit" },
         { "Rebooting...", "Starte neu..." },
         { "Reboot", "Neustart" },

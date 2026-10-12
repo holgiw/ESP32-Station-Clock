@@ -68,6 +68,18 @@ function showMsg(text, ok) { $('msg').className = ok === undefined ? '' : (ok ? 
 // Hand angles like renderClockFrame() on the device: station clock (second
 // races and waits at 12), smooth or jumping minute and second.
 
+// Wo die Zeiger sitzen (wie makeHandPlan() in display.h): sec/hm = [x, y] im Zifferblatt, -1 = Mitte; order 0 automatisch,
+// 1 ueber, 2 unter den anderen; cx/cy = Mitte im Zeichenfeld, oy = Versatz des Zifferblatts. under: Sekundenzeiger zuerst
+// Where the hands sit (as makeHandPlan() in display.h): sec/hm = [x, y] on the clock face, -1 = centre; order 0 automatic,
+// 1 over, 2 below the others; cx/cy = centre in the canvas, oy = offset of the clock face. under: second hand first
+function handPlan(sec, hm, order, showSec, cx, cy, oy) {
+  var hmC = hm && hm[0] >= 0, secO = sec && sec[0] >= 0;
+  var hx = hmC ? hm[0] : cx, hy = hmC ? oy + hm[1] : cy;
+  var sx = secO ? sec[0] : hx, sy = secO ? oy + sec[1] : hy;
+  var differs = Math.abs(sx - hx) > 0.5 || Math.abs(sy - hy) > 0.5;
+  return { hx: hx, hy: hy, sx: sx, sy: sy, differs: differs, under: !!showSec && (order === 2 || (!order && differs)) };
+}
+
 function handAngles(d, M) {
   var h = d.getHours() % 12, m = d.getMinutes(), s = d.getSeconds(), ms = d.getMilliseconds(), sec;
   M = M || {};

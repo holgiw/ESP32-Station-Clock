@@ -897,15 +897,43 @@
     // Size of the built-in strip font in percent (STRIP_SCALE_MIN..MAX), separate for time and date. VLW fonts
     // have their pixel size instead (stripVlwTimeSize/stripVlwDateSize).
 
-    // Drehpunkt des Sekundenzeigers im Zifferblatt (facecfg_<Name>.txt), -1 = Mitte. faceSettingsFor: Zifferblatt,
-    // dessen Einstellungen geladen sind ("?" = neu laden).
+    // Drehpunkt des Sekundenzeigers im Zifferblatt (Anhang der Zifferblatt-Datei, siehe readFaceSecPivot()), -1 = Mitte.
+    // faceSettingsFor: Zifferblatt, dessen Einstellungen geladen sind ("?" = neu laden).
 
-    // Pivot of the second hand on the clock face (facecfg_<name>.txt), -1 = centre. faceSettingsFor: clock face
-    // whose settings are loaded ("?" = reload).
+    // Pivot of the second hand on the clock face (trailer of the clock face file, see readFaceSecPivot()), -1 =
+    // centre. faceSettingsFor: clock face whose settings are loaded ("?" = reload).
 
     int16_t secPivotX = -1;
     int16_t secPivotY = -1;
+
+    // Drehpunkt von Stunden- und Minutenzeiger (zusammen) im Zifferblatt, -1 = Mitte, und Lage des Sekundenzeigers
+    // (0 = automatisch: ueber den anderen Zeigern, wenn sein Drehpunkt gleich ist, sonst darunter; 1 = immer ueber,
+    // 2 = immer unter den anderen Zeigern) - ebenfalls im Anhang der Zifferblatt-Datei.
+
+    // Pivot of the hour and minute hand (together) on the clock face, -1 = centre, and position of the second hand
+    // (0 = automatic: over the other hands if its pivot is the same, otherwise below; 1 = always over, 2 = always
+    // below the other hands) - also in the trailer of the clock face file.
+
+    int16_t hmPivotX = -1;
+    int16_t hmPivotY = -1;
+    uint8_t secOrder = 0;
     String faceSettingsFor = "?";
+
+    // Drehpunkte und Reihenfolge eines Zifferblatts (Anhang der Datei) / pivots and order of a clock face (file trailer)
+    struct FacePivots {
+        int16_t secX = -1, secY = -1; // Sekundenzeiger / second hand
+        int16_t hmX = -1, hmY = -1;   // Stunden- und Minutenzeiger / hour and minute hand
+        uint8_t order = 0;            // Lage des Sekundenzeigers / position of the second hand
+    };
+
+    // Wo welcher Zeiger sitzt (in Zifferblatt-Pixeln, ohne Rotation): makeHandPlan() in display.h
+    // Where which hand sits (in clock face pixels, without rotation): makeHandPlan() in display.h
+    struct HandPlan {
+        float hmX, hmY, secX, secY;
+        bool hmCustom;  // Drehpunkt von Stunde/Minute nicht in der Mitte / pivot of hour/minute not in the centre
+        bool secOwn;    // Sekundenzeiger mit eigenem Drehpunkt / second hand with a pivot of its own
+        bool secUnder;  // Sekundenzeiger unter den anderen Zeigern / second hand below the other hands
+    };
 
     String stripSettingsFor = "?"; // Zifferblatt, dessen Streifen-Einstellungen geladen sind ("?" = neu laden)
                                    // clock face whose strip settings are loaded ("?" = reload)
@@ -971,6 +999,8 @@
     bool photoresistorFound = false;
 
     uint8_t currentBrightness = 255;
+    uint8_t brightnessTestValue = 0;       // Wert des Helligkeitstests / value of the brightness test
+    unsigned long brightnessTestUntil = 0; // millis() am Ende des Tests, 0 = kein Test / millis() at the end of the test, 0 = no test
     uint8_t lastAppliedBrightness = 255; // gehoert zum Zifferblatt-Cache und wird von loadClockFace() gepflegt
                                          // belongs to the clock face cache and is maintained by loadClockFace()
 
