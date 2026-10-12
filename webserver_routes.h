@@ -946,7 +946,7 @@
     // Inserts the backlight pin into a translated text ("{pin}", different per board)
 
     String withBacklightPin(String text) {
-        text.replace("{pin}", String(TFT_Backlight));
+        text.replace("{pin}", TFT_Backlight < 0 ? String("CH32V003") : String(TFT_Backlight)); // Board ohne Pin: PWM im Port-Expander / board without a pin: PWM in the port expander
         return text;
     }
 
@@ -1535,7 +1535,7 @@
         // tells /save_brightness it was in the form. All checkboxes in one table, lined up below each other.
 
         bool showBacklight = displayType == DISPLAY_TYPE_GC9D01 || displayType == DISPLAY_TYPE_ST7789 ||
-                             displayType == DISPLAY_TYPE_ST7789_240 || useBacklight;
+                             displayType == DISPLAY_TYPE_ST7789_240 || displayType == DISPLAY_TYPE_ST7701_480 || useBacklight;
         if (showBacklight || photoresistorFound) {
             html += "<table style='margin:auto;text-align:left;'>";
             if (showBacklight) {
@@ -4747,6 +4747,40 @@
             delete[] bmpBytes;
             });
 
+#if BOARD_WAVESHARE_S3_LCD4
+        webserver.on("/api/lcdstats", HTTP_GET, []() {
+            String r = "{\"bounceLines\":" + String(lcd4BounceLines) + ",\"gapLimitUs\":" + String((uint32_t)lcd4BounceGapUs) +
+                       ",\"maxGapUs\":" + String(lcd4MaxGapUs) + ",\"stallsBounce\":" + String(lcd4StallCount) +
+                       ",\"stallsVsync\":" + String(lcd4VsyncStalls) + ",\"reinits\":" + String(lcd4ReinitCount) +
+                       ",\"uptimeS\":" + String(millis() / 1000) + "}";
+            lcd4MaxGapUs = 0;
+            webserver.send(200, "application/json", r);
+            });
+        webserver.on("/api/lcdtest", HTTP_GET, []() {
+
+            // Test: feste Farbe mit Textstreifen fuer 6 s zeigen (/api/lcdtest?a=Zeile1&b=Zeile2)
+            // Test: show the fixed colour with the text banner for 6 s (/api/lcdtest?a=line1&b=line2)
+
+            lcd4StaticText(webserver.arg("a").length() ? webserver.arg("a") : String("Test"), webserver.arg("b").length() ? webserver.arg("b") : String("12 %"), tftRotation1 == 2);
+            webserver.send(200, "text/plain", "OK");
+            for (int i = 0; i < 60; i++) { lcd4StaticBegin(); delay(100); }
+            });
+        webserver.on("/api/lcdwifi", HTTP_GET, []() {
+
+            // Test: das animierte WLAN-Symbol 4 Durchlaeufe lang zeigen, danach zeichnet die Uhr neu
+            // Test: show the animated WiFi symbol for 4 runs, then the clock redraws
+
+            webserver.send(200, "text/plain", "OK");
+            clearTFT();
+            for (int i = 0; i < 4; i++) animateCursor(statusWidth() / 2, (int)(CLOCK_HEIGHT * 0.84f), 170);
+            firstRun = true;
+            });
+        webserver.on("/api/lcdresync", HTTP_GET, []() {
+            lcd4Resync();
+            webserver.send(200, "text/plain", "OK");
+            });
+#endif
+
         webserver.on("/currentpreview", HTTP_GET, []() {
             String face = preferences.getString(PK_BACKGROUND, "/face_default.bmp");
             String handSet = preferences.getString(PK_HANDSET, "");
@@ -5576,6 +5610,7 @@
                     { "ILI9341", DISPLAY_TYPE_ILI9341, "ILI9341 (240x320) with time and date strip" },
                     { "ST7789", DISPLAY_TYPE_ST7789, "ST7789 (172x320, ESP32-C6-LCD-1.47) with time and date strip" },
                     { "ST7789_240", DISPLAY_TYPE_ST7789_240, "ST7789 (240x240, ESP32-C6-LCD-1.3)" },
+                    { "ST7701_480", DISPLAY_TYPE_ST7701_480, "ST7701 (480x480, ESP32-S3-Touch-LCD-4)" },
                 };
                 chunk += "<div style='display:flex;flex-wrap:wrap;align-items:center;gap:6px;'>" + translate("Display type") + ": " + infoTip(withBacklightPin(translate("Type of the connected display - applies to both displays. BL = backlight: with BL the brightness is controlled via PWM on pin {pin} (same as the backlight checkbox in the brightness tab), without BL by darkening the pixels. Switching to another display type restarts the clock and resets backlight, brightness and hub size to the defaults of the new type; uploaded clock faces and hands only fit the size they were made for (GC9A01 and ILI9341 share the 240 size)"))) + " ";
                 chunk += "<select data-cur='" + String(curChoice) + "' data-t='" + String(displayType) + "' style='min-width:190px;max-width:100%;' onchange=\"var o=this.options[this.selectedIndex];if(confirm('" + translate("Change the display type to") + ": '+o.text+'?'+(o.dataset.t!=this.dataset.t?'\\n" + translate("The clock restarts to apply the display type") + ".':''))){var f=document.createElement('form');f.method='POST';f.action='/save_displaytype';var i=document.createElement('input');i.type='hidden';i.name='display';i.value=this.value;f.appendChild(i);document.body.appendChild(f);f.submit();}else{this.value=this.dataset.cur;}\">";

@@ -404,6 +404,16 @@ void connectWiFiAtBoot() {
     // Setup-Funktion
     // Setup function
 
+#if BOARD_WAVESHARE_S3_LCD4
+
+// Vom Arduino-Core vor setup() aufgerufen: den Beeper so frueh wie moeglich ausschalten
+// Called by the Arduino core before setup(): switch the buzzer off as early as possible
+
+void initVariant() {
+    lcd4BuzzerOff();
+}
+#endif
+
 void setup() {
 
         // Systemzeit verwerfen: sie uebersteht einen Neustart per Reset-Taste oder Software. Jeder Start beginnt
@@ -459,6 +469,14 @@ void setup() {
         // false at this point, but better safe than sorry.
 
         logBufferMutex = xSemaphoreCreateMutex();
+
+#if BOARD_WAVESHARE_S3_LCD4
+
+        // Beeper sofort aus (Expander startet mit allen Ausgaengen high), startet auch Wire
+        // Buzzer off right away (the expander starts with all outputs high), also starts Wire
+
+        lcd4BuzzerOff();
+#endif
 
         // CS_1 (Display-1-Chip-Select) manuell auf Output/LOW setzen - LovyanGFX
         // steuert keinen CS-Pin (pin_cs = -1, siehe lgfx_config.h). Muss VOR tft.init() weiter unten passieren.
@@ -659,7 +677,9 @@ void setup() {
         // I2C-Scanner starten, um RTC zu erkennen
         // Start I2C scanner to detect the RTC
 
+#if !BOARD_WAVESHARE_S3_LCD4 // dort laeuft Wire schon (lcd4BuzzerOff()) / Wire is already running there (lcd4BuzzerOff())
         Wire.begin(SDA_PIN, SCL_PIN);
+#endif
         if (i2cScan() == 1) {
 
             if (rtc.begin()) {
@@ -695,7 +715,9 @@ void setup() {
             }
         }
         else {
+#if !BOARD_WAVESHARE_S3_LCD4 // Port-Expander und Touch brauchen Wire / the port expander and the touch need Wire
             Wire.end();
+#endif
             rtcOk = RTC_NOT_AVAILABLE;
         }
 
@@ -1622,6 +1644,7 @@ void setup() {
         }
 
         checkButton();
+        checkTouch();
         updateBrightness();
         mqttTick();
         checkLogFlush();

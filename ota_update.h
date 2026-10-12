@@ -27,7 +27,16 @@
 
     void showOtaStatus(const String& line2) {
 #if HAS_OTA
+#if BOARD_WAVESHARE_S3_LCD4
+
+        // Feste Farbe mit Textstreifen statt Text im Bildspeicher (der flackerte bei den Flash-Schreibzugriffen)
+        // Fixed colour with a text banner instead of text in the frame buffer (it flickered during the flash writes)
+
+        lcd4StaticText("Firmware Update", line2, tftRotation1 == 2);
+        lcd4StaticBegin();
+#else
         showButtonMessage(TFT_CYAN, "Firmware Update", line2, "", TFT_DARKGREY);
+#endif
 #endif
     }
 
@@ -40,7 +49,11 @@
         int percent = (int)min((size_t)100, done * 100 / total);
         if (otaShownPercent >= 0 && percent < otaShownPercent + 5) return;
         otaShownPercent = percent;
+#if BOARD_WAVESHARE_S3_LCD4
+        lcd4StaticText("Firmware Update", String(percent) + " %", tftRotation1 == 2);
+#else
         updateButtonLine(TFT_CYAN, String(percent) + " %"); // nur die Zahl, ohne Flackern / only the number, no flicker
+#endif
 #endif
     }
 
@@ -70,6 +83,7 @@
             });
             ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
                 showOtaProgress(progress, total);
+                lcd4FlashPause();
             });
             ArduinoOTA.onEnd([]() {
                 DEBUG_PRINTLN("[OTA] Network update finished");
@@ -167,6 +181,7 @@
                 return;
             }
             showOtaProgress(upload.totalSize + upload.currentSize, (size_t)max(0, webserver.clientContentLength()));
+            lcd4FlashPause();
         }
         else if (upload.status == UPLOAD_FILE_END) {
             if (otaUploadError.length() || !Update.isRunning()) return;
@@ -398,6 +413,7 @@
             }
             done += got;
             showOtaProgress(done, total);
+            lcd4FlashPause();
         }
         free(buffer);
         http.end();

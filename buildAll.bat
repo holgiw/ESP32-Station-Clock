@@ -2,6 +2,7 @@
 rem Baut die Firmware mit arduino-cli (der Arduino IDE) fuer ESP32-S3, ESP32-S2 und ESP32-C6 nacheinander.
 rem   buildAll.bat              alle drei Chips (Reihenfolge s3, s2, c6)
 rem   buildAll.bat s3 c6        nur die genannten Chips
+rem   buildAll.bat s3lcd4       Waveshare ESP32-S3-Touch-LCD-4 (480x480, nur auf Zuruf; das Ergebnis bleibt in %TEMP%\uhr4-build\s3lcd4)
 rem Nach jedem erfolgreichen Build werden die fertigen Dateien nach build_uhr4\esp32s3, esp32s2 bzw. esp32c6 kopiert.
 rem Die Zwischenstaende liegen in %TEMP%\uhr4-build\[chip] (spaetere Laeufe sind schneller), das Protokoll in
 rem %TEMP%\uhr4-build\[chip].log. Die Chips werden nacheinander gebaut: parallele Laeufe teilen sich Zwischenordner im
@@ -13,6 +14,7 @@ rem
 rem Builds the firmware with arduino-cli (from the Arduino IDE) for ESP32-S3, ESP32-S2 and ESP32-C6 one after another.
 rem   buildAll.bat              all three chips (order s3, s2, c6)
 rem   buildAll.bat s3 c6        only the named chips
+rem   buildAll.bat s3lcd4       Waveshare ESP32-S3-Touch-LCD-4 (480x480, only on request; the result stays in %TEMP%\uhr4-build\s3lcd4)
 rem After every successful build the finished files are copied to build_uhr4\esp32s3, esp32s2 or esp32c6.
 rem The intermediate state is in %TEMP%\uhr4-build\[chip] (later runs are faster), the log in
 rem %TEMP%\uhr4-build\[chip].log. The chips are built one after another: parallel runs share intermediate folders in
@@ -90,8 +92,14 @@ if /i "%CHIP%"=="c6" (
     set "DIR=esp32c6"
     set "FQBN=esp32:esp32:esp32c6:UploadSpeed=921600,CDCOnBoot=cdc,CPUFreq=160,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=uhr4_c6,DebugLevel=none,JTAGAdapter=default,ZigbeeMode=default"
 )
+set "NOCOPY="
+if /i "%CHIP%"=="s3lcd4" (
+    set "NOCOPY=1"
+    set "FQBN=esp32:esp32:esp32s3:UploadSpeed=921600,USBMode=hwcdc,CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=cdc,CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,DebugLevel=none,PSRAM=opi,LoopCore=1,EventsCore=1,JTAGAdapter=default,ZigbeeMode=default"
+    set "PROP=--build-property "compiler.cpp.extra_flags=-mtext-section-literals -DUHR4_BOARD_S3_LCD4""
+)
 if not defined FQBN (
-    echo Unbekannter Chip / unknown chip: %CHIP% ^(s3, s2, c6^)
+    echo Unbekannter Chip / unknown chip: %CHIP% ^(s3, s2, c6, s3lcd4^)
     set "RESULT=!RESULT! %CHIP%=unbekannt/unknown"
     exit /b 1
 )
@@ -108,6 +116,10 @@ if errorlevel 1 (
 for %%F in ("%OUT%\%CHIP%\uhr4.ino.bin") do echo [%TIME:~0,8%] %CHIP% fertig / done: %%~zF Bytes, %%~tF
 set "RESULT=!RESULT! %CHIP%=OK"
 
+if "%NOCOPY%"=="1" (
+    echo %CHIP%: nicht nach build_uhr4 kopiert / not copied to build_uhr4: %OUT%\%CHIP%
+    exit /b 0
+)
 for %%F in (uhr4.ino.bin uhr4.ino.bootloader.bin uhr4.ino.partitions.bin uhr4.ino.merged.bin) do copy /y "%OUT%\%CHIP%\%%F" "build_uhr4\%DIR%\" >nul
 echo %CHIP%: nach build_uhr4\%DIR% kopiert / copied to build_uhr4\%DIR%
 exit /b 0

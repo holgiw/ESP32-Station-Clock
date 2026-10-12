@@ -84,14 +84,16 @@
 
     bool displayTypeSupported(uint8_t type) {
         bool c6Type = type == DISPLAY_TYPE_ST7789 || type == DISPLAY_TYPE_ST7789_240;
+        if (BOARD_WAVESHARE_S3_LCD4) return type == DISPLAY_TYPE_ST7701_480;
         if (BOARD_WAVESHARE_S3_GC9A01) return type == DISPLAY_TYPE_GC9A01;
-        return BOARD_WAVESHARE_C6_ST7789 ? c6Type : type < DISPLAY_TYPE_COUNT && !c6Type;
+        return BOARD_WAVESHARE_C6_ST7789 ? c6Type : type < DISPLAY_TYPE_ST7701_480 && !c6Type;
     }
 
     // Namen der Displaytypen dieses Boards fuer Fehlermeldungen an flashESP
     // Names of this board's display types for error messages to flashESP
 
     const char* supportedDisplayNames() {
+        if (BOARD_WAVESHARE_S3_LCD4) return "ST7701_480";
         if (BOARD_WAVESHARE_S3_GC9A01) return "GC9A01, GC9A01_WITH_BACKLIGHT";
         return BOARD_WAVESHARE_C6_ST7789 ? "ST7789, ST7789_240" : "GC9A01, GC9A01_WITH_BACKLIGHT, GC9D01, ILI9341";
     }
@@ -111,6 +113,7 @@
         else if (name == "ILI9341") { type = DISPLAY_TYPE_ILI9341; backlight = false; }
         else if (name == "ST7789") { type = DISPLAY_TYPE_ST7789; backlight = true; }
         else if (name == "ST7789_240") { type = DISPLAY_TYPE_ST7789_240; backlight = true; }
+        else if (name == "ST7701_480") { type = DISPLAY_TYPE_ST7701_480; backlight = false; }
         else return false;
         return displayTypeSupported(type);
     }
@@ -126,6 +129,7 @@
         if (type == DISPLAY_TYPE_ILI9341) return "ILI9341";
         if (type == DISPLAY_TYPE_ST7789) return "ST7789";
         if (type == DISPLAY_TYPE_ST7789_240) return "ST7789_240";
+        if (type == DISPLAY_TYPE_ST7701_480) return "ST7701_480";
         return backlight ? "GC9A01_WITH_BACKLIGHT" : "GC9A01";
     }
 
@@ -196,6 +200,14 @@
     // GC9D01 stayed black, hence pin_rst = -1.
 
     void resetPanels() {
+#if BOARD_WAVESHARE_S3_LCD4
+
+        // Reset ueber den Port-Expander und ST7701-Startfolge (lgfx_config.h), kein Reset-Pin am Chip
+        // Reset via the port expander and ST7701 start-up sequence (lgfx_config.h), no reset pin on the chip
+
+        lcd4PanelInit();
+        return;
+#endif
         pinMode(TFT_RST, OUTPUT);
         digitalWrite(TFT_RST, HIGH);
         delay(5);
@@ -889,12 +901,21 @@
     // HIGH at boot too - a floating BL input would otherwise stay dark on some modules.
 
     void applyBacklightPin() {
+#if BOARD_WAVESHARE_S3_LCD4
+        // Kein Pin: die PWM sitzt im Port-Expander (lcd4SetBacklight()); ohne Haken volle Helligkeit
+        // No pin: the PWM is in the port expander (lcd4SetBacklight()); without the checkbox full brightness
+
+        backlightAttached = useBacklight;
+        backlightWrite(useBacklight ? currentBrightness : 255);
+        return;
+#endif
+        if (TFT_Backlight < 0) return; // Board ohne Beleuchtungs-Pin / board without a backlight pin
         if (useBacklight) {
             if (!backlightAttached) {
                 backlightAttached = ledcAttach(TFT_Backlight, BACKLIGHT_FREQ, BACKLIGHT_RESOLUTION);
                 if (!backlightAttached) DEBUG_PRINTLN("[Display] Error: couldnt attach backlight PWM");
             }
-            if (backlightAttached) ledcWrite(TFT_Backlight, currentBrightness);
+            if (backlightAttached) backlightWrite(currentBrightness);
             return;
         }
         if (backlightAttached) {
@@ -3528,9 +3549,33 @@
             backgroundSprite.setTextDatum(lgfx::middle_center);
             int hintW = backgroundSprite.textWidth(hint), hintH = backgroundSprite.fontHeight();
             int hintX = CLOCK_WIDTH / 2, hintY = CLOCK_HEIGHT * 3 / 4;
-            backgroundSprite.fillRoundRect(hintX - hintW / 2 - 6, hintY - hintH / 2 - 2, hintW + 12, hintH + 4, 4, setPixelBrightness(TFT_DARKGREY));
-            backgroundSprite.setTextColor(setPixelBrightness(TFT_WHITE), setPixelBrightness(TFT_DARKGREY));
-            backgroundSprite.drawString(hint, hintX, hintY);
+            LGFX_Sprite hintSprite(&backgroundSprite);
+            hintSprite.setColorDepth(backgroundSprite.getColorDepth());
+
+            // Mit Software-Rotation ist das Zifferblatt im Bildspeicher gedreht, der Hinweis muss mit: erst auf ein kleines
+            // Sprite zeichnen, dann um orientation * 90 Grad (im Uhrzeigersinn) um die Mitte des Zifferblatts gedreht einsetzen.
+
+            // With software rotation the clock face is rotated in the frame buffer, the hint has to follow: draw it on a small
+            // sprite first, then insert it rotated by orientation * 90 degrees (clockwise) around the middle of the clock face.
+
+            if (gc9d01SwRotation && orientation != 0 && hintSprite.createSprite(hintW + 12, hintH + 4)) {
+                hintSprite.fillSprite(TRANSPARENT_COLOR);
+                hintSprite.fillRoundRect(0, 0, hintW + 12, hintH + 4, 4, setPixelBrightness(TFT_DARKGREY));
+                hintSprite.setFont(&fonts::Font2);
+                hintSprite.setTextSize(1);
+                hintSprite.setTextDatum(lgfx::middle_center);
+                hintSprite.setTextColor(setPixelBrightness(TFT_WHITE), setPixelBrightness(TFT_DARKGREY));
+                hintSprite.drawString(hint, (hintW + 12) / 2, (hintH + 4) / 2);
+                float angle = orientation * 90.0f, rad = angle * 0.017453293f, offs = CLOCK_HEIGHT / 4.0f;
+                hintSprite.pushRotateZoom(&backgroundSprite, CLOCK_WIDTH / 2.0f - offs * sinf(rad), CLOCK_HEIGHT / 2.0f + offs * cosf(rad),
+                                          angle, 1.0f, 1.0f, TRANSPARENT_COLOR);
+                hintSprite.deleteSprite();
+            }
+            else {
+                backgroundSprite.fillRoundRect(hintX - hintW / 2 - 6, hintY - hintH / 2 - 2, hintW + 12, hintH + 4, 4, setPixelBrightness(TFT_DARKGREY));
+                backgroundSprite.setTextColor(setPixelBrightness(TFT_WHITE), setPixelBrightness(TFT_DARKGREY));
+                backgroundSprite.drawString(hint, hintX, hintY);
+            }
         }
 
         if (partial) {
@@ -5191,7 +5236,7 @@
         }
 
         if (useBacklight && backlightAttached) {
-            ledcWrite(TFT_Backlight, currentBrightness);  // 0–255
+            backlightWrite(currentBrightness);  // 0–255
                                                           // 0-255
         }
 

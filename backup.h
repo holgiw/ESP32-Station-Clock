@@ -1392,6 +1392,7 @@
                         backupRestoreFail("clock storage full while restoring files");
                         return;
                     }
+                    lcd4FlashPause();
                 }
                 s.remaining -= n; data += n; len -= n;
                 if (s.remaining == 0) {
@@ -1426,6 +1427,14 @@
             delete backupRestore;
             backupRestore = new (std::nothrow) BackupRestoreState();
             if (!backupRestore) return;
+#if BOARD_WAVESHARE_S3_LCD4
+
+            // Schwarzer Hinweisbildschirm: Verschiebungen durch die Flash-Schreibzugriffe fallen darauf kaum auf
+            // Black notice screen: shifts caused by the flash writes are hardly visible on it
+
+            lcd4StaticText("Backup", "restoring...", tftRotation1 == 2);
+            lcd4StaticBegin();
+#endif
             if (!isPrivateNetworkIp(webserver.client().remoteIP())) {
                 backupRestoreFail("only allowed from a private network");
                 return;

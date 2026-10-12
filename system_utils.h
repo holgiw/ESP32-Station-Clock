@@ -208,6 +208,103 @@
         }
     }
 
+#if BOARD_WAVESHARE_S3_LCD4
+
+    // Touch (GT911 am I2C 15/7, nach dem Reset auf 0x14 oder 0x5D) direkt per Wire lesen - LovyanGFX' Touch_GT911 meldete
+    // auf dem Board nichts. Register 0x814E = Status (Bit 7 = Daten bereit, Bits 0-3 = Anzahl Punkte), 0x8150 = erster
+    // Punkt. Der Status muss nach dem Lesen auf 0 gesetzt werden.
+
+    // Read the touch (GT911 on I2C 15/7, at 0x14 or 0x5D after the reset) directly via Wire - LovyanGFX's Touch_GT911
+    // reported nothing on the board. Register 0x814E = status (bit 7 = data ready, bits 0-3 = number of points), 0x8150 =
+    // first point. The status has to be set to 0 after reading.
+
+    uint8_t gt911Addr = 0;
+
+    bool gt911Read(uint16_t reg, uint8_t* buf, size_t len) {
+        Wire.beginTransmission(gt911Addr);
+        Wire.write((uint8_t)(reg >> 8));
+        Wire.write((uint8_t)(reg & 0xFF));
+        if (Wire.endTransmission(true) != 0) return false;
+        if (Wire.requestFrom((int)gt911Addr, (int)len) != (int)len) return false;
+        for (size_t i = 0; i < len; i++) buf[i] = Wire.read();
+        return true;
+    }
+
+    void gt911Write(uint16_t reg, uint8_t value) {
+        Wire.beginTransmission(gt911Addr);
+        Wire.write((uint8_t)(reg >> 8));
+        Wire.write((uint8_t)(reg & 0xFF));
+        Wire.write(value);
+        Wire.endTransmission(true);
+    }
+
+
+    // Beruehrung des Displays: wie ein kurzer Tastendruck die WLAN-Anzeige (Name, IP-Adresse) fuer 5 Sekunden zeigen,
+    // dann zurueck zur Uhr. Der Touch-Chip wird alle 2 s gesucht, bis er antwortet; abgefragt wird alle 25 ms.
+
+    // Touching the display: like a short button press show the WiFi info (name, IP address) for 5 seconds, then back to
+    // the clock. The touch chip is searched every 2 s until it answers; it is polled every 25 ms.
+
+    void checkTouch() {
+        static unsigned long lastPoll = 0, lastProbe = 0, lastReinit = 0, lastExpander = 0;
+
+        // Beeper aus und Beleuchtung wieder setzen, ein Register alle 300 ms (siehe lcd4ExpanderRefresh())
+        // Buzzer off and set the backlight again, one register every 300 ms (see lcd4ExpanderRefresh())
+
+        if (tftInitialized && !lcd4StaticOn && millis() - lastExpander > 300) {
+            lastExpander = millis();
+            lcd4ExpanderRefresh();
+        }
+
+        // Hat ein Flash-Schreibzugriff die Display-Unterbrechung gesperrt (siehe lcd4VsyncEvent()), den Treiber neu starten
+        // If a flash write has locked the display interrupt (see lcd4VsyncEvent()), restart the driver
+
+        if (lcd4StaticOn && millis() - lcd4LastPauseMs > 1500) {
+            lcd4StaticOn = false;
+            lcd4Reinit();
+            firstRun = true; // Uhr komplett neu zeichnen / redraw the clock completely
+        }
+        if (!lcd4StaticOn && lcd4StallSeen && millis() - lastReinit > 2000) {
+            lastReinit = millis();
+            lcd4Reinit();
+        }
+        if (millis() - lastPoll < 25) return;
+        lastPoll = millis();
+
+        if (!gt911Addr) {
+            if (millis() - lastProbe < 2000) return;
+            lastProbe = millis();
+            for (uint8_t a : { (uint8_t)0x14, (uint8_t)0x5D }) {
+                Wire.beginTransmission(a);
+                if (Wire.endTransmission() == 0) { gt911Addr = a; break; }
+            }
+            if (gt911Addr) DEBUG_PRINTLN("[TOUCH] GT911 found at 0x" + String(gt911Addr, HEX));
+            return;
+        }
+
+        uint8_t status = 0;
+        if (!gt911Read(0x814E, &status, 1) || !(status & 0x80)) return;
+        gt911Write(0x814E, 0);
+        if ((status & 0x0F) == 0) return;
+
+        DEBUG_PRINTLN("[TOUCH] Touch - showing the WiFi info for 5 s");
+        clearTFT();
+        showWlanCredentials(WiFi.SSID());
+        unsigned long until = millis() + WAIT_5s;
+        while ((long)(until - millis()) > 0) {
+            if (backgroundWorkAllowed()) webserver.handleClient();
+            delay(10);
+        }
+        gt911Write(0x814E, 0);
+        firstRun = true; // Zeiger springen sofort auf die aktuelle Zeit / the hands snap to the current time
+    }
+
+#else
+
+    void checkTouch() {}
+
+#endif
+
 
     // Prueft, ob der woechentliche geplante Neustart faellig ist, und loest ihn
     // bei Bedarf aus (praeventiver Neustart gegen langsame Speicherfragmentierung)
