@@ -460,6 +460,7 @@
     void deleteAllLogFiles() ;
     void checkHeapWarning(const String& context) ;
     void logToFile(const String& message) ;
+    String logFileHeader() ;
     void flushLogBuffer() ;
     void checkLogFlush() ;
     String trim(const String& str) ;

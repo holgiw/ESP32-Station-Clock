@@ -5,6 +5,8 @@
 ## 2026-10-08
 
 ### Hinzugefügt
+- Jede neue Logdatei beginnt mit einer Kopfzeile: Uhr (uhr4), Hostname, ESP32-Chip (Modell, Revision, Arduino-Core),
+  Display und Kompilierdatum/-zeit.
 - Zifferblatt-Designer: Auch Stunden- und Minutenzeiger (zusammen) lassen sich über das ganze Zifferblatt verschieben
   („Drehpunkt Stunde und Minute“, X/Y oder Mitte). Die Nabe sitzt auf diesem Drehpunkt. Ein Sekundenzeiger ohne eigenen
   Drehpunkt sitzt auf dem der anderen Zeiger. Der Haken „Sekundenzeiger über den anderen Zeigern“ legt die Lage fest;
@@ -118,6 +120,7 @@
     vorhandener Uhren Sets zu deren Zifferblättern.
 
 ### Geändert
+- Helligkeitsseite: Das Kästchen „Hintergrundbeleuchtung regeln“ heißt jetzt „Hintergrundbeleuchtung PWM“.
 - Zifferblatt-Designer: Der Knopf „Speichern“ im Kasten „Nabe und Sekundenzeiger“ entfällt. Das Speichern oben legt
   Bild, Nabe, Drehpunkte und Streifen zusammen ab; bei den von der Firmware erzeugten Zifferblättern speichert
   „Aktuelles Zifferblatt speichern“ jetzt Nabe, Drehpunkte und Streifen (das Bild bleibt).
@@ -395,6 +398,8 @@
 ## 2026-10-08
 
 ### Added
+- Every new log file starts with a header line: clock (uhr4), hostname, ESP32 chip (model, revision, Arduino core),
+  display and compile date/time.
 - Clock face designer: the hour and minute hand (together) can also be moved over the whole clock face ("Hour and
   minute hand pivot", X/Y or centre). The hub sits on this pivot. A second hand without a pivot of its own sits on that
   of the other hands. The tick "Second hand over the other hands" sets the position; without a choice of its own the
@@ -506,6 +511,7 @@
     their clock faces.
 
 ### Changed
+- Brightness page: the German label of the backlight checkbox is now "Hintergrundbeleuchtung PWM".
 - Clock face designer: the "Save" button in the box "Hub and second hand" is gone. Saving at the top stores image,
   hub, pivots and strip together; for the clock faces created by the firmware "Save current clock face" now stores hub,
   pivots and strip (the image stays).
