@@ -29,10 +29,12 @@
 #if HAS_OTA
 #if BOARD_WAVESHARE_S3_LCD4
 
-        // Feste Farbe mit Textstreifen statt Text im Bildspeicher (der flackerte bei den Flash-Schreibzugriffen)
-        // Fixed colour with a text banner instead of text in the frame buffer (it flickered during the flash writes)
+        // Nur "Update" fuer 1 Sekunde, danach eine ruhige blaue Flaeche (Text und Fortschritt flackerten bei den
+        // Flash-Schreibzugriffen); line2 wird hier nicht angezeigt
+        // Only "Update" for 1 second, then a calm blue area (text and progress flickered during the flash writes);
+        // line2 is not shown here
 
-        lcd4StaticText("Firmware Update", line2, tftRotation1 == 2);
+        lcd4StaticText("Update", "", tftRotation1 == 2);
         lcd4StaticBegin();
 #else
         showButtonMessage(TFT_CYAN, "Firmware Update", line2, "", TFT_DARKGREY);
@@ -50,7 +52,7 @@
         if (otaShownPercent >= 0 && percent < otaShownPercent + 5) return;
         otaShownPercent = percent;
 #if BOARD_WAVESHARE_S3_LCD4
-        lcd4StaticText("Firmware Update", String(percent) + " %", tftRotation1 == 2);
+        // 480x480: kein Fortschritt - die blaue Flaeche bleibt unveraendert / no progress - the blue area stays unchanged
 #else
         updateButtonLine(TFT_CYAN, String(percent) + " %"); // nur die Zahl, ohne Flackern / only the number, no flicker
 #endif

@@ -349,6 +349,11 @@ inline void lcd4BuzzerOff() {
     // calls this only every 300 ms. Catches a disturbance or a short voltage dip.
     // (a read changes the registers, see above).
 
+// Zeitaufteilung der Bilder fuer /api/lcdstats ([0] Teilbild, [1] volles Bild: Anzahl, Vorbereitung, Zwischenbild, Zeiger, Senden in us)
+// Frame time split for /api/lcdstats ([0] partial frame, [1] full frame: count, preparation, composite, hands, send in us)
+inline volatile uint32_t lcd4Prof[2][5] = {};
+inline volatile uint32_t lcd4ProfPixels = 0;
+
 inline volatile uint8_t lcd4BacklightPwm = LCD4_BACKLIGHT_PWM; // aktueller PWM-Wert (Register 0x05) / current PWM value (register 0x05)
 
     // Helligkeit 0-255 (255 = hell) in den umgekehrten Registerwert 247..LCD4_BACKLIGHT_PWM umrechnen; geschrieben
@@ -477,7 +482,7 @@ inline void lcd4StaticText(const String& line1, const String& line2, bool rot180
     lcd4Banner.setFont(&fonts::FreeSansBold9pt7b);
     lcd4Banner.setTextColor(1, 0);
     lcd4Banner.setTextDatum(lgfx::top_center);
-    lcd4Banner.drawString(line1 + " " + line2, 240, 1);
+    lcd4Banner.drawString(line2.length() ? line1 + " " + line2 : line1, 240, 1);
     int pct = line2.toInt();
     if (pct > 0) lcd4Banner.fillRect(0, LCD4_TILE_H - 4, 480 * min(pct, 100) / 100, 4, 1);
 }

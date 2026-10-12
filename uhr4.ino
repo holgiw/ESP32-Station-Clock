@@ -936,7 +936,7 @@ void setup() {
 
         lowThreshold = constrain(preferences.getInt(PK_LOW_THRESHOLD, 40), 0, 100);
         highThreshold = constrain(preferences.getInt(PK_HIGH_THRESHOLD, 60), 0, 100);
-        minBrightness = preferences.getUChar(PK_MIN_BRIGHTNESS, 100);
+        minBrightness = preferences.getUChar(PK_MIN_BRIGHTNESS, 75);
         maxBrightness = preferences.getUChar(PK_MAX_BRIGHTNESS, 255);
 
         // Zeitabhängige Helligkeit aus Preferences
@@ -1024,7 +1024,7 @@ void setup() {
         }
 
 
-        minBrightness = preferences.getUChar(PK_MIN_BRIGHTNESS, 100);
+        minBrightness = preferences.getUChar(PK_MIN_BRIGHTNESS, 75);
         maxBrightness = preferences.getUChar(PK_MAX_BRIGHTNESS, 255);
 
         updateBrightness();

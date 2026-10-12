@@ -1016,7 +1016,7 @@
     uint8_t targetBrightness = 255;
     int lowThreshold = 40;
     int highThreshold = 60;
-    uint8_t minBrightness = 100;  //
+    uint8_t minBrightness = 75;   //
     uint8_t maxBrightness = 255;  // Obergrenze
                                   // Upper limit
 

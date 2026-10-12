@@ -1,7 +1,7 @@
 # Erzeugt die Pakete, die flashESP.bat / flashESP.sh beim Flashen vom GitHub-Release laden:
-# je Chip uhr4-esp32s2.zip, uhr4-esp32c6.zip, uhr4-esp32s3.zip (Bootloader, Partitionstabelle,
+# je Chip uhr4-esp32s2.zip, uhr4-esp32c6.zip, uhr4-esp32s3.zip, uhr4-esp32s3lcd4.zip (Bootloader, Partitionstabelle,
 # App, bei C6 und S3 boot_app0.bin - flach im Zip) und dazu uhr4-<chip>.sha256 ("<SHA-256>  <Zip>").
-# Quelle sind die Ordner esp32s2, esp32c6 und esp32s3 neben diesem Skript.
+# Quelle sind die Ordner esp32s2, esp32c6, esp32s3 und esp32s3lcd4 neben diesem Skript.
 #   .\publish_builds.ps1                      Pakete in einen Ordner schreiben (Standard: Temp), nichts hochladen
 #   .\publish_builds.ps1 -OutDir C:\test      Zielordner angeben
 #   .\publish_builds.ps1 -Upload              zusaetzlich in das Release hochladen (gh, ersetzt vorhandene Dateien)
@@ -9,9 +9,9 @@
 # Zum Testen ohne Release: $env:UHR4_BUILD_URL = 'file:///C:/test' vor flashESP.bat bzw. clocksetup.ps1.
 #
 # Creates the packages that flashESP.bat / flashESP.sh download from the GitHub release when flashing:
-# per chip uhr4-esp32s2.zip, uhr4-esp32c6.zip, uhr4-esp32s3.zip (bootloader, partition table, app,
+# per chip uhr4-esp32s2.zip, uhr4-esp32c6.zip, uhr4-esp32s3.zip, uhr4-esp32s3lcd4.zip (bootloader, partition table, app,
 # boot_app0.bin for C6 and S3 - flat in the zip) and uhr4-<chip>.sha256 ("<SHA-256>  <zip>").
-# The source is the folders esp32s2, esp32c6 and esp32s3 next to this script.
+# The source is the folders esp32s2, esp32c6, esp32s3 and esp32s3lcd4 next to this script.
 #   .\publish_builds.ps1                      write the packages to a folder (default: temp), upload nothing
 #   .\publish_builds.ps1 -OutDir C:\test      set the target folder
 #   .\publish_builds.ps1 -Upload              also upload to the release (gh, replaces existing files)
@@ -26,7 +26,7 @@ if (-not $OutDir) { $OutDir = Join-Path ([System.IO.Path]::GetTempPath()) 'uhr4-
 New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 
 $files = @()
-foreach ($chip in 's2', 'c6', 's3') {
+foreach ($chip in 's2', 'c6', 's3', 's3lcd4') {
     $src = Join-Path $PSScriptRoot "esp32$chip"
     $parts = @('uhr4.ino.bootloader.bin', 'uhr4.ino.partitions.bin', 'uhr4.ino.bin')
     if ($chip -ne 's2') { $parts += 'boot_app0.bin' }
@@ -58,7 +58,7 @@ foreach ($chip in 's2', 'c6', 's3') {
 $toolsZip = Join-Path $OutDir 'uhr4_flash.zip'
 if (Test-Path $toolsZip) { Remove-Item $toolsZip -Force }
 Push-Location (Split-Path $PSScriptRoot -Parent)
-git archive --format=zip -o $toolsZip HEAD -- build_uhr4 LICENSE THIRD_PARTY_LICENSES.md ':(exclude)build_uhr4/esp32s2' ':(exclude)build_uhr4/esp32c6' ':(exclude)build_uhr4/esp32s3' ':(exclude)build_uhr4/publish_*.ps1'
+git archive --format=zip -o $toolsZip HEAD -- build_uhr4 LICENSE THIRD_PARTY_LICENSES.md ':(exclude)build_uhr4/esp32s2' ':(exclude)build_uhr4/esp32c6' ':(exclude)build_uhr4/esp32s3' ':(exclude)build_uhr4/esp32s3lcd4' ':(exclude)build_uhr4/publish_*.ps1'
 $gitOk = ($LASTEXITCODE -eq 0)
 Pop-Location
 if (-not $gitOk) { throw 'git archive failed' }

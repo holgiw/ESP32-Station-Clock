@@ -6,7 +6,7 @@
 #   .\checkClocks.ps1 -All                  listet zuerst ALLE Geraete im Netz auf (auch keine Uhren): Adresse, MAC, Name,
 #                                           Hinweis (Seitentitel, uhr4, ESP-Hersteller), danach die Uhren-Tabelle
 #   .\checkClocks.ps1 -PassThru             gibt die Uhren als Objekte zurueck statt als Tabelle (fuer flashAll.ps1)
-# Der Soll-Stand ist die Build-Zeit, die in den Dateien build_uhr4\esp32s2|esp32c6|esp32s3\uhr4.ino.bin steht
+# Der Soll-Stand ist die Build-Zeit, die in den Dateien build_uhr4\esp32s2|esp32c6|esp32s3|esp32s3lcd4\uhr4.ino.bin steht
 # (Kennung UHR4_FW_BUILD=). Aeltere Firmware ohne Kennung zeigt "?". Geraete werden per Ping und ARP gefunden; was
 # weder auf Ping antwortet noch im ARP-Cache des PCs steht, fehlt in der Liste.
 #
@@ -18,7 +18,7 @@
 #   .\checkClocks.ps1 -All                  first lists ALL devices on the network (also non-clocks): address, MAC, name,
 #                                           note (page title, uhr4, ESP vendor), then the clock table
 #   .\checkClocks.ps1 -PassThru             returns the clocks as objects instead of a table (for flashAll.ps1)
-# The target is the build time stored in the files build_uhr4\esp32s2|esp32c6|esp32s3\uhr4.ino.bin (marker
+# The target is the build time stored in the files build_uhr4\esp32s2|esp32c6|esp32s3|esp32s3lcd4\uhr4.ino.bin (marker
 # UHR4_FW_BUILD=). Older firmware without the marker shows "?". Devices are found by ping and ARP; anything that
 # neither answers a ping nor is in the PC's ARP cache is missing from the list.
 
@@ -42,7 +42,7 @@ function Get-TargetBuild([string]$chip) {
     try { return [datetime]::ParseExact($stamp, 'MMM d yyyy HH:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture).ToString('yyyy-MM-dd HH:mm:ss') }
     catch { return $null }
 }
-$target = @{ S2 = Get-TargetBuild 's2'; C6 = Get-TargetBuild 'c6'; S3 = Get-TargetBuild 's3' }
+$target = @{ S2 = Get-TargetBuild 's2'; C6 = Get-TargetBuild 'c6'; S3 = Get-TargetBuild 's3'; 'S3-480' = Get-TargetBuild 's3lcd4' }
 
 # Netz des PCs bestimmen (erste drei Zahlen der Adresse), falls kein -Subnet angegeben ist
 # Determine the PC's network (first three numbers of its address) if no -Subnet is given
@@ -98,6 +98,11 @@ $rows = foreach ($ipAddr in $Ip) {
     }
     $parts = $chipDisp -split ' ', 2
     $chip = $parts[0]; $display = if ($parts.Count -gt 1) { $parts[1] } else { '' }
+
+    # ESP32-S3 mit ST7701_480 = Waveshare ESP32-S3-Touch-LCD-4 (eigener Build, esp32s3lcd4)
+    # ESP32-S3 with ST7701_480 = Waveshare ESP32-S3-Touch-LCD-4 (own build, esp32s3lcd4)
+
+    if ($chip -eq 'S3' -and $display -eq 'ST7701_480') { $chip = 'S3-480' }
     $top = Get-Page "http://$ipAddr/api/topbarStatus"
     $version = [regex]::Match([string]$top, '"version":"([^"]*)"').Groups[1].Value
     $timeOk = [regex]::Match([string]$top, '"time":"([^"]*)"').Groups[1].Value
@@ -172,4 +177,4 @@ if ($All) {
 if ($PassThru) { return @($rows) }
 if (-not $rows) { Write-Host 'Keine uhr4 gefunden. / No uhr4 found.'; exit 1 }
 $rows | Sort-Object IP | Format-Table -AutoSize
-Write-Host ('Soll / target:  S2 {0}   C6 {1}   S3 {2}' -f $target.S2, $target.C6, $target.S3)
+Write-Host ('Soll / target:  S2 {0}   C6 {1}   S3 {2}   S3-480 {3}' -f $target.S2, $target.C6, $target.S3, $target['S3-480'])

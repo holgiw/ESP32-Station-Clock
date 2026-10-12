@@ -448,7 +448,15 @@
     // Update from GitHub (ota_update.h, ESP32-S3 only): files of the latest release, uhr4-s3.txt (line 1: build time
     // "YYYY-MM-DD HH:MM:SS", line 2: SHA-256 of the .bin) and uhr4-s3.bin. Created by build_uhr4/publish_s3_update.ps1.
 
+    // Das 480x480-Board (ESP32-S3-Touch-LCD-4) hat eine eigene Firmware: uhr4-s3lcd4.txt / uhr4-s3lcd4.bin
+
+    // The 480x480 board (ESP32-S3-Touch-LCD-4) has its own firmware: uhr4-s3lcd4.txt / uhr4-s3lcd4.bin
+
+#if BOARD_WAVESHARE_S3_LCD4
+#define FW_UPDATE_ASSET "uhr4-s3lcd4"
+#else
 #define FW_UPDATE_ASSET "uhr4-s3"
+#endif
 #define FW_UPDATE_URL "https://github.com/" GITHUB_REPO_OWNER "/" GITHUB_REPO_NAME "/releases/latest/download/" FW_UPDATE_ASSET
 
 #define HAS_DISPLAY2 (CS_2 >= 0)

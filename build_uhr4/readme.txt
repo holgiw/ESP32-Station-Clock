@@ -3,7 +3,7 @@
 #######################################################################################
 # Flashen unter Windows (10, 11) getestet
 
-Für ESP32-S2 (Lolin S2 Pico), ESP32-C6 und ESP32-S3 (Waveshare). Windows 7/8 haben keinen passenden
+Für ESP32-S2 (Lolin S2 Pico), ESP32-C6, ESP32-S3 und ESP32-S3-Touch-LCD-4 (480x480) (Waveshare). Windows 7/8 haben keinen passenden
 USB-Treiber und werden nicht unterstützt. macOS: flashESP.sh läuft dort nicht - von Hand mit esptool
 flashen (siehe Linux-Abschnitt, Port /dev/cu.usbmodem...).
 
@@ -23,15 +23,18 @@ flashen (siehe Linux-Abschnitt, Port /dev/cu.usbmodem...).
 	Uhr suchen: flashESP.bat listet alle COM Schnittstellen und markiert angeschlossene Uhren
 	(Download-Modus bzw. laufend). Bei genau einer Uhr nimmt es deren Schnittstelle ohne Rückfrage,
 	sonst fragt es nach der Nummer. Das Board erkennt es am USB-Port, lädt den Build dieses Chips
-	vom Release (uhr4-esp32s2, -esp32c6 bzw. -esp32s3, Prüfsumme SHA-256) und flasht ihn.
+	vom Release (uhr4-esp32s2, -esp32c6, -esp32s3 bzw. -esp32s3lcd4, Prüfsumme SHA-256) und flasht ihn.
 	Schlägt der Download fehl, wird nichts geflasht. Den ESP32-S3 erkennt es am USB-Seriell-Wandler CH343P; den gibt
 	es auch auf fremden Geräten, antwortet dort keine uhr4, fragt flashESP.bat vor dem Flashen nach.
+	Der ESP32-C6 und das 480x480-Board (ESP32-S3-Touch-LCD-4) melden sich gleich (USB-Serial-JTAG, 303A:1001): eine
+	laufende uhr4 verrät es per Displaytyp ST7701_480, sonst fragt flashESP.bat den Chip mit esptool ab.
 
 	Displaytyp:
 	  ESP32-S2: 1 = GC9A01 (240x240) ohne Hintergrundbeleuchtung (BL), 2 = GC9A01 mit BL an Pin 3,
 	            3 = GC9D01 (160x160), 4 = ILI9341 (240x320, Uhr mit Streifen für Uhrzeit und Datum)
 	  ESP32-C6: 1 = ST7789 (172x320, ESP32-C6-LCD-1.47), 2 = ST7789_240 (240x240, ESP32-C6-LCD-1.3)
 	  ESP32-S3 (ESP32-S3-LCD-1.28): keine Abfrage, das GC9A01 ist fest verbaut
+	  ESP32-S3-Touch-LCD-4 (EXPERIMENTELL): keine Abfrage, das ST7701 (480x480) ist fest verbaut
 	  Enter = unverändert (Update einer eingerichteten Uhr).
 	Läuft auf der Uhr schon uhr4, fragt flashESP.bat ihren Displaytyp ab und wählt ihn vor (Enter
 	behält ihn). Hat sie noch keinen, muss er angegeben werden. Mit falschem Displaytyp zeigt das
@@ -137,6 +140,7 @@ Hintergrundbeleuchtung per PWM (Haken "Hintergrundbeleuchtung regeln" im Helligk
 	ESP32-S2: Pin 3, bei GC9D01 und Displaytyp "GC9A01 mit BL" ab Werk an
 	ESP32-C6: Pin 22, auf dem Waveshare-Board fest verdrahtet, ab Werk an
 	ESP32-S3: Pin 40, auf dem Waveshare-Board fest verdrahtet, ab Werk an
+	ESP32-S3-Touch-LCD-4: PWM-Register des Port-Expanders CH32V003 (kein Pin), ab Werk an
 Unbedingt Schaltplan und Platinenentwurf beachten: Die TFTs haben unterschiedliche Pin-Reihenfolgen.
 Auf die Beschriftung achten (VCC, GND usw.).
 

@@ -206,7 +206,7 @@
     void drawFaceRows(LGFX_Sprite& dest) ;
     int prepareClockFaceCache() ;
     int faceOrientationFor(uint8_t rotation) ;
-    bool blitFaceIntoSprite(LGFX_Sprite& dest, uint8_t rotation) ;
+    bool blitFaceIntoSprite(LGFX_Sprite& dest, uint8_t rotation, int32_t x0 = 0, int32_t y0 = 0, int32_t x1 = -1, int32_t y1 = -1) ;
     bool buildHandComposite(HandComposite& comp, uint8_t rotation, float hourAngle, float minuteAngle, bool hands) ;
     bool drawCompositeInto(uint8_t displayNum, uint8_t rotation, float hourAngle, float minuteAngle, bool hands) ;
     bool renderClockFrame(uint8_t displayNum, uint8_t rotation, float& lastHourAngleRef, float& lastMinuteAngleRef, float& lastSecondAngleRef, bool& firstRunRef) ; // false = Frame unveraendert, nichts gesendet

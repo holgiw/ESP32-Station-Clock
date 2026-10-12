@@ -202,19 +202,12 @@
         url += "&rocrail=" + String(rocrailEnabled ? "true" : "false");
         url += "&wifiReconnect=" + String(wifiActive ? "true" : "false");
 
-        // Helligkeit (siehe applyBrightnessPresetValue() in display.h) - bewusst OHNE useBacklight, das
-        // haengt an der Verdrahtung. Aeltere Presets ohne diese Werte lassen die Helligkeit unveraendert.
+        // Helligkeit (siehe applyBrightnessPresetValue() in display.h): nur die automatische Helligkeit; die
+        // Helligkeitswerte und useBacklight gehoeren zur Uhr und ihrem Display.
 
-        // Brightness (see applyBrightnessPresetValue() in display.h) - deliberately WITHOUT useBacklight,
-        // that depends on the wiring. Older presets without these values leave brightness unchanged.
+        // Brightness (see applyBrightnessPresetValue() in display.h): only the automatic brightness; the
+        // brightness values and useBacklight belong to the clock and its display.
 
-        url += "&minBrightness=" + String(preferences.getUChar(PK_MIN_BRIGHTNESS, 100));
-        url += "&maxBrightness=" + String(preferences.getUChar(PK_MAX_BRIGHTNESS, 255));
-        url += "&brightStart=" + String(preferences.getUChar(PK_BRIGHT_START_HOUR, 7));
-        url += "&brightEnd=" + String(preferences.getUChar(PK_BRIGHT_END_HOUR, 21));
-        url += "&lowThreshold=" + String(preferences.getInt(PK_LOW_THRESHOLD, 40));
-        url += "&highThreshold=" + String(preferences.getInt(PK_HIGH_THRESHOLD, 60));
-        url += "&gamma=" + String(preferences.getFloat(PK_GAMMA_BRIGHTNESS, 2.2f), 1);
         url += "&autoBrightness=" + String(useAdc ? "true" : "false");
 
         return url;

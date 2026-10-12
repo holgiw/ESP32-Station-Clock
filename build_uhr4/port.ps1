@@ -51,7 +51,7 @@ function Get-StateText($state) {
     switch ($state) {
         'download' { 'UHR - Download-Modus / download mode' }
         'running'  { 'UHR - laeuft / running' }
-        'c6'       { 'UHR ESP32-C6 (USB-Serial-JTAG)' }
+        'c6'       { 'UHR ESP32-C6 oder S3-480 / or S3-480 (USB-Serial-JTAG)' }
         's3'       { 'UHR ESP32-S3 (CH343)?' }
         default    { '-' }
     }

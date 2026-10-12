@@ -24,6 +24,11 @@ Eine Firmware je ESP. Den Displaytyp wählt man im Tab „Uhr Einstellungen“ o
   - Flash mit zwei App-Partitionen und 9,9 MB für Zifferblätter, Zeiger und Schriften
   - Firmware-Update über WLAN (siehe Abschnitt 10)
   - Rotation von Hand oder „automatisch“ über den eingebauten Lagesensor (QMI8658): Das Zifferblatt steht aufrecht, egal wie die Uhr hängt; liegt sie flach, bleibt die Lage. Vorher die passende Rotation von Hand wählen und speichern, dann auf „automatisch“ stellen – die Uhr nimmt diese Lage als Bezug.
+- **ESP32-S3-Touch-LCD-4** (Waveshare, Display fest verbaut, Build `build_uhr4/esp32s3lcd4`, 16 MB Flash, 8 MB PSRAM; **EXPERIMENTELL** – läuft auf einem Board, ist aber weniger erprobt als die anderen Chips):
+  - ST7701_480 – quadratisch, 480 × 480, am RGB-Bus; Touch GT911, Port-Expander CH32V003 (Beleuchtung per PWM, Beeper)
+  - Das Bild liegt in einem eigenen Puffer im PSRAM; nach Flash-Schreibzugriffen (Firmware-Update, Sicherung einspielen) synchronisiert die Uhr das Panel neu. Während Update und Sicherung zeigt das Display kurz den Text und danach eine blaue Fläche.
+  - Berührung des Displays zeigt 5 Sekunden lang WLAN und IP-Adresse. Helligkeit über die PWM-Beleuchtung („Hintergrundbeleuchtung PWM“).
+  - Bekannte Grenzen: etwa 22 Bilder pro Sekunde beim Sekundenzeiger, selten kurzes Flimmern oder ein Neustart des Panels (Zähler `/api/lcdstats`). Eigene Firmware: Das GitHub-Update lädt `uhr4-s3lcd4.bin`.
 - Zweites, baugleiches Display (nur ESP32-S2) mit eigener Rotation (0°, 90°, 180°, 270°). Steht ein Display auf „nicht angeschlossen (n.a.)“, bleibt es schwarz, und die Uhr zeichnet und berechnet nichts dafür. Standard: Display 1 mit 0°, Display 2 n.a. Status- und Startmeldungen (Start, Access-Point-Modus) erscheinen bis zum Uhrstart trotzdem auf beiden Displays; die Einstellungsseite weist darauf hin.
 
 ---
@@ -117,6 +122,8 @@ Eine Firmware je ESP. Den Displaytyp wählt man im Tab „Uhr Einstellungen“ o
   - [ESP32-C6-LCD-1.3](https://docs.waveshare.com/ESP32-C6-LCD-1.3/Resources-And-Documents) mit ST7789 (240 × 240)
 - **ESP32-S3** (Waveshare, Display fest verbaut):
   - [ESP32-S3-LCD-1.28](https://docs.waveshare.com/ESP32-S3-LCD-1.28) mit GC9A01 (240 × 240, rund)
+- **ESP32-S3-Touch-LCD-4** (Waveshare, Display fest verbaut, **experimentell**):
+  - [ESP32-S3-Touch-LCD-4](https://docs.waveshare.com/ESP32-S3-Touch-LCD-4) mit ST7701 (480 × 480, quadratisch, Touch)
 - Fotowiderstand für die Helligkeit; die Uhr erkennt ihn beim Start.
 - Optional: zweites, baugleiches Display (nur ESP32-S2, eigener Chip-Select), RTC DS3231 (hält die Uhrzeit über Stromausfälle, auch ohne WLAN), DCF77-Empfänger (Funkzeit ohne Internet).
 - Taster (oder der eingebaute Boot-Taster), je nach Haltedauer:
@@ -190,6 +197,11 @@ One firmware per ESP. The display type is chosen in the "Clock Setup" tab or whe
   - flash with two app partitions and 9.9 MB for clock faces, hands and fonts
   - firmware update over WiFi (see section 10)
   - rotation by hand or "automatic" via the built-in motion sensor (QMI8658): the clock face stays upright however the clock hangs; lying flat, the orientation stays. First select and save the fitting rotation by hand, then switch to "automatic" – the clock takes this position as its reference.
+- **ESP32-S3-Touch-LCD-4** (Waveshare, display built in, build `build_uhr4/esp32s3lcd4`, 16 MB flash, 8 MB PSRAM; **EXPERIMENTAL** – runs on one board but is less tested than the other chips):
+  - ST7701_480 – square, 480 × 480, on the RGB bus; GT911 touch, CH32V003 port expander (PWM backlight, buzzer)
+  - The image is in its own buffer in PSRAM; after flash writes (firmware update, restoring a backup) the clock re-synchronises the panel. During update and backup the display briefly shows the text and then a blue area.
+  - Touching the display shows WiFi and IP address for 5 seconds. Brightness via the PWM backlight ("Backlight PWM").
+  - Known limits: about 22 frames per second for the second hand, rarely a short flicker or a panel restart (counter in `/api/lcdstats`). Own firmware: the GitHub update downloads `uhr4-s3lcd4.bin`.
 - A second, identical display (ESP32-S2 only) with its own rotation (0°, 90°, 180°, 270°). A display set to "not connected (n.a.)" stays black, and the clock neither draws nor calculates anything for it. Default: display 1 at 0°, display 2 n.a. Status and boot messages (boot, access point mode) still appear on both displays until the clock starts; the settings page notes this.
 
 ---
@@ -283,6 +295,8 @@ One firmware per ESP. The display type is chosen in the "Clock Setup" tab or whe
   - [ESP32-C6-LCD-1.3](https://docs.waveshare.com/ESP32-C6-LCD-1.3/Resources-And-Documents) with ST7789 (240 × 240)
 - **ESP32-S3** (Waveshare, display built in):
   - [ESP32-S3-LCD-1.28](https://docs.waveshare.com/ESP32-S3-LCD-1.28) with GC9A01 (240 × 240, round)
+- **ESP32-S3-Touch-LCD-4** (Waveshare, display built in, **experimental**):
+  - [ESP32-S3-Touch-LCD-4](https://docs.waveshare.com/ESP32-S3-Touch-LCD-4) with ST7701 (480 × 480, square, touch)
 - Photoresistor for brightness; the clock detects it at startup.
 - Optional: a second, identical display (ESP32-S2 only, own chip select), RTC DS3231 (keeps the time across power loss, also without WiFi), DCF77 receiver (radio time without internet).
 - Button (or the built-in Boot button), depending on how long it is held:

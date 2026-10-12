@@ -810,14 +810,14 @@
     }
 
 
-    // Werksvorgaben fuer min. Helligkeit und Schwellwerte: mit Backlight dimmt die PWM fast bis 0 stufenlos;
-    // ohne werden die Pixel abgedunkelt, unter ~100 wird das Zifferblatt unleserlich.
+    // Werksvorgaben fuer min. Helligkeit (dunkel, 75) und Schwellwerte: mit Backlight dimmt die PWM stufenlos,
+    // ohne werden die Pixel abgedunkelt.
 
-    // Factory defaults for min. brightness and thresholds: with a backlight the PWM dims steplessly almost to
-    // 0; without one the pixels are darkened, below ~100 the clock face becomes unreadable.
+    // Factory defaults for min. brightness (dark, 75) and thresholds: with a backlight the PWM dims steplessly,
+    // without one the pixels are darkened.
 
     void putBrightnessDefaults(bool backlight) {
-        preferences.putUChar(PK_MIN_BRIGHTNESS, backlight ? 5 : 100);
+        preferences.putUChar(PK_MIN_BRIGHTNESS, 75);
         preferences.putInt(PK_LOW_THRESHOLD, backlight ? 1 : 40);
         preferences.putInt(PK_HIGH_THRESHOLD, backlight ? 100 : 60); // 100 statt frueher 255: das Formularfeld erlaubt nur 0-100, der
                                                                      // Lichtwert (5-100 %) ueberschreitet 100 ohnehin nie - gleiche Wirkung
@@ -849,40 +849,22 @@
     }
 
 
-    // Helligkeitswert aus einem Preset (/api/setMode) uebernehmen, begrenzen und speichern. false = kein
-    // Helligkeits-Schluessel; wirkt beim naechsten updateBrightness().
+    // Helligkeitswert aus einem Preset (/api/setMode): nur "autoBrightness" wirkt, die Helligkeitswerte werden
+    // ignoriert. false = kein Helligkeits-Schluessel.
 
-    // Take over, clamp and store a brightness value from a preset (/api/setMode). false = not a brightness key;
-    // takes effect on the next updateBrightness().
+    // Brightness value from a preset (/api/setMode): only "autoBrightness" takes effect, the brightness values
+    // are ignored. false = not a brightness key.
 
     bool applyBrightnessPresetValue(const String& key, const String& value) {
-        if (key == "minBrightness") {
-            minBrightness = (uint8_t)constrain(value.toInt(), 0, 255);
-            preferences.putUChar(PK_MIN_BRIGHTNESS, minBrightness);
-        }
-        else if (key == "maxBrightness") {
-            maxBrightness = (uint8_t)constrain(value.toInt(), 0, 255);
-            preferences.putUChar(PK_MAX_BRIGHTNESS, maxBrightness);
-        }
-        else if (key == "brightStart") {
-            brightStartHour = (uint8_t)constrain(value.toInt(), 0, 23);
-            preferences.putUChar(PK_BRIGHT_START_HOUR, brightStartHour);
-        }
-        else if (key == "brightEnd") {
-            brightEndHour = (uint8_t)constrain(value.toInt(), 0, 23);
-            preferences.putUChar(PK_BRIGHT_END_HOUR, brightEndHour);
-        }
-        else if (key == "lowThreshold") {
-            lowThreshold = constrain(value.toInt(), 0, 100);
-            preferences.putInt(PK_LOW_THRESHOLD, lowThreshold);
-        }
-        else if (key == "highThreshold") {
-            highThreshold = constrain(value.toInt(), 0, 100);
-            preferences.putInt(PK_HIGH_THRESHOLD, highThreshold);
-        }
-        else if (key == "gamma") {
-            gammaBrightness = constrain(value.toFloat(), 0.1f, 3.0f);
-            preferences.putFloat(PK_GAMMA_BRIGHTNESS, gammaBrightness);
+        if (key == "minBrightness" || key == "maxBrightness" || key == "brightStart" || key == "brightEnd" ||
+            key == "lowThreshold" || key == "highThreshold" || key == "gamma") {
+
+            // Diese Helligkeitswerte gehoeren zur Uhr und ihrem Display: aus Presets (auch aelteren) und aus
+            // Sicherungen nicht uebernehmen
+
+            // These brightness values belong to the clock and its display: not taken from presets (older ones
+            // included) nor from backups
+
         }
         else if (key == "autoBrightness") {
             setAutoBrightness(value == "1" || value.equalsIgnoreCase("true"));
@@ -941,7 +923,7 @@
         preferences.putBool(PK_USE_BACKLIGHT, enabled);
 
         putBrightnessDefaults(enabled);
-        minBrightness = preferences.getUChar(PK_MIN_BRIGHTNESS, 100);
+        minBrightness = preferences.getUChar(PK_MIN_BRIGHTNESS, 75);
         lowThreshold = preferences.getInt(PK_LOW_THRESHOLD, 40);
         highThreshold = preferences.getInt(PK_HIGH_THRESHOLD, 60);
 
@@ -2251,12 +2233,39 @@
     // as loadClockFace(), but into any target, since buildHandComposite()
     // draws into its own composite sprite.
 
-    bool blitFaceIntoSprite(LGFX_Sprite& dest, uint8_t rotation) {
+    bool blitFaceIntoSprite(LGFX_Sprite& dest, uint8_t rotation, int32_t x0, int32_t y0, int32_t x1, int32_t y1) {
         if (dest.width() <= 0) return false;
         if (prepareClockFaceCache() != 2) return false;
 
         const int N = CLOCK_WIDTH;
         int faceOrientation = faceOrientationFor(rotation);
+
+        // Mit x1 >= 0 nur das Rechteck x0..x1 / y0..y1 kopieren (Zwischenbild-Teilaktualisierung, 480x480)
+        // With x1 >= 0 copy only the rectangle x0..x1 / y0..y1 (partial composite update, 480x480)
+
+        if (x1 >= 0) {
+            x0 = max(x0, (int32_t)0); y0 = max(y0, (int32_t)0);
+            x1 = min(x1, (int32_t)N - 1); y1 = min(y1, (int32_t)CLOCK_HEIGHT - 1);
+            if (x1 < x0 || y1 < y0) return true;
+            const int w = x1 - x0 + 1;
+            for (int y = y0; y <= y1; y++) {
+                if (faceOrientation == 0) {
+                    dest.pushImage(x0, y, w, 1, clockFaceBrightBuffer + (size_t)y * N + x0);
+                    continue;
+                }
+                for (int x = x0; x <= x1; x++) {
+                    int srcX, srcY;
+                    switch (faceOrientation) {
+                        case 1:  srcX = y;         srcY = N - 1 - x; break;
+                        case 2:  srcX = N - 1 - x; srcY = N - 1 - y; break;
+                        default: srcX = N - 1 - y; srcY = x;         break;
+                    }
+                    rowBuffer[x - x0] = clockFaceBrightBuffer[srcY * N + srcX];
+                }
+                dest.pushImage(x0, y, w, 1, rowBuffer);
+            }
+            return true;
+        }
 
         if (faceOrientation == 0) {
             dest.pushImage(0, 0, N, CLOCK_HEIGHT, clockFaceBrightBuffer);
@@ -2714,6 +2723,69 @@
     }
 
 
+#if BOARD_WAVESHARE_S3_LCD4
+
+    // 480x480: weiches Gleiten von Stunden-/Minutenzeiger zum neuen Wert, zeitgesteuert (LCD4_HAND_EASE_MS, sanfter
+    // Anfang und Ende) statt in Schritten je Bild - die Dauer haengt so nicht von der Bildrate ab. slot 0 =
+    // Minutenzeiger, 1 = Stundenzeiger; idx = Display. Liefert den Winkel fuer dieses Bild.
+
+    // 480x480: smooth gliding of the hour/minute hand to the new value, time-controlled (LCD4_HAND_EASE_MS, soft
+    // start and end) instead of steps per frame - the duration thus does not depend on the frame rate. slot 0 =
+    // minute hand, 1 = hour hand; idx = display. Returns the angle for this frame.
+
+    float easeHandTimed(uint8_t idx, uint8_t slot, float current, float target) {
+        const uint32_t LCD4_HAND_EASE_MS = 600;
+        static float from[2][2], to[2][2];
+        static uint32_t startMs[2][2];
+        static bool active[2][2];
+        idx &= 1; slot &= 1;
+        if (!active[idx][slot] && fabsf(shortestAngleDiff(current, target)) < 0.01f) return target;
+        if (!active[idx][slot] || fabsf(shortestAngleDiff(to[idx][slot], target)) > 0.01f) {
+            from[idx][slot] = current;
+            to[idx][slot] = target;
+            startMs[idx][slot] = millis();
+            active[idx][slot] = true;
+        }
+        float p = (float)(millis() - startMs[idx][slot]) / (float)LCD4_HAND_EASE_MS;
+        if (p >= 1.0f) {
+            active[idx][slot] = false;
+            return target;
+        }
+        p = p * p * (3.0f - 2.0f * p);
+        float a = from[idx][slot] + shortestAngleDiff(from[idx][slot], target) * p;
+        if (a < 0.0f) a += 360.0f;
+        if (a >= 360.0f) a -= 360.0f;
+        return a;
+    }
+
+    // 480x480: bewegen sich nur Stunden- und Minutenzeiger, baut diese Funktion das Zwischenbild nur im Rechteck
+    // x0..x1 / y0..y1 neu auf (Zifferblatt dort kopieren, beide Zeiger neu setzen) statt komplett - ein volles Bild
+    // kostet hier ca. 240 ms. false = nicht moeglich, dann baut drawCompositeInto() es voll auf.
+
+    // 480x480: if only the hour and minute hand move, this function rebuilds the composite only in the rectangle
+    // x0..x1 / y0..y1 (copy the clock face there, set both hands anew) instead of completely - a full frame costs
+    // about 240 ms here. false = not possible, drawCompositeInto() then rebuilds it completely.
+
+    bool updateCompositeRect(HandComposite& comp, uint8_t rotation, float hourAngle, float minuteAngle,
+                             int32_t x0, int32_t y0, int32_t x1, int32_t y1) {
+        if (!comp.valid || !comp.sprite || !comp.hands || comp.rotation != rotation) return false;
+        if (comp.assetGeneration != clockAssetGeneration) return false;
+        if (hourHandSprite.width() <= 0 || minuteHandSprite.width() <= 0) return false;
+        comp.sprite->setClipRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+        bool ok = blitFaceIntoSprite(*comp.sprite, rotation, x0, y0, x1, y1);
+        if (ok) {
+            hourHandSprite.pushRotatedWithAA(comp.sprite, hourAngle, TRANSPARENT_COLOR);
+            minuteHandSprite.pushRotatedWithAA(comp.sprite, minuteAngle, TRANSPARENT_COLOR);
+            comp.hourAngle = hourAngle;
+            comp.minuteAngle = minuteAngle;
+        }
+        comp.sprite->clearClipRect();
+        return ok;
+    }
+
+#endif
+
+
     // Haelt das Zwischenbild aktuell und kopiert es ins backgroundSprite. Neu
     // aufgebaut wird nur bei spuerbarer Aenderung (Bild/Rotation/Helligkeit/
     // Winkel > COMPOSITE_ANGLE_EPS, deutlich unter 1 Pixel am Zeigerende).
@@ -2904,7 +2976,17 @@
 
         float secAngle = t.tm_sec * 6.0f;
         float minAngle = t.tm_min * 6.0f;
+#if BOARD_WAVESHARE_S3_LCD4
+
+        // 480x480: Stundenzeiger nur im Minutentakt (zusammen mit dem Minutenzeiger) - jede Aenderung kostet ein
+        // aufwaendiges Bild; 0,5 Grad je Minute sind am Zeigerende knapp 2 Pixel
+        // 480x480: hour hand only once a minute (together with the minute hand) - every change costs an expensive
+        // frame; 0.5 degrees per minute are just under 2 pixels at the tip of the hand
+
+        float hourAngle = (t.tm_hour % 12) * 30.0f + (t.tm_min / 2.0f);
+#else
         float hourAngle = (t.tm_hour % 12) * 30.0f + (t.tm_min / 2.0f) + (t.tm_sec / 120.0f);
+#endif
 
         static uint8_t stationTick = 0;
         static uint32_t stationLastMillis = 0;
@@ -3272,6 +3354,15 @@
                 if (fabs(angleDiff) > HAND_MOVE_THRESHOLD_DEG) {
                     lastMinuteAngleRef = targetMinAngle; // grosser Sprung: animateHand() / large jump: animateHand()
                 }
+#if BOARD_WAVESHARE_S3_LCD4
+
+                // 480x480: zeitgesteuert gleiten (easeHandTimed()) - nur die Zeigerrechtecke werden neu gezeichnet
+                // 480x480: glide time-controlled (easeHandTimed()) - only the hand rectangles are redrawn
+
+                else {
+                    lastMinuteAngleRef = easeHandTimed(displayNum - 1, 0, lastMinuteAngleRef, targetMinAngle);
+                }
+#else
                 else if (fabs(angleDiff) > 0.1f) {
                     lastMinuteAngleRef += angleDiff * 0.1f;
                     if (lastMinuteAngleRef < 0.0f) lastMinuteAngleRef += 360.0f;
@@ -3280,6 +3371,7 @@
                 else {
                     lastMinuteAngleRef = targetMinAngle;
                 }
+#endif
             }
 
             minAngle = lastMinuteAngleRef;
@@ -3292,6 +3384,11 @@
         if (fabs(hourAngleDiff) > HAND_MOVE_THRESHOLD_DEG) {
             lastHourAngleRef = targetHourAngle; // grosser Sprung: animateHand() / large jump: animateHand()
         }
+#if BOARD_WAVESHARE_S3_LCD4
+        else {
+            lastHourAngleRef = easeHandTimed(displayNum - 1, 1, lastHourAngleRef, targetHourAngle); // 480x480: zeitgesteuert / time-controlled
+        }
+#else
         else if (fabs(hourAngleDiff) > 0.05f) {
             lastHourAngleRef += hourAngleDiff * 0.1f;  // Glättungsfaktor
                                                        // smoothing factor
@@ -3308,6 +3405,7 @@
         else {
             lastHourAngleRef = targetHourAngle;
         }
+#endif
         hourAngle = lastHourAngleRef;
 
         if (noTimeYet) {
@@ -3460,6 +3558,9 @@
         const float drawMinAngle = (subdial && partial) ? lastFrame.minuteAngle : minAngle;
 
         int32_t px0 = INT32_MAX, py0 = INT32_MAX, px1 = INT32_MIN, py1 = INT32_MIN;
+#if BOARD_WAVESHARE_S3_LCD4
+        bool handsMoved = false;
+#endif
         if (partial) {
             if (subdial) backgroundSprite.setPivot(subX, subY);
             addRotatedSpriteBounds(secondHandSprite, lastFrame.secondAngle, px0, py0, px1, py1);
@@ -3471,6 +3572,27 @@
                 px1 = max(px1, (int32_t)(hubX + hubSize + 2));
                 py1 = max(py1, (int32_t)(hubY + hubSize + 2));
             }
+#if BOARD_WAVESHARE_S3_LCD4
+
+            // Haben sich Stunden-/Minutenzeiger bewegt (nur im Minutentakt), kommen ihre alten und neuen Flaechen
+            // ins Rechteck und das Zwischenbild wird nur dort neu aufgebaut (updateCompositeRect()).
+
+            // If the hour/minute hand moved (only once a minute), their old and new areas join the rectangle and
+            // the composite is rebuilt only there (updateCompositeRect()).
+
+            if (!subdial) {
+                HandComposite& comp = handComposite[(displayNum == 1) ? 0 : 1];
+                if (comp.valid && comp.sprite && comp.hands && comp.rotation == rotation &&
+                    (fabsf(shortestAngleDiff(comp.hourAngle, hourAngle)) >= 0.12f ||
+                     fabsf(shortestAngleDiff(comp.minuteAngle, minAngle)) >= 0.12f)) {
+                    addRotatedSpriteBounds(hourHandSprite, comp.hourAngle, px0, py0, px1, py1);
+                    addRotatedSpriteBounds(hourHandSprite, hourAngle, px0, py0, px1, py1);
+                    addRotatedSpriteBounds(minuteHandSprite, comp.minuteAngle, px0, py0, px1, py1);
+                    addRotatedSpriteBounds(minuteHandSprite, minAngle, px0, py0, px1, py1);
+                    handsMoved = true;
+                }
+            }
+#endif
             px0 = max(px0, (int32_t)0);
             py0 = max(py0, (int32_t)0);
             px1 = min(px1, (int32_t)(CLOCK_WIDTH - 1));
@@ -3478,6 +3600,12 @@
             partial = (px1 >= px0 && py1 >= py0);
         }
         if (partial) backgroundSprite.setClipRect(px0, py0, px1 - px0 + 1, py1 - py0 + 1);
+#if BOARD_WAVESHARE_S3_LCD4
+        if (partial && handsMoved) {
+            updateCompositeRect(handComposite[(displayNum == 1) ? 0 : 1], rotation, hourAngle, minAngle, px0, py0, px1, py1);
+        }
+        const uint32_t profA = micros();
+#endif
 
         uint32_t buildsBefore = compositeBuildCount;
         bool compositeOk = drawCompositeInto(displayNum, rotation, hourAngle, minAngle, !subdial);
@@ -3493,6 +3621,9 @@
             backgroundSprite.clearClipRect();
             if (compositeOk) compositeOk = drawCompositeInto(displayNum, rotation, hourAngle, minAngle, !subdial);
         }
+#if BOARD_WAVESHARE_S3_LCD4
+        const uint32_t profB = micros();
+#endif
         if (!compositeOk) loadClockFace(rotation);
         if (plan.secUnder) {
             backgroundSprite.setPivot(subX, subY);
@@ -3578,6 +3709,9 @@
             }
         }
 
+#if BOARD_WAVESHARE_S3_LCD4
+        const uint32_t profC = micros();
+#endif
         if (partial) {
 
             // Nur das Rechteck senden (siehe pushBackgroundRect())
@@ -3596,6 +3730,22 @@
             backgroundSprite.pushSprite(ox, oy);
         }
         lastRenderPartial = partial;
+#if BOARD_WAVESHARE_S3_LCD4
+
+        // Zeitaufteilung fuer /api/lcdstats: Rechteck/Zwischenbild, Zeiger und Nabe, Senden (Mikrosekunden)
+        // Time split for /api/lcdstats: rectangle/composite, hands and hub, sending (microseconds)
+
+        {
+            const uint32_t profD = micros();
+            const int k = partial ? 0 : 1;
+            lcd4Prof[k][0]++;
+            lcd4Prof[k][1] += profA - renderStartMicros;
+            lcd4Prof[k][2] += profB - profA;
+            lcd4Prof[k][3] += profC - profB;
+            lcd4Prof[k][4] += profD - profC;
+            if (partial) lcd4ProfPixels += (uint32_t)(px1 - px0 + 1) * (uint32_t)(py1 - py0 + 1);
+        }
+#endif
         recordRenderFrame(micros() - renderStartMicros, partial);
 
         lastFrame.valid = true;

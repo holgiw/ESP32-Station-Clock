@@ -137,7 +137,7 @@ find_running_port() {
     for dev in $(list_ports); do
         state=$(port_state "$dev")
         case "$BOARD:$state" in
-            s2:running|c6:c6|s3:s3|:running|:c6|:s3) echo "$dev"; return 0 ;;
+            s2:running|c6:c6|s3lcd4:c6|s3:s3|:running|:c6|:s3) echo "$dev"; return 0 ;;
         esac
     done
     return 1
@@ -429,6 +429,12 @@ send_time() {
 # Displayname aus Nummer oder Name (je nach Board), leer bei ungueltig
 # Display name from number or name (depending on the board), empty if invalid
 display_name() {
+    if [ "$BOARD" = s3lcd4 ]; then
+        case "${1^^}" in
+            1|ST7701_480) echo ST7701_480 ;;
+        esac
+        return
+    fi
     if [ "$BOARD" = s3 ]; then
         case "${1^^}" in
             1|GC9A01) echo GC9A01 ;;
@@ -475,6 +481,34 @@ query_clock_info() {
     fi
     exec 3>&-
     [ -n "$CLOCK_NAME" ]
+}
+
+# 303a:1001 (USB-Serial-JTAG) haben der ESP32-C6 und der ESP32-S3 des 480x480-Boards. Erst fragt das Skript eine
+# laufende uhr4 ("UHR4 INFO": ST7701_480 = 480x480-Board), sonst esptool (chip_id, startet den Chip neu):
+# ESP32-S3 = 480x480-Board. Ohne Antwort und ohne esptool gilt UHR4_BOARD (c6 oder s3lcd4), sonst c6.
+# Setzt JTAG_BOARD.
+# 303a:1001 (USB serial JTAG) is used by the ESP32-C6 and by the ESP32-S3 of the 480x480 board. The script first
+# asks a running uhr4 ("UHR4 INFO": ST7701_480 = 480x480 board), otherwise esptool (chip_id, restarts the chip):
+# ESP32-S3 = 480x480 board. Without a reply and without esptool UHR4_BOARD (c6 or s3lcd4) applies, otherwise c6.
+# Sets JTAG_BOARD.
+JTAG_BOARD=c6
+detect_jtag_board() {
+    local dev="$1" tool out
+    JTAG_BOARD="${UHR4_BOARD:-c6}"
+    CLOCK_NAME=""
+    if query_clock_info "$dev"; then
+        [ "$CLOCK_NAME" = ST7701_480 ] && JTAG_BOARD=s3lcd4 || JTAG_BOARD=c6
+        return
+    fi
+    for tool in esptool esptool.py; do
+        command -v "$tool" >/dev/null 2>&1 || continue
+        out=$("$tool" -p "$dev" chip_id 2>&1) || out=$("$tool" -p "$dev" chip-id 2>&1)
+        case "$out" in
+            *ESP32-S3*) JTAG_BOARD=s3lcd4 ;;
+            *ESP32-C6*) JTAG_BOARD=c6 ;;
+        esac
+        return
+    done
 }
 
 # Displaytyp abfragen: gespeicherter Typ vorgewaehlt (Enter behaelt ihn), uhr4
@@ -573,7 +607,7 @@ if [ -z "$PORT" ]; then
         case "$state" in
             download) text="UHR ESP32-S2 - Download-Modus / download mode"; clocks+=("$dev") ;;
             running)  text="UHR ESP32-S2 - laeuft / running"; clocks+=("$dev") ;;
-            c6)       text="UHR ESP32-C6 (USB-Serial-JTAG)"; clocks+=("$dev") ;;
+            c6)       text="UHR ESP32-C6 oder S3-480 / or S3-480 (USB-Serial-JTAG)"; clocks+=("$dev") ;;
             s3)       text="UHR ESP32-S3 (CH343)?"; clocks+=("$dev") ;;
             *)        text="-" ;;
         esac
@@ -625,11 +659,12 @@ fi
 # Board am Port erkennen und den Build dieses Chips vom Release laden (Zip + SHA-256 pruefen, entpacken)
 # Recognize the board on the port and download the build of that chip from the release (check zip + SHA-256, unpack)
 case "$state" in
-    c6) BOARD=c6 ;;
+    c6) detect_jtag_board "$PORT"; BOARD="$JTAG_BOARD" ;;
     s3) BOARD=s3 ;;
     *)  BOARD=s2 ;;
 esac
-echo "ESP32-${BOARD^^} an / on $PORT"
+if [ "$BOARD" = s3lcd4 ]; then echo "ESP32-S3 (480x480) an / on $PORT"; else echo "ESP32-${BOARD^^} an / on $PORT"; fi
+[ "$BOARD" = s3lcd4 ] && echo "ESP32-S3-Touch-LCD-4 (480x480): EXPERIMENTELL / EXPERIMENTAL"
 if [ "${UHR4_LOCAL:-}" = 1 ]; then
     BIN_DIR="esp32$BOARD"
 else
@@ -701,6 +736,8 @@ if [ -z "$1" ]; then
             read -r -p "An $PORT antwortet keine uhr4 - trotzdem den ESP32-S3-Build flashen? / no uhr4 replies on $PORT - flash the ESP32-S3 build anyway? [j/N, y/N] " ok
             [[ "$ok" =~ ^[JjYy] ]] || exit 1
         fi
+    elif [ "$BOARD" = s3lcd4 ]; then
+        :   # ESP32-S3-Touch-LCD-4: Display fest verbaut - keine Abfrage / display built in - no question
     else
         ask_display
     fi
@@ -750,8 +787,10 @@ fi
 # ESP32-C6 and -S3: esptool puts the chip into download mode itself (USB serial JTAG or DTR/RTS on the
 # CH343P); bootloader at 0x0, plus boot_app0.bin at 0xE000 - resets a boot selection of a previous
 # firmware (e.g. OTA)
-if [ "$BOARD" = c6 ] || [ "$BOARD" = s3 ]; then
-    "$ESPTOOL" --chip "esp32$BOARD" -p "$PORT" -b 921600 "$WRITE" \
+if [ "$BOARD" != s2 ]; then
+    CHIP="esp32$BOARD"
+    [ "$BOARD" = s3lcd4 ] && CHIP=esp32s3
+    "$ESPTOOL" --chip "$CHIP" -p "$PORT" -b 921600 "$WRITE" \
         0x0 "$BIN_DIR/uhr4.ino.bootloader.bin" 0x8000 "$BIN_DIR/uhr4.ino.partitions.bin" 0xe000 "$BIN_DIR/boot_app0.bin" \
         0x10000 "$BIN_DIR/uhr4.ino.bin"
 else

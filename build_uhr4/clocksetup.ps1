@@ -17,13 +17,13 @@
 # Displaytyp ESP32-S2: 1/GC9A01, 2/GC9A01_WITH_BACKLIGHT, 3/GC9D01, 4/ILI9341;
 # ESP32-C6 (Waveshare): 1/ST7789 (1,47"), 2/ST7789_240 (1,3"); ESP32-S3
 # (Waveshare ESP32-S3-LCD-1.28): fest GC9A01, keine Abfrage; 0 = unveraendert.
-# Das Board erkennt das Skript am USB-Port (303A:1001 = ESP32-C6, 1A86:55D3 =
-# ESP32-S3 am CH343P) und LAEDT den Build dieses Chips vom GitHub-Release (uhr4-esp32s2,
-# -esp32c6 bzw. -esp32s3 als Zip samt SHA-256, Pruefung vor dem Flashen). Dafuer braucht
+# Das Board erkennt das Skript am USB-Port (303A:1001 = ESP32-C6 oder 480x480-Board ESP32-S3-Touch-LCD-4,
+# unterschieden per "UHR4 INFO" bzw. esptool chip_id; 1A86:55D3 = ESP32-S3 am CH343P) und
+# LAEDT den Build dieses Chips vom GitHub-Release (uhr4-esp32s2, -esp32c6, -esp32s3 bzw. -esp32s3lcd4 als Zip samt SHA-256, Pruefung vor dem Flashen). Dafuer braucht
 # der PC beim Flashen Internet; einen Rueckfall auf lokale Dateien gibt es nicht.
 #   -Local
 #        Nur fuer die Entwicklung: statt zu laden den Build aus dem Unterordner esp32s2,
-#        esp32c6 bzw. esp32s3 neben diesem Skript flashen (auch UHR4_LOCAL=1).
+#        esp32c6, esp32s3 bzw. esp32s3lcd4 neben diesem Skript flashen (auch UHR4_LOCAL=1).
 #        Die Umgebungsvariable UHR4_BUILD_URL ersetzt die Adresse des Releases (zum Testen).
 # Das WLAN-Passwort wird verdeckt eingegeben, bleibt nur im Speicher dieses
 # Skripts (keine Datei, keine Umgebungsvariable) und geht nur per USB an die Uhr.
@@ -48,24 +48,24 @@
 # Display type ESP32-S2: 1/GC9A01, 2/GC9A01_WITH_BACKLIGHT, 3/GC9D01, 4/ILI9341;
 # ESP32-C6 (Waveshare): 1/ST7789 (1.47"), 2/ST7789_240 (1.3"); ESP32-S3
 # (Waveshare ESP32-S3-LCD-1.28): fixed GC9A01, no question; 0 = unchanged.
-# The script recognizes the board by the USB port (303A:1001 = ESP32-C6,
-# 1A86:55D3 = ESP32-S3 on the CH343P) and DOWNLOADS the build of that chip from the GitHub
-# release (uhr4-esp32s2, -esp32c6 or -esp32s3 as a zip with SHA-256, checked before
+# The script recognizes the board by the USB port (303A:1001 = ESP32-C6 or 480x480 board ESP32-S3-Touch-LCD-4,
+# told apart by "UHR4 INFO" or esptool chip_id; 1A86:55D3 = ESP32-S3 on the CH343P) and DOWNLOADS the build of that chip from the GitHub
+# release (uhr4-esp32s2, -esp32c6, -esp32s3 or -esp32s3lcd4 as a zip with SHA-256, checked before
 # flashing). The PC needs internet while flashing; there is no fallback to local files.
 #   -Local
 #        For development only: instead of downloading, flash the build from the subfolder
-#        esp32s2, esp32c6 or esp32s3 next to this script (also UHR4_LOCAL=1).
+#        esp32s2, esp32c6, esp32s3 or esp32s3lcd4 next to this script (also UHR4_LOCAL=1).
 #        The environment variable UHR4_BUILD_URL replaces the release address (for testing).
 # The WiFi password is entered hidden, stays only in this script's memory (no
 # file, no environment variable) and only goes to the clock via USB.
 param([switch]$Flash, [string]$Port, [string]$Display, [string]$Send, [switch]$Time, [switch]$NoMonitor, [switch]$Local)
 
 # Board und Displaytypen: 's2' (Lolin S2 Pico, wechselbares Display), 'c6' (Waveshare ESP32-C6-LCD mit fest
-# verbautem ST7789) oder 's3' (Waveshare ESP32-S3-LCD-1.28 mit fest verbautem GC9A01). Set-Board stellt Namen
-# und Beschriftungen um.
+# verbautem ST7789), 's3' (Waveshare ESP32-S3-LCD-1.28 mit fest verbautem GC9A01) oder 's3lcd4' (Waveshare
+# ESP32-S3-Touch-LCD-4 mit fest verbautem ST7701, 480x480). Set-Board stellt Namen und Beschriftungen um.
 # Board and display types: 's2' (Lolin S2 Pico, exchangeable display), 'c6' (Waveshare ESP32-C6-LCD with a
-# built-in ST7789) or 's3' (Waveshare ESP32-S3-LCD-1.28 with a built-in GC9A01). Set-Board switches names and
-# labels.
+# built-in ST7789), 's3' (Waveshare ESP32-S3-LCD-1.28 with a built-in GC9A01) or 's3lcd4' (Waveshare
+# ESP32-S3-Touch-LCD-4 with a built-in ST7701, 480x480). Set-Board switches names and labels.
 $board = 's2'
 $names = @{}
 $labels = @{}
@@ -74,6 +74,9 @@ function Set-Board([string]$b) {
     if ($b -eq 'c6') {
         $script:names = @{ 1 = 'ST7789'; 2 = 'ST7789_240' }
         $script:labels = @{ 1 = 'ST7789 (172x320, Waveshare ESP32-C6-LCD-1.47) mit Streifen fuer Uhrzeit und Datum / with time and date strip'; 2 = 'ST7789 (240x240, Waveshare ESP32-C6-LCD-1.3)' }
+    } elseif ($b -eq 's3lcd4') {
+        $script:names = @{ 1 = 'ST7701_480' }
+        $script:labels = @{ 1 = 'ST7701 (480x480, Waveshare ESP32-S3-Touch-LCD-4)' }
     } elseif ($b -eq 's3') {
         $script:names = @{ 1 = 'GC9A01'; 2 = 'GC9A01_WITH_BACKLIGHT' }
         $script:labels = @{ 1 = 'GC9A01 (240x240) ohne Helligkeitsregelung ueber die Beleuchtung / without backlight dimming'; 2 = 'GC9A01 (240x240) mit Helligkeitsregelung ueber die Beleuchtung (Pin 40) / with backlight dimming (pin 40)' }
@@ -130,11 +133,42 @@ function Get-BuildDir([string]$b) {
     return (Join-Path $work 'files')
 }
 
-# Board am COM-Port: USB-Serial-JTAG (303A:1001) = ESP32-C6, CH343P (1A86:55D3) = ESP32-S3, sonst ESP32-S2
-# Board on the COM port: USB serial JTAG (303A:1001) = ESP32-C6, CH343P (1A86:55D3) = ESP32-S3, else ESP32-S2
-function Get-PortBoard([int]$num) {
+# USB-Serial-JTAG (303A:1001) haben der ESP32-C6 und der ESP32-S3 des 480x480-Boards. Erst fragt das Skript eine
+# laufende uhr4 ("UHR4 INFO": ST7701_480 = 480x480-Board), sonst esptool.exe (chip_id, nur mit $withEsptool - das
+# startet den Chip neu): ESP32-S3 = 480x480-Board, alles andere ESP32-C6.
+# USB serial JTAG (303A:1001) is used by the ESP32-C6 and by the ESP32-S3 of the 480x480 board. The script first
+# asks a running uhr4 ("UHR4 INFO": ST7701_480 = 480x480 board), otherwise esptool.exe (chip_id, only with
+# $withEsptool - it restarts the chip): ESP32-S3 = 480x480 board, anything else ESP32-C6.
+function Get-JtagBoard([int]$num, [bool]$withEsptool) {
+    # DTR/RTS aus (Open-ClockPort richtet sich nach $board, hier noch 's2') / DTR/RTS off (Open-ClockPort depends on $board, still 's2' here)
+    Set-Board 'c6'
+    $sp = $null
+    try {
+        $sp = Open-ClockPort $num
+        $reply = Send-Command $sp 'UHR4 INFO'
+        $sp.Close()
+        if ($reply -match '^UHR4 OK INFO (\S+)') {
+            if ($Matches[1] -eq 'ST7701_480') { return 's3lcd4' }
+            return 'c6'
+        }
+    } catch {
+    } finally {
+        if ($sp -and $sp.IsOpen) { try { $sp.Close() } catch {} }
+    }
+    if ($withEsptool) {
+        $out = & (Join-Path $PSScriptRoot 'esptool.exe') --port "COM$num" chip_id 2>&1 | Out-String
+        if ($out -match 'ESP32-S3') { return 's3lcd4' }
+    }
+    return 'c6'
+}
+
+# Board am COM-Port: USB-Serial-JTAG (303A:1001) = ESP32-C6 oder 480x480-Board (Get-JtagBoard), CH343P (1A86:55D3) =
+# ESP32-S3, sonst ESP32-S2
+# Board on the COM port: USB serial JTAG (303A:1001) = ESP32-C6 or 480x480 board (Get-JtagBoard), CH343P (1A86:55D3) =
+# ESP32-S3, else ESP32-S2
+function Get-PortBoard([int]$num, [bool]$withEsptool = $false) {
     $dev = Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match "\(COM$num\)" } | Select-Object -First 1
-    if ($dev -and $dev.DeviceID -match 'VID_303A&PID_1001') { return 'c6' }
+    if ($dev -and $dev.DeviceID -match 'VID_303A&PID_1001') { return (Get-JtagBoard $num $withEsptool) }
     if ($dev -and $dev.DeviceID -match 'VID_1A86&PID_55D3') { return 's3' }
     return 's2'
 }
@@ -380,7 +414,7 @@ function Get-RunningClockPort {
     Get-CimInstance Win32_PnPEntity | Where-Object {
         $_.Name -match '\(COM(\d+)\)' -and
         $(if ($board -eq 's3') { $_.DeviceID -match 'VID_1A86&PID_55D3' }
-          elseif ($board -eq 'c6') { $_.DeviceID -match 'VID_303A&PID_1001' }
+          elseif ($board -eq 'c6' -or $board -eq 's3lcd4') { $_.DeviceID -match 'VID_303A&PID_1001' }
           else { $_.DeviceID -match 'VID_303A' -and $_.DeviceID -notmatch 'PID_0002|PID_1001' })
     } | ForEach-Object { [int]([regex]::Match($_.Name, '\(COM(\d+)\)').Groups[1].Value) } | Select-Object -First 1
 }
@@ -559,8 +593,11 @@ elseif ($Flash) {
 
     # Board am Port erkennen und den Build dieses Chips laden (Get-BuildDir)
     # Recognize the board on the port and download the build of that chip (Get-BuildDir)
-    Set-Board (Get-PortBoard $selPort)
-    Write-Host "ESP32-$($board.ToUpper()) an / on COM$selPort"
+    Set-Board (Get-PortBoard $selPort $true)
+    Write-Host "$(if ($board -eq 's3lcd4') { 'ESP32-S3 (480x480)' } else { 'ESP32-' + $board.ToUpper() }) an / on COM$selPort"
+    if ($board -eq 's3lcd4') {
+        Write-Host 'ESP32-S3-Touch-LCD-4 (480x480): EXPERIMENTELL / EXPERIMENTAL'
+    }
     $binDir = Get-BuildDir $board
     $bins = @('uhr4.ino.bootloader.bin', 'uhr4.ino.partitions.bin', 'uhr4.ino.bin')
     if ($board -ne 's2') {
@@ -596,6 +633,7 @@ elseif ($Flash) {
                 if ($ok -notmatch '^[JjYy]') { exit 1 }
             }
         }
+        elseif ($board -eq 's3lcd4') { $c = 0 }
         else { $c = Read-DisplayChoice $info }
         Read-Wifi
     }
@@ -628,8 +666,9 @@ elseif ($Flash) {
     # ESP32-C6 and -S3: bootloader at 0x0, plus boot_app0.bin at 0xE000 - resets a boot selection of a
     # previous firmware (e.g. Waveshare demo). ESP32-S2: bootloader at 0x1000.
     try {
-        if ($board -eq 'c6' -or $board -eq 's3') {
-            & $esptool --chip "esp32$board" --port "COM$comPort" --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode keep --flash_freq keep --flash_size keep 0x0 uhr4.ino.bootloader.bin 0x8000 uhr4.ino.partitions.bin 0xe000 boot_app0.bin 0x10000 uhr4.ino.bin
+        if ($board -ne 's2') {
+            $chipName = if ($board -eq 's3lcd4') { 'esp32s3' } else { "esp32$board" }
+            & $esptool --chip $chipName --port "COM$comPort" --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode keep --flash_freq keep --flash_size keep 0x0 uhr4.ino.bootloader.bin 0x8000 uhr4.ino.partitions.bin 0xe000 boot_app0.bin 0x10000 uhr4.ino.bin
         } else {
             & $esptool --chip esp32-S2 --port "COM$comPort" --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode keep --flash_freq keep --flash_size keep 0x1000 uhr4.ino.bootloader.bin 0x8000 uhr4.ino.partitions.bin 0x10000 uhr4.ino.bin
         }

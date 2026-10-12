@@ -2,6 +2,33 @@
 
 *English version below.*
 
+## 2026-10-12
+
+### Hinzugefügt
+- Neues Ziel (EXPERIMENTELL): Waveshare ESP32-S3-Touch-LCD-4 (480x480, ST7701 am RGB-Bus, Touch GT911, Port-Expander CH32V003). Eigener
+  Build (`esp32s3lcd4`, PSRAM octal). Das Bild kommt aus einem eigenen Puffer im PSRAM; nach Flash-Schreibzugriffen
+  (Firmware-Update, Backup einspielen) wird das Panel neu synchronisiert. Während Update und Backup-Wiederherstellung zeigt
+  das Display kurz den Text und danach eine ruhige blaue Fläche.
+- 480x480: Berührung des Displays zeigt 5 Sekunden lang die Seite mit WLAN und IP-Adresse.
+- 480x480: Die Helligkeit wird über das PWM-Register des Port-Expanders geregelt („Hintergrundbeleuchtung PWM“, ab
+  Werk an); der Test-Knopf in den Helligkeitseinstellungen funktioniert wie bei den anderen Uhren.
+- 480x480: Der Beeper wird beim Start und regelmäßig im Betrieb ausgeschaltet.
+- Firmware-Update von GitHub: Das 480x480-Board lädt `uhr4-s3lcd4.bin` (die Datei `uhr4-s3.bin` gehört zum ESP32-S3-LCD-1.28).
+- buildAll.bat baut vier Ziele (s3, s2, c6, s3lcd4) und kopiert den Build des 480x480-Boards nach `build_uhr4\esp32s3lcd4`.
+- flashESP (Windows und Linux), flashAll und checkClocks kennen das 480x480-Board: Es wird am Displaytyp ST7701_480 bzw.
+  per esptool (chip_id) vom ESP32-C6 unterschieden (beide melden sich als USB-Serial-JTAG), erhält nur seinen eigenen
+  Build und wird nicht nach dem Displaytyp gefragt. publish_builds.ps1 und publish_s3_update.ps1 veröffentlichen auch
+  `uhr4-esp32s3lcd4` bzw. `uhr4-s3lcd4`.
+
+### Geändert
+- Zeigersatz „Sekundenfeld“ (Satz 3): Die Nabe des Sekundenzeigers ist noch einmal halbiert.
+- Eine ganz neu geflashte Uhr startet mit der Helligkeit „dunkel“ (Min. Helligkeit) 75 statt 100 bzw. 5; Updates ändern
+  gespeicherte Werte nicht.
+- Sicherungen enthalten keine Helligkeitswerte mehr (Min./Max. Helligkeit, Schwellwerte, Gamma, Hell-/Dunkelzeiten);
+  beim Wiederherstellen behält die Uhr ihre eigenen Werte, auch aus älteren Sicherungen.
+  Presets speichern und übernehmen sie ebenfalls nicht mehr (es gilt der Wert der Uhr); nur „Automatische Helligkeit“
+  bleibt Teil eines Presets.
+
 ## 2026-10-08
 
 ### Hinzugefügt
@@ -405,6 +432,35 @@
 ---
 
 # English Version
+
+## 2026-10-12
+
+### Added
+- New target (EXPERIMENTAL): Waveshare ESP32-S3-Touch-LCD-4 (480x480, ST7701 on the RGB bus, GT911 touch, CH32V003 port expander). Own
+  build (`esp32s3lcd4`, octal PSRAM). The image comes from its own buffer in PSRAM; after flash writes (firmware update,
+  restoring a backup) the panel is re-synchronised. During update and backup restore the display briefly shows the text,
+  then a calm blue area.
+- 480x480: touching the display shows the page with WiFi and IP address for 5 seconds.
+- 480x480: brightness is controlled via the PWM register of the port expander ("Backlight PWM", on by default); the test
+  button in the brightness settings works as on the other clocks.
+- 480x480: the buzzer is switched off at start-up and regularly during operation.
+- Firmware update from GitHub: the 480x480 board downloads `uhr4-s3lcd4.bin` (the file `uhr4-s3.bin` belongs to the
+  ESP32-S3-LCD-1.28).
+- buildAll.bat builds four targets (s3, s2, c6, s3lcd4) and copies the build of the 480x480 board to
+  `build_uhr4\esp32s3lcd4`.
+- flashESP (Windows and Linux), flashAll and checkClocks know the 480x480 board: it is told apart from the ESP32-C6 (both
+  report as USB serial JTAG) by the display type ST7701_480 or by esptool (chip_id), gets only its own build and is not
+  asked for the display type. publish_builds.ps1 and publish_s3_update.ps1 also publish `uhr4-esp32s3lcd4` and
+  `uhr4-s3lcd4`.
+
+### Changed
+- Hand set "seconds subdial" (set 3): the hub of the second hand is halved once more.
+- A completely freshly flashed clock starts with the "dark" brightness (min. brightness) 75 instead of 100 or 5;
+  updates do not change stored values.
+- Backups no longer contain brightness values (min./max. brightness, thresholds, gamma, bright/dark times); when
+  restoring, the clock keeps its own values, also from older backups.
+  Presets no longer save or apply them either (the clock's own value applies); only "Automatic brightness" stays part
+  of a preset.
 
 ## 2026-10-08
 

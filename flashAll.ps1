@@ -1,5 +1,5 @@
 # Prueft alle Uhren im Netz (checkClocks.ps1) und bringt veraltete auf den Stand der Builds in build_uhr4:
-#  - ESP32-S3: per WLAN (OTA, /firmware/update), ohne USB
+#  - ESP32-S3 (S3) und ESP32-S3-Touch-LCD-4 (S3-480, eigener Build): per WLAN (OTA, /firmware/update), ohne USB
 #  - ESP32-S2 und -C6 haben kein OTA: sie werden nur geflasht, wenn sie am USB haengen (clocksetup.ps1 -Flash -Local,
 #    Einstellungen und Dateien bleiben)
 # Vor jedem Flash wird gefragt (Enter = Ja). Eine Uhr am USB kann ihre Firmware-Version nicht melden, deshalb wird dort
@@ -10,7 +10,7 @@
 #   .\flashAll.ps1 -Force        auch aktuelle S3 neu einspielen
 #
 # Checks all clocks on the network (checkClocks.ps1) and brings outdated ones to the state of the builds in build_uhr4:
-#  - ESP32-S3: over WiFi (OTA, /firmware/update), no USB needed
+#  - ESP32-S3 (S3) and ESP32-S3-Touch-LCD-4 (S3-480, own build): over WiFi (OTA, /firmware/update), no USB needed
 #  - ESP32-S2 and -C6 have no OTA: they are only flashed if connected via USB (clocksetup.ps1 -Flash -Local, settings
 #    and files stay)
 # Before every flash it asks (Enter = yes). A clock on USB cannot report its firmware version, so it is always asked
@@ -39,13 +39,16 @@ else {
     $clocks | Sort-Object IP | Format-Table IP, Name, Chip, Display, Firmware, Soll, Stand, Zeit -AutoSize | Out-String -Width 200 | Write-Host
 }
 
-# ---- 2. ESP32-S3 per OTA / ESP32-S3 via OTA
-$bin = Join-Path $root 'build_uhr4\esp32s3\uhr4.ino.bin'
+# ---- 2. ESP32-S3 und S3-480 per OTA / ESP32-S3 and S3-480 via OTA
+# Jedes Board bekommt NUR seinen eigenen Build - die beiden S3-Firmwares sind nicht austauschbar.
+# Each board gets ONLY its own build - the two S3 firmwares are not interchangeable.
+$otaBins = @{ 'S3' = 'build_uhr4\esp32s3\uhr4.ino.bin'; 'S3-480' = 'build_uhr4\esp32s3lcd4\uhr4.ino.bin' }
 $failed = 0
-foreach ($c in ($clocks | Where-Object { $_.Chip -eq 'S3' -and ($_.Stand -eq 'aelter' -or $Force) })) {
-    if ($CheckOnly) { Write-Host "S3 $($c.Name) ($($c.IP)): veraltet / outdated"; continue }
+foreach ($c in ($clocks | Where-Object { $otaBins.ContainsKey($_.Chip) -and ($_.Stand -eq 'aelter' -or $Force) })) {
+    $bin = Join-Path $root $otaBins[$c.Chip]
+    if ($CheckOnly) { Write-Host "$($c.Chip) $($c.Name) ($($c.IP)): veraltet / outdated"; continue }
     if (-not (Test-Path $bin)) { Write-Host "Build fehlt / missing: $bin"; $failed++; continue }
-    if (-not (Ask "S3 $($c.Name) ($($c.IP)) per WLAN aktualisieren / update via WiFi?")) { continue }
+    if (-not (Ask "$($c.Chip) $($c.Name) ($($c.IP)) per WLAN aktualisieren / update via WiFi?")) { continue }
     Write-Host "Spiele ein / uploading: $($c.IP) ..."
     $answer = & curl.exe -s -m 240 -F "firmware=@$bin" "http://$($c.IP)/firmware/update"
     if ($answer -ne 'OK') { Write-Host "  Fehler / error: $answer"; $failed++; continue }
@@ -65,7 +68,9 @@ Write-Host ''
 Write-Host '=== Uhren am USB / clocks on USB ==='
 $boards = @(Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match 'COM(\d+)\)' -and $_.DeviceID -match 'VID_303A|VID_1A86&PID_55D3' } | ForEach-Object {
     $port = [int]([regex]::Match($_.Name, 'COM(\d+)\)').Groups[1].Value)
-    $chip = if ($_.DeviceID -match 'VID_1A86') { 'S3' } elseif ($_.DeviceID -match 'PID_1001') { 'C6' } else { 'S2' }
+    # 303A:1001 ist der ESP32-C6 oder das 480x480-Board - clocksetup.ps1 erkennt es beim Flashen
+    # 303A:1001 is the ESP32-C6 or the 480x480 board - clocksetup.ps1 recognizes it when flashing
+    $chip = if ($_.DeviceID -match 'VID_1A86') { 'S3' } elseif ($_.DeviceID -match 'PID_1001') { 'C6/S3-480' } else { 'S2' }
     [pscustomobject]@{ Port = $port; Chip = $chip }
 })
 if ($boards.Count -eq 0) { Write-Host 'Keine Uhr am USB. / No clock on USB.' }

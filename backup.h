@@ -44,6 +44,18 @@
                                             // upper limit decrypted WiFi data
 
 
+    // Helligkeitswerte (Helligkeits-Tab): gehoeren zur Uhr und ihrem Display, nicht in eine Sicherung - eine Uhr
+    // behaelt ihre eigenen Werte.
+
+    // Brightness values (brightness tab): they belong to the clock and its display, not into a backup - a clock
+    // keeps its own values.
+
+    bool isBackupBrightnessKey(const String& key) {
+        return key == PK_MIN_BRIGHTNESS || key == PK_MAX_BRIGHTNESS || key == PK_LOW_THRESHOLD || key == PK_HIGH_THRESHOLD ||
+               key == PK_GAMMA_BRIGHTNESS || key == PK_BRIGHT_START_HOUR || key == PK_BRIGHT_END_HOUR;
+    }
+
+
     // Nie gesicherte/zurueckgeschriebene Schluessel: geraete-/firmwarespezifische Kennungen (eine alte
     // "version" taeuschte einen Versionswechsel vor) und veraltete Schluessel (isObsoletePrefKey()) -
     // "ssid"/"pass" enthielten das WLAN im Klartext.
@@ -53,7 +65,7 @@
 
     bool isBackupExcludedKey(const String& key) {
         return key == PK_VERSION || key == PK_FIRST_START || key == PK_MIGRATIONS_DONE || key == PK_SUBDIAL_SET || key == PK_SUBDIAL_HAND_VER || key == PK_RENUM_PLAN ||
-               key == PK_LOG_FILE_NUMBER || key == PK_LOGGING_START || key == PK_LAST_RESET_WEEK || key == PK_MQTT_PASS || key.startsWith("wtx") || isObsoletePrefKey(key);
+               key == PK_LOG_FILE_NUMBER || key == PK_LOGGING_START || isBackupBrightnessKey(key) || key == PK_LAST_RESET_WEEK || key == PK_MQTT_PASS || key.startsWith("wtx") || isObsoletePrefKey(key);
     }
 
 

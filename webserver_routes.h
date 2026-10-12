@@ -1916,7 +1916,7 @@
         chunk += "<li><b>showSecondhand</b>: " + String(preferences.getBool(PK_SHOW_SECOND_HAND, true) ? "true" : "false") + "</li>";
         chunk += "<li><b>smoothMinute</b>: " + String(preferences.getBool(PK_SMOOTH_MINUTE, false) ? "true" : "false") + "</li>";
 
-        chunk += "<li><b>minBrightness</b>: " + String(preferences.getUChar(PK_MIN_BRIGHTNESS, 100)) + "</li>";
+        chunk += "<li><b>minBrightness</b>: " + String(preferences.getUChar(PK_MIN_BRIGHTNESS, 75)) + "</li>";
         chunk += "<li><b>useBacklight</b>: " + String(preferences.getBool(PK_USE_BACKLIGHT, BACKLIGHT_DEFAULT) ? "true" : "false") + "</li>";
         chunk += "<li><b>maxBrightness</b>: " + String(preferences.getUChar(PK_MAX_BRIGHTNESS, 255)) + "</li>";
 
@@ -4752,7 +4752,20 @@
             String r = "{\"bounceLines\":" + String(lcd4BounceLines) + ",\"gapLimitUs\":" + String((uint32_t)lcd4BounceGapUs) +
                        ",\"maxGapUs\":" + String(lcd4MaxGapUs) + ",\"stallsBounce\":" + String(lcd4StallCount) +
                        ",\"stallsVsync\":" + String(lcd4VsyncStalls) + ",\"reinits\":" + String(lcd4ReinitCount) +
-                       ",\"uptimeS\":" + String(millis() / 1000) + "}";
+                       ",\"uptimeS\":" + String(millis() / 1000) + ",\"frames\":{";
+
+            // Je Bildart: Anzahl und Mittelwert in us (Vorbereitung, Zwischenbild, Zeiger/Nabe, Senden), danach zuruecksetzen
+            // Per frame type: count and mean in us (preparation, composite, hands/hub, send), then reset
+
+            for (int k = 0; k < 2; k++) {
+                uint32_t n = lcd4Prof[k][0] ? lcd4Prof[k][0] : 1;
+                r += String(k ? "\"full\"" : "\"partial\"") + ":{\"n\":" + String(lcd4Prof[k][0]) +
+                     ",\"prep\":" + String(lcd4Prof[k][1] / n) + ",\"comp\":" + String(lcd4Prof[k][2] / n) +
+                     ",\"hands\":" + String(lcd4Prof[k][3] / n) + ",\"send\":" + String(lcd4Prof[k][4] / n) + "}" + (k ? "" : ",");
+                for (int j = 0; j < 5; j++) lcd4Prof[k][j] = 0;
+            }
+            r += String(",\"sumPixelsPartial\":") + String(lcd4ProfPixels) + "}}";
+            lcd4ProfPixels = 0;
             lcd4MaxGapUs = 0;
             webserver.send(200, "application/json", r);
             });
