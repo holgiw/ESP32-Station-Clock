@@ -32,8 +32,47 @@
 
 static constexpr int PIN_LCD_CS = 42, PIN_LCD_SCK = 2, PIN_LCD_SDA = 1; // 3-Draht-SPI zum ST7701 / 3-wire SPI to the ST7701
 static constexpr int PIN_I2C_SDA = 15, PIN_I2C_SCL = 7, PIN_TOUCH_INT = 16;
-static constexpr uint8_t TCA9554_ADDR = 0x20;                           // TCA9554PWR mit A0..A2 = 0 / with A0..A2 = 0
+// Adresse des Port-Expanders: V2 hat 0x20 (A0..A2 = 0), die V3 meldet sich auf 0x24 - setup() nimmt die erste gefundene
+// Address of the port expander: V2 has 0x20 (A0..A2 = 0), the V3 answers at 0x24 - setup() takes the first one found
+
+static uint8_t TCA9554_ADDR = 0x20;
+
+// Die V3 hat statt des TCA9554 einen Waveshare-Expander (CH32V003, Adresse 0x24) mit eigener Registerbelegung
+// (aus der ESPHome-Komponente waveshare_io_ch32v003): Richtung (1 = Ausgang), Ausgang, Eingang, PWM-Helligkeit.
+// The V3 has a Waveshare expander (CH32V003, address 0x24) instead of the TCA9554, with its own register map
+// (from the ESPHome component waveshare_io_ch32v003): direction (1 = output), output, input, PWM brightness.
+
+static constexpr uint8_t EXP_REG_DIR = 0x02, EXP_REG_OUT = 0x03, EXP_REG_IN = 0x04, EXP_REG_PWM = 0x05;
+
+// Touch direkt per Wire lesen (GT911, Adresse 0x5D oder 0x14) statt ueber LovyanGFX - zur Fehlersuche
+// Read the touch directly via Wire (GT911, address 0x5D or 0x14) instead of via LovyanGFX - for troubleshooting
+
+#define TOUCH_VIA_WIRE 1
+static uint8_t gt911Addr = 0;
+
+static bool gt911Read(uint16_t reg, uint8_t* buf, size_t len) {
+    Wire.beginTransmission(gt911Addr);
+    Wire.write(reg >> 8);
+    Wire.write(reg & 0xFF);
+    if (Wire.endTransmission(true) != 0) return false;
+    if (Wire.requestFrom((int)gt911Addr, (int)len) != (int)len) return false;
+    for (size_t i = 0; i < len; i++) buf[i] = Wire.read();
+    return true;
+}
+
+static void gt911Write(uint16_t reg, uint8_t value) {
+    Wire.beginTransmission(gt911Addr);
+    Wire.write(reg >> 8);
+    Wire.write(reg & 0xFF);
+    Wire.write(value);
+    Wire.endTransmission(true);
+}
 static constexpr uint8_t EXIO_TP_RST = 0, EXIO_BL_EN = 1, EXIO_LCD_RST = 2, EXIO_SD_CS = 3;
+
+// EXIO5 = Beeper (high = an): als Ausgang auf low setzen, sonst schwebt der Pin hoch und der Beeper piept dauernd
+// EXIO5 = buzzer (high = on): set it to an output at low, otherwise the pin floats high and the buzzer sounds all the time
+
+static constexpr uint8_t EXIO_BUZZER = 5;
 
 class LGFX : public lgfx::LGFX_Device {
     lgfx::Panel_RGB _panel;
@@ -100,7 +139,7 @@ public:
             cfg.pin_scl = PIN_I2C_SCL;
             cfg.freq = 400000;
             _touch.config(cfg);
-            _panel.setTouch(&_touch);
+            if (!TOUCH_VIA_WIRE) _panel.setTouch(&_touch);
         }
         setPanel(&_panel);
     }
@@ -119,9 +158,33 @@ static bool expanderWrite(uint8_t reg, uint8_t value) {
     return Wire.endTransmission() == 0;
 }
 
+// Fehlersuche: antwortet der GT911 (0x5D oder 0x14)? / troubleshooting: does the GT911 answer (0x5D or 0x14)?
+
+static int gt911Probe() {
+    for (uint8_t a : { (uint8_t)0x5D, (uint8_t)0x14 }) {
+        Wire.beginTransmission(a);
+        if (Wire.endTransmission() == 0) return a;
+    }
+    return 0;
+}
+
+static void expanderDump(const char* what) {
+    Serial.printf("Expander %s:", what);
+    for (uint8_t reg = EXP_REG_DIR; reg <= EXP_REG_IN; reg++) {
+        Wire.beginTransmission(TCA9554_ADDR);
+        Wire.write(reg);
+        if (Wire.endTransmission(true) == 0 && Wire.requestFrom((int)TCA9554_ADDR, 1) == 1) Serial.printf(" r%d=0x%02X", reg, Wire.read());
+        else Serial.printf(" r%d=--", reg);
+    }
+    Serial.printf("  GT911: 0x%02X  INT=%d\n", gt911Probe(), digitalRead(PIN_TOUCH_INT));
+}
+
 static void expanderBit(uint8_t exio, bool high) {
     if (high) expanderOut |= (1 << exio); else expanderOut &= ~(1 << exio);
-    expanderWrite(0x01, expanderOut);
+    expanderWrite(EXP_REG_OUT, expanderOut);
+    char what[24];
+    snprintf(what, sizeof(what), "EXIO%d=%d", (int)exio, (int)high);
+    expanderDump(what);
 }
 
 // ---- ST7701: 9-Bit-SPI von Hand (erstes Bit: 0 = Befehl, 1 = Daten)
@@ -240,7 +303,29 @@ static void measureFill() {
 }
 
 void setup() {
+    // Seriell nie blockieren: ohne geoeffnetes Terminal (Kaltstart ueber USB) wartet jede Ausgabe sonst auf das Leeren des
+    // Puffers, das Setup dauert ~10 s und der Beeper bleibt so lange an.
+    // Never block on serial output: without an open terminal (cold start via USB) every print would wait for the buffer to
+    // drain, the setup takes ~10 s and the buzzer stays on that long.
+
     Serial.begin(115200);
+    Serial.setTxTimeoutMs(0);
+
+    // Beeper (EXIO5) sofort ausschalten: der Expander startet mit allen Ausgaengen high
+    // Switch the buzzer (EXIO5) off immediately: the expander starts with all outputs high
+
+    Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, 400000);
+    for (int tries = 0; tries < 20; tries++) {
+        Wire.beginTransmission(0x24);
+        Wire.write(EXP_REG_DIR);
+        Wire.write(0xFF);
+        bool ok = Wire.endTransmission() == 0;
+        Wire.beginTransmission(0x24);
+        Wire.write(EXP_REG_OUT);
+        Wire.write(0x0F);
+        if (Wire.endTransmission() == 0 && ok) break;
+        delay(10);
+    }
     delay(1500);
     Serial.println("lcd4_test: start");
     Serial.printf("PSRAM: %u KB, frei / free: %u KB\n", (unsigned)(ESP.getPsramSize() / 1024), (unsigned)(ESP.getFreePsram() / 1024));
@@ -248,20 +333,34 @@ void setup() {
     // Port-Expander: LCD_RST, Touch-Reset, Beleuchtung ein
     // Port expander: LCD reset, touch reset, backlight on
 
-    Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, 400000);
     Serial.println("I2C-Suche / I2C scan (SDA 15, SCL 7):");
     for (uint8_t a = 1; a < 127; a++) {
         Wire.beginTransmission(a);
         if (Wire.endTransmission() == 0) Serial.printf("  Adresse / address 0x%02X\n", a);
     }
-    if (expanderWrite(0x03, 0xF0)) {            // EXIO0..3 als Ausgang / EXIO0..3 as outputs
-        expanderOut = 0xFF;
+    for (uint8_t a = 0x20; a <= 0x27; a++) {
+        Wire.beginTransmission(a);
+        if (Wire.endTransmission() == 0) { TCA9554_ADDR = a; break; }
+    }
+    Serial.printf("Port-Expander / port expander: 0x%02X\n", TCA9554_ADDR);
+    pinMode(PIN_TOUCH_INT, INPUT);
+    expanderDump("vor dem Schreiben / before writing");
+    bool dirOk = false;
+    for (int tries = 0; tries < 10 && !dirOk; tries++) {   // nach dem Einschalten braucht der Expander evtl. etwas / after power-up the expander may need a moment
+        dirOk = expanderWrite(EXP_REG_DIR, 0xFF);          // alle Pins als Ausgang / all pins as outputs
+        if (!dirOk) { Serial.printf("Expander: Schreiben %d fehlgeschlagen / write %d failed\n", tries + 1, tries + 1); delay(50); }
+    }
+    if (dirOk) {
+        expanderDump("Richtung gesetzt / direction set");
+        expanderOut = 0x0F;                                // nur EXIO0..3 high, Beeper (EXIO5) und die uebrigen low / only EXIO0..3 high, buzzer (EXIO5) and the rest low
+        expanderWrite(EXP_REG_OUT, expanderOut);
         expanderBit(EXIO_LCD_RST, false);
         expanderBit(EXIO_TP_RST, false);
         delay(20);
         expanderBit(EXIO_LCD_RST, true);
         expanderBit(EXIO_TP_RST, true);
         expanderBit(EXIO_BL_EN, true);
+        expanderWrite(EXP_REG_PWM, 247); // Helligkeit der Beleuchtung, 1..247 / backlight brightness, 1..247
         expanderBit(EXIO_SD_CS, true);
         delay(120);
         Serial.println("TCA9554: ok (Reset und Beleuchtung gesetzt / reset and backlight set)");
@@ -269,7 +368,20 @@ void setup() {
     else {
         Serial.println("TCA9554 antwortet nicht / does not answer - Beleuchtung und Reset unklar / backlight and reset unclear");
     }
-    Wire.end();
+    if (TOUCH_VIA_WIRE) {
+        pinMode(PIN_TOUCH_INT, INPUT);
+        for (uint8_t a : { (uint8_t)0x5D, (uint8_t)0x14 }) {
+            gt911Addr = a;
+            uint8_t id[4] = { 0 };
+            if (gt911Read(0x8140, id, 4)) {
+                Serial.printf("GT911 bei 0x%02X, Produkt-ID / product ID: %c%c%c%c\n", a, id[0], id[1], id[2], id[3]);
+                break;
+            }
+            gt911Addr = 0;
+        }
+        if (!gt911Addr) Serial.println("GT911 antwortet nicht / does not answer");
+    }
+    else Wire.end();
 
     st7701Init();
     if (!lcd.init()) Serial.println("lcd.init() fehlgeschlagen / failed");
@@ -285,7 +397,33 @@ void setup() {
 void loop() {
     static int lastX = -1, lastY = -1;
     lgfx::touch_point_t tp;
-    if (lcd.getTouch(&tp)) {
+    bool touched = false;
+    if (TOUCH_VIA_WIRE) {
+        static uint32_t lastStatus = 0;
+        uint8_t st = 0;
+        if (gt911Addr && gt911Read(0x814E, &st, 1)) {
+            if (st & 0x80) {                                   // Daten bereit / data ready
+                uint8_t n = st & 0x0F;
+                if (n >= 1) {
+                    uint8_t p[8];
+                    if (gt911Read(0x8150, p, 8)) {
+                        int rx = p[0] | (p[1] << 8), ry = p[2] | (p[3] << 8);
+                        Serial.printf("GT911 roh / raw: x=%d y=%d (Punkte / points %d)\n", rx, ry, (int)n);
+                        tp.x = (TEST_ROTATION == 2) ? 479 - rx : rx;
+                        tp.y = (TEST_ROTATION == 2) ? 479 - ry : ry;
+                        touched = true;
+                    }
+                }
+                gt911Write(0x814E, 0);                         // Status quittieren / acknowledge the status
+            }
+            else if (millis() - lastStatus > 3000) {
+                lastStatus = millis();
+                Serial.printf("GT911 Status 0x%02X, INT-Pin %d\n", st, digitalRead(PIN_TOUCH_INT));
+            }
+        }
+    }
+    else touched = lcd.getTouch(&tp);
+    if (touched) {
         if (tp.x != lastX || tp.y != lastY) {
             Serial.printf("Touch: x=%d y=%d\n", (int)tp.x, (int)tp.y);
             lcd.drawFastHLine(tp.x - 12, tp.y, 25, TFT_GREEN);
