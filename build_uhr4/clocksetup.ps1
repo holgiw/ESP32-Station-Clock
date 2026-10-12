@@ -4,8 +4,8 @@
 #        (port.ps1 -NoSwitch), fragt eine laufende Uhr nach ihrem Displaytyp,
 #        fragt Displaytyp und WLAN ab, bringt die Uhr dann in den Download-Modus,
 #        flasht sie (esptool) und sendet danach die Einstellungen und die
-#        Uhrzeit des PCs ueber USB. Danach bleibt ein serieller Monitor offen und
-#        zeigt die Ausgabe der Uhr (Beenden mit Q oder Esc; -NoMonitor = ohne).
+#        Uhrzeit des PCs ueber USB. Danach ist die COM-Schnittstelle frei (-Monitor:
+#        serieller Monitor mit der Ausgabe der Uhr, Beenden mit Q oder Esc).
 #        Mit -Port ohne Rueckfragen, das WLAN wird dann nicht abgefragt.
 #   -Send <n>
 #        Nur senden (ohne Flashen): Displaytyp an eine laufende Uhr.
@@ -40,8 +40,10 @@
 #        Send only (without flashing): display type to a running clock.
 #   -Time [-Port <n>]
 #        Only send the PC's time to a running clock (setTime.bat).
+#   -Monitor
+#        With -Flash: keep a serial monitor open afterwards (by default the COM port is released).
 #   -NoMonitor
-#        With -Flash: no serial monitor afterwards (it stays open otherwise).
+#        No effect any more (the monitor is off by default); accepted for old calls.
 # Sent are "UHR4 WIFI <name hex> <password hex>", "UHR4 DISPLAY <name>",
 # "UHR4 RESTART" if needed, then "UHR4 TIME <unix seconds>" (see
 # handleSerialCommands() in display.h).
@@ -58,7 +60,7 @@
 #        The environment variable UHR4_BUILD_URL replaces the release address (for testing).
 # The WiFi password is entered hidden, stays only in this script's memory (no
 # file, no environment variable) and only goes to the clock via USB.
-param([switch]$Flash, [string]$Port, [string]$Display, [string]$Send, [switch]$Time, [switch]$NoMonitor, [switch]$Local)
+param([switch]$Flash, [string]$Port, [string]$Display, [string]$Send, [switch]$Time, [switch]$Monitor, [switch]$NoMonitor, [switch]$Local)
 
 # Board und Displaytypen: 's2' (Lolin S2 Pico, wechselbares Display), 'c6' (Waveshare ESP32-C6-LCD mit fest
 # verbautem ST7789), 's3' (Waveshare ESP32-S3-LCD-1.28 mit fest verbautem GC9A01) oder 's3lcd4' (Waveshare
@@ -862,6 +864,7 @@ if ($result -eq 0) {
     [void](Send-ClockTime 0 60)
 }
 
-# 7) Serieller Monitor (nur nach dem Flashen) / serial monitor (only after flashing)
-if ($Flash -and -not $NoMonitor) { Start-SerialMonitor }
+# 7) Serieller Monitor nur mit -Monitor, sonst bleibt die COM-Schnittstelle nicht belegt
+# 7) Serial monitor only with -Monitor, otherwise the COM port is not kept in use
+if ($Flash -and $Monitor -and -not $NoMonitor) { Start-SerialMonitor }
 exit $result

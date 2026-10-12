@@ -22,6 +22,8 @@
 
 ### Geändert
 - Zeigersatz „Sekundenfeld“ (Satz 3): Die Nabe des Sekundenzeigers ist noch einmal halbiert.
+- `flashESP.bat` lässt nach dem Flashen die COM-Schnittstelle frei (kein serieller Monitor mehr); den Monitor gibt es mit
+  `clocksetup.ps1 -Flash -Monitor`.
 - Eine ganz neu geflashte Uhr startet mit der Helligkeit „dunkel“ (Min. Helligkeit) 75 statt 100 bzw. 5; Updates ändern
   gespeicherte Werte nicht.
 - Sicherungen enthalten keine Helligkeitswerte mehr (Min./Max. Helligkeit, Schwellwerte, Gamma, Hell-/Dunkelzeiten);
@@ -455,6 +457,8 @@
 
 ### Changed
 - Hand set "seconds subdial" (set 3): the hub of the second hand is halved once more.
+- `flashESP.bat` leaves the COM port free after flashing (no serial monitor any more); the monitor is available with
+  `clocksetup.ps1 -Flash -Monitor`.
 - A completely freshly flashed clock starts with the "dark" brightness (min. brightness) 75 instead of 100 or 5;
   updates do not change stored values.
 - Backups no longer contain brightness values (min./max. brightness, thresholds, gamma, bright/dark times); when

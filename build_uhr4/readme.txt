@@ -53,10 +53,10 @@ flashen (siehe Linux-Abschnitt, Port /dev/cu.usbmodem...).
 	Danach sendet es Displaytyp und WLAN per USB an die Uhr; sie startet neu und verbindet sich
 	mit dem WLAN. Zuletzt bekommt die Uhr die Uhrzeit des PCs und läuft damit sofort richtig,
 	auch ohne WLAN, DCF77 und RTC (NTP/DCF77 korrigieren später).
-	Das Fenster bleibt am Ende offen und wird zum seriellen Monitor: Er zeigt die Ausgabe der Uhr
-	(WLAN, Zeit, Fehler) und verbindet sich nach einem Neustart der Uhr selbst wieder. Beenden mit Q
-	oder Esc. Die Uhr schreibt nur dann, wenn "Logging aktivieren" in ihren Einstellungen an ist.
-	Ohne Monitor: clocksetup.ps1 -Flash -NoMonitor.
+	Am Ende ist die COM-Schnittstelle frei, es bleibt kein serieller Monitor offen. Die Ausgabe der Uhr
+	(WLAN, Zeit, Fehler) zeigt auf Wunsch: clocksetup.ps1 -Flash -Monitor (verbindet sich nach einem
+	Neustart der Uhr selbst wieder, Beenden mit Q oder Esc). Die Uhr schreibt nur dann, wenn "Logging
+	aktivieren" in ihren Einstellungen an ist.
 
 	Im DOS Fenster im ausgepackten Verzeichnis geht es auch mit der COM-Nummer, z.B.
 	"flashESP.bat 3" für COM3, optional mit Displaytyp: "flashESP.bat 3 GC9D01".
@@ -368,10 +368,10 @@ Linux section, port /dev/cu.usbmodem...).
 	Then it sends display type and WiFi to the clock via USB; the clock restarts and connects to
 	the WiFi. Finally the clock gets the PC's time and runs correctly right away, even without
 	WiFi, DCF77 and RTC (NTP/DCF77 correct it later).
-	The window stays open at the end and becomes a serial monitor: it shows the clock's output
-	(WiFi, time, errors) and reconnects by itself after the clock restarts. Quit with Q or Esc. The
-	clock only writes if "Enable Logging" is on in its settings. Without monitor:
-	clocksetup.ps1 -Flash -NoMonitor.
+	At the end the COM port is free, no serial monitor stays open. On request the clock's output
+	(WiFi, time, errors) is shown by: clocksetup.ps1 -Flash -Monitor (reconnects by itself after the
+	clock restarts, quit with Q or Esc). The clock only writes if "Enable Logging" is on in its
+	settings.
 
 	In a Command Prompt in the unpacked folder it also works with the COM port number, e.g.
 	"flashESP.bat 3" for COM3, optionally with display type: "flashESP.bat 3 GC9D01".
