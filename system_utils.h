@@ -699,6 +699,19 @@
     }
 
 
+    // Kopf einer Logdatei: Name der Uhr, Hostname, ESP32-Chip (Modell, Revision, Arduino-Core), Display und
+    // Kompilierdatum/-zeit. Steht am Anfang jeder neuen Logdatei, damit sie auch einzeln zuordenbar ist.
+
+    // Header of a log file: clock name, hostname, ESP32 chip (model, revision, Arduino core), display and compile
+    // date/time. Sits at the start of every new log file, so each file can be attributed on its own.
+
+    String logFileHeader() {
+        return String("# uhr4 | Host: ") + hostname + " | ESP32: " + ESP.getChipModel() + " rev " + String(ESP.getChipRevision()) +
+               ", " CHIP_SHORT_NAME ", Arduino-Core " ESP_ARDUINO_VERSION_STR " | Display: " + displayChoiceName(displayType, useBacklight) +
+               " | Build: " + (fwBuildMarker + 14) + "\n";
+    }
+
+
     // Schreibt den gesammelten Log-Puffer auf einen Rutsch (statt einer Datei-Runde je Zeile) - weniger
     // Flash-Zugriffe und Aussetzer. Aufruf regelmaessig per checkLogFlush() sowie vor
     // espReboot()/factoryReset().
@@ -763,11 +776,17 @@
             }
         }
 
+        // Neue Logdatei: Kopfzeile mit Uhr, Hostname, Chip, Display und Build voranstellen.
+        // New log file: put a header line with clock, hostname, chip, display and build first.
+
+        bool newLogFile = !LittleFS.exists(logFileName);
+
         File logFile = LittleFS.open(logFileName, FILE_APPEND);
         if (!logFile) {
             if (loggingEnabled) Serial.println("[LOG] Error opening log file: " + logFileName);
             return;
         }
+        if (newLogFile) logFile.print(logFileHeader());
         logFile.print(textToWrite);
         logFile.close();
     }

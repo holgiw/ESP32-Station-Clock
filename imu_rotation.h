@@ -11,6 +11,7 @@
 #if HAS_IMU
     uint8_t imuAddr = 0;      // 0 = kein Sensor gefunden / no sensor found
     int8_t imuQuadrant = -1;  // zuletzt erkannte Lage 0-3, -1 = unklar (flach) / last detected position 0-3, -1 = unclear (flat)
+    float imuLastG[3] = { 0, 0, 0 }; // letzte Messung X/Y/Z in g (Anzeige /api/imu, Log) / last reading X/Y/Z in g (shown by /api/imu, log)
 
     bool imuWrite(uint8_t reg, uint8_t value) {
         Wire.beginTransmission(imuAddr);
@@ -80,6 +81,7 @@
         float nle = sqrtf(le[0] * le[0] + le[1] * le[1] + le[2] * le[2]);
         float nbe = sqrtf(be[0] * be[0] + be[1] * be[1] + be[2] * be[2]);
         const float* g = fabsf(nle - 1.0f) <= fabsf(nbe - 1.0f) ? le : be;
+        imuLastG[0] = g[0]; imuLastG[1] = g[1]; imuLastG[2] = g[2];
         float ax = g[0], ay = g[1];
         float ix = fabsf(ax), iy = fabsf(ay);
 
@@ -136,7 +138,17 @@
         lastRead = millis();
 
         int8_t q = imuReadQuadrant();
-        if (q < 0) return; // flach oder unklar: nichts aendern / flat or unclear: change nothing
+        if (q < 0) {
+
+            // flach oder unklar: nichts aendern - und die Zeitmessung neu beginnen, sonst genuegt nach langem Liegen
+            // ein einzelner Ausreisser (Stoss auf den Tisch) mit der alten Lage, um sofort zu drehen
+
+            // flat or unclear: change nothing - and restart the timing, otherwise after lying a long time a single
+            // outlier (knock on the table) with the old position is enough to turn immediately
+
+            candidate = -1;
+            return;
+        }
         if (q != candidate) {
             candidate = q;
             stableSince = millis();
@@ -146,7 +158,8 @@
         imuQuadrant = q;
         uint8_t target = imuRotationFor(q);
         if (target == tftRotation1) return;
-        DEBUG_PRINTLN("[IMU] Position " + String(q) + " - rotating display to " + String(target * 90) + " deg");
+        DEBUG_PRINTLN("[IMU] Position " + String(q) + " - rotating display to " + String(target * 90) + " deg (x " + String(imuLastG[0], 2) +
+                      " y " + String(imuLastG[1], 2) + " z " + String(imuLastG[2], 2) + " g)");
         applyDisplayRotation(1, target);
         freeClockFaceBuffer();
         loadClockFace();

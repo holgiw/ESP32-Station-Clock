@@ -1263,8 +1263,22 @@
                 outW = legacy ? HAND_LEGACY_WIDTH : HAND_WIDTH;
                 outH = legacy ? HAND_LEGACY_HEIGHT : HAND_HEIGHT;
             }
+
+            // Drehpunkt des Sekundenzeigers aus dem Anhang des Zifferblatts mitnehmen (das neue Bild hat keinen)
+            // Take over the second hand pivot from the clock face's trailer (the new image has none)
+
+            const bool isFace = target.startsWith("/face_");
+            FacePivots piv;
+            const int fromClock = DISPLAY_GEOMETRY[s.backupType].clock;
+            if (isFace) readFaceTrailer(BACKUP_TMP_PATH, piv);
             LittleFS.remove(target);
             ok = scaleAndSaveBmp(BACKUP_TMP_PATH, target.c_str(), outW, outH);
+            if (ok && isFace && fromClock > 0) {
+                auto sc = [&](int16_t v) -> int16_t { return v < 0 ? (int16_t)-1 : (int16_t)(v * CLOCK_WIDTH / fromClock); };
+                piv.secX = sc(piv.secX); piv.secY = sc(piv.secY);
+                piv.hmX = sc(piv.hmX); piv.hmY = sc(piv.hmY);
+                saveFacePivots(target, piv);
+            }
         }
         else {
             LittleFS.remove(target);

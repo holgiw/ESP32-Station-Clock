@@ -58,7 +58,7 @@ Eine Firmware je ESP. Den Displaytyp wählt man im Tab „Uhr Einstellungen“ o
 ## 4. Helligkeitssteuerung
 
 - Automatische Helligkeit über einen Fotowiderstand mit einstellbaren Schwellwerten, oder manuell.
-- Hintergrundbeleuchtung per PWM: Die Uhr dimmt dann die Beleuchtung statt die Pixel. Der Helligkeits-Tab zeigt dafür den Haken „Hintergrundbeleuchtung regeln“ mit der Pinnummer.
+- Hintergrundbeleuchtung per PWM: Die Uhr dimmt dann die Beleuchtung statt die Pixel. Der Helligkeits-Tab zeigt dafür den Haken „Hintergrundbeleuchtung PWM“ mit der Pinnummer.
   - ESP32-S2: Pin 3, bei den Displaytypen „GC9A01 mit BL“ und GC9D01 ab Werk an.
   - ESP32-C6: Pin 22, auf dem Waveshare-Board fest verdrahtet, ab Werk an.
   - ESP32-S3: Pin 40, auf dem Waveshare-Board fest verdrahtet, ab Werk an.

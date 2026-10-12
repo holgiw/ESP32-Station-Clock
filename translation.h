@@ -121,6 +121,7 @@
         { "Smooth Minute Hand", "Sanfter Minutenzeiger" },
         { "Smooth Second Hand", "Sanfter Sekundenzeiger" },
         { "Min Brightness", "Minimale Helligkeit" },
+        { "Shows the value in the field on the clock for 10 seconds, then the normal brightness applies again", "Zeigt den Wert im Feld 10 Sekunden lang auf der Uhr, danach gilt wieder die normale Helligkeit" },
         { "Max Brightness", "Maximale Helligkeit" },
         { "Rebooting...", "Starte neu..." },
         { "Reboot", "Neustart" },
@@ -409,7 +410,7 @@
         { "ST7789 (240x240, ESP32-C6-LCD-1.3)", "ST7789 (240x240, ESP32-C6-LCD-1.3)" },
         { "GC9A01 (240x240) without backlight (BL)", "GC9A01 (240x240) ohne Hintergrundbeleuchtung (BL)" },
         { "GC9A01 (240x240) with backlight (BL) on pin {pin}", "GC9A01 (240x240) mit Hintergrundbeleuchtung (BL) an Pin {pin}" },
-        { "Backlight control (pin {pin})", "Hintergrundbeleuchtung regeln (Pin {pin})" },
+        { "Backlight control (pin {pin})", "Hintergrundbeleuchtung PWM (Pin {pin})" },
         { "Dims the display via the backlight PWM on pin {pin} instead of darkening the pixels - only if the backlight is wired to pin {pin} (always on GC9D01). Switching resets min. brightness and thresholds to the matching defaults", "Dimmt das Display &uuml;ber die PWM der Hintergrundbeleuchtung an Pin {pin} statt die Pixel abzudunkeln - nur wenn die Beleuchtung an Pin {pin} angeschlossen ist (beim GC9D01 immer). Beim Umschalten werden min. Helligkeit und Schwellwerte auf die passenden Standardwerte gesetzt" },
 
         // Diagrammtitel der Gamma-Kurve - wird per decodeHtml() an Plotly

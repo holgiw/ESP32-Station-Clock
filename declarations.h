@@ -214,7 +214,15 @@
     String faceSidePath(const String& facePath, const char* prefix) ;
     String stripConfigPath(const String& facePath) ;
     String faceConfigPath(const String& facePath) ;
+    bool faceTrailerOffset(File& f, size_t& off) ;
+    bool readFaceTrailer(const String& facePath, FacePivots& out) ;
+    void readFacePivots(const String& facePath, FacePivots& out) ;
+    bool saveFacePivots(const String& facePath, const FacePivots& p) ;
     void readFaceSecPivot(const String& facePath, int16_t& x, int16_t& y) ;
+    void migrateFaceCfgFiles() ;
+    HandPlan makeHandPlanFrom(const FacePivots& p, bool drawSecond) ;
+    HandPlan makeHandPlan(bool drawSecond) ;
+    void pivotToDisplay(uint8_t rotation, float px, float py, float& x, float& y) ;
     bool saveFaceSettings(const String& facePath, int16_t x, int16_t y) ;
     void ensureFaceSettings() ;
     bool secondPivotAt(uint8_t rotation, float& x, float& y) ;
@@ -453,6 +461,7 @@
     void deleteAllLogFiles() ;
     void checkHeapWarning(const String& context) ;
     void logToFile(const String& message) ;
+    String logFileHeader() ;
     void flushLogBuffer() ;
     void checkLogFlush() ;
     void checkLoggingExpiry() ;

@@ -5,6 +5,16 @@
 ## 2026-10-08
 
 ### Hinzugefügt
+- Jede neue Logdatei beginnt mit einer Kopfzeile: Uhr (uhr4), Hostname, ESP32-Chip (Modell, Revision, Arduino-Core),
+  Display und Kompilierdatum/-zeit.
+- Zifferblatt-Designer: Auch Stunden- und Minutenzeiger (zusammen) lassen sich über das ganze Zifferblatt verschieben
+  („Drehpunkt Stunde und Minute“, X/Y oder Mitte). Die Nabe sitzt auf diesem Drehpunkt. Ein Sekundenzeiger ohne eigenen
+  Drehpunkt sitzt auf dem der anderen Zeiger. Der Haken „Sekundenzeiger über den anderen Zeigern“ legt die Lage fest;
+  ohne eigene Wahl gilt die Regel: über den anderen, wenn alle denselben Drehpunkt haben, sonst darunter (Sekundenfeld).
+  Drehpunkte und Lage stehen im Anhang der Zifferblatt-Datei (jetzt 14 statt 8 Byte, ältere Dateien bleiben lesbar).
+- Helligkeitsseite: Neben „Minimale“ und „Maximale Helligkeit“ gibt es je einen Knopf „Test 10 s“. Er zeigt den Wert im
+  Feld (auch ungespeichert) 10 Sekunden lang auf der Uhr, danach gilt wieder die normale Helligkeit.
+- Das Kästchen „Uhrzeit aus offenen WLANs holen“ steht jetzt im Tab „Uhr Einstellungen“ (unter „WLAN neu verbinden“).
 - MQTT-Meldung (alle Chips, ab Werk aus, Seite „MQTT“ in der Navigation): Die Uhr veröffentlicht ihren Status als
   retained-Nachrichten an einen MQTT-Broker, z. B. den von openHAB - einmal nach dem Start, einmal um Mitternacht und wenn
   sich ihre IP-Adresse ändert: `<Basis-Topic>/<Hostname>/` mit `info` (JSON mit `host`, `ip`, `chip`, `display`, `version`; daraus kann openHAB eine
@@ -110,6 +120,18 @@
     vorhandener Uhren Sets zu deren Zifferblättern.
 
 ### Geändert
+- Helligkeitsseite: Das Kästchen „Hintergrundbeleuchtung regeln“ heißt jetzt „Hintergrundbeleuchtung PWM“.
+- Zifferblatt-Designer: Der Knopf „Speichern“ im Kasten „Nabe und Sekundenzeiger“ entfällt. Das Speichern oben legt
+  Bild, Nabe, Drehpunkte und Streifen zusammen ab; bei den von der Firmware erzeugten Zifferblättern speichert
+  „Aktuelles Zifferblatt speichern“ jetzt Nabe, Drehpunkte und Streifen (das Bild bleibt).
+- Der Drehpunkt des Sekundenzeigers im Sekundenfeld steckt jetzt in der Zifferblatt-Datei selbst (8 Byte hinter den
+  Bilddaten) statt in einer eigenen Datei `facecfg_<Name>.txt`. Ältere Firmware liest solche Dateien weiter. Vorhandene
+  `facecfg_*.txt` werden beim Start einmalig ins Zifferblatt übernommen und gelöscht, auch nach dem Wiederherstellen einer
+  älteren Sicherung; beim Umrechnen einer Sicherung auf einen anderen Displaytyp wird der Drehpunkt mit skaliert. Ein
+  neu hochgeladenes Zifferblatt hat wieder die Mitte als Drehpunkt.
+- Lagesensor (ESP32-S3): Liegt die Uhr flach, beginnt die Zeitmessung für die stabile Lage von vorn; ein einzelner
+  Ausreißer nach langem Liegen dreht das Display nicht mehr sofort. Die Seite `/api/imu` zeigt Beschleunigung, Lage und
+  Rotation zur Diagnose.
 - ESP32-S3 (Waveshare ESP32-S3-LCD-1.28): Der SPI-Takt zum Display steigt von 40 auf 80 MHz. Die Startanimation
   läuft damit etwas flüssiger (in einer Messung 55 statt 47 Bilder in 3 s); die übrigen Chips bleiben bei 40 MHz.
 - Der ESP32-S2-Build ist kleiner: Mit „Core Debug Level: None“ (Visual Micro) bzw. `DebugLevel=none` sind es 56 KB
@@ -376,6 +398,16 @@
 ## 2026-10-08
 
 ### Added
+- Every new log file starts with a header line: clock (uhr4), hostname, ESP32 chip (model, revision, Arduino core),
+  display and compile date/time.
+- Clock face designer: the hour and minute hand (together) can also be moved over the whole clock face ("Hour and
+  minute hand pivot", X/Y or centre). The hub sits on this pivot. A second hand without a pivot of its own sits on that
+  of the other hands. The tick "Second hand over the other hands" sets the position; without a choice of its own the
+  rule applies: over the others if all share the same pivot, otherwise below (seconds subdial). Pivots and position are
+  in the trailer of the clock face file (now 14 instead of 8 bytes, older files stay readable).
+- Brightness page: next to "Min Brightness" and "Max Brightness" there is a "Test 10 s" button each. It shows the value
+  in the field (even unsaved) on the clock for 10 seconds, then the normal brightness applies again.
+- The checkbox "Get the time from open WiFis" is now in the tab "Clock Setup" (below "Reconnect WiFi").
 - MQTT report (all chips, off by default, page "MQTT" in the navigation): the clock publishes its status as retained
   messages to an MQTT broker, e.g. that of openHAB - once after the start, once at midnight and when its IP address
   changes: `<base topic>/<host name>/` with `info` (JSON with `host`, `ip`, `chip`, `display`, `version`; openHAB can build a
@@ -479,6 +511,18 @@
     their clock faces.
 
 ### Changed
+- Brightness page: the German label of the backlight checkbox is now "Hintergrundbeleuchtung PWM".
+- Clock face designer: the "Save" button in the box "Hub and second hand" is gone. Saving at the top stores image,
+  hub, pivots and strip together; for the clock faces created by the firmware "Save current clock face" now stores hub,
+  pivots and strip (the image stays).
+- The pivot of the second hand in the seconds subdial is now part of the clock face file itself (8 bytes behind the
+  image data) instead of a file of its own, `facecfg_<name>.txt`. Older firmware keeps reading such files. Existing
+  `facecfg_*.txt` are moved into the clock face once at start and deleted, also after restoring an older backup;
+  when a backup is converted to another display type the pivot is scaled along. A newly uploaded clock face has the
+  centre as pivot again.
+- Motion sensor (ESP32-S3): when the clock lies flat, the timing for a stable position starts anew; a single outlier
+  after lying a long time no longer turns the display at once. The page `/api/imu` shows acceleration, position and
+  rotation for diagnosis.
 - ESP32-S3 (Waveshare ESP32-S3-LCD-1.28): the SPI clock to the display rises from 40 to 80 MHz. The start animation
   runs a bit smoother with it (55 instead of 47 frames in 3 s in one measurement); the other chips stay at 40 MHz.
 - The ESP32-S2 build is smaller: with "Core Debug Level: None" (Visual Micro) or `DebugLevel=none` it is 56 KB less,

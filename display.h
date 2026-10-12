@@ -1428,11 +1428,12 @@
             return false;
         }
 
-        // Mit Sekundenfeld gleich den passenden Drehpunkt des Sekundenzeigers (facecfg_*.txt)
-        // With a subdial the matching second hand pivot right away (facecfg_*.txt)
+        // Mit Sekundenfeld gleich den passenden Drehpunkt des Sekundenzeigers, angehaengt an die Datei
+        // With a subdial the matching second hand pivot right away, appended to the file
 
-        if (numeralMode == FACE_NUMERALS_SUBDIAL) saveFaceSettings(path, CLOCK_WIDTH / 2, lroundf(CLOCK_WIDTH * SUBDIAL_Y));
-        return writeRleImage(path, gen.w, gen.w, [&gen](int y, uint16_t* row) { gen.row(y, row); });
+        bool written = writeRleImage(path, gen.w, gen.w, [&gen](int y, uint16_t* row) { gen.row(y, row); });
+        if (written && numeralMode == FACE_NUMERALS_SUBDIAL) saveFaceSettings(path, CLOCK_WIDTH / 2, lroundf(CLOCK_WIDTH * SUBDIAL_Y));
+        return written;
     }
 
     // Zifferblaetter des Startpakets (ensureStarterSet(), refreshGeneratedAssets())
@@ -3428,9 +3429,21 @@
         // composite is then the clock face only, the large hands go over it each frame - in the rectangle around
         // the second hand with the angles of the last full frame, so that it matches the rest.
 
-        float subX = 0, subY = 0;
-        const bool subdial = drawSecond && secondPivotAt(rotation, subX, subY);
+        // Drehpunkte: Stunden-/Minutenzeiger (hmX/hmY) und Sekundenzeiger (subX/subY), beides ohne eigenen auf der Mitte
+        // bzw. der Sekundenzeiger auf dem der anderen. subdial = nicht alles in der Mitte (Zwischenbild nur Zifferblatt).
+
+        // Pivots: hour/minute hand (hmX/hmY) and second hand (subX/subY), both in the centre without a pivot of their
+        // own, the second hand on that of the others. subdial = not everything in the centre (composite is the face only).
+
         const float centreX = backgroundSprite.getPivotX(), centreY = backgroundSprite.getPivotY();
+        const HandPlan plan = makeHandPlan(drawSecond);
+        float hmX = centreX, hmY = centreY, subX = centreX, subY = centreY;
+        if (plan.hmCustom) pivotToDisplay(rotation, plan.hmX, plan.hmY, hmX, hmY);
+        if (plan.secOwn) pivotToDisplay(rotation, secPivotX, secPivotY, subX, subY);
+        else { subX = hmX; subY = hmY; }
+        const bool subdial = plan.hmCustom || plan.secUnder;
+        const int hubX = plan.hmCustom ? (int)lroundf(hmX) : CLOCK_WIDTH / 2;
+        const int hubY = plan.hmCustom ? (int)lroundf(hmY) : CLOCK_HEIGHT / 2;
         if (subdial && partial) {
             partial = fabsf(shortestAngleDiff(lastFrame.hourAngle, hourAngle)) < 0.12f &&
                       fabsf(shortestAngleDiff(lastFrame.minuteAngle, minAngle)) < 0.12f;
@@ -3445,10 +3458,10 @@
             addRotatedSpriteBounds(secondHandSprite, secAngle, px0, py0, px1, py1);
             backgroundSprite.setPivot(centreX, centreY);
             if (drawHub) {
-                px0 = min(px0, (int32_t)(CLOCK_WIDTH / 2 - hubSize - 2));
-                py0 = min(py0, (int32_t)(CLOCK_HEIGHT / 2 - hubSize - 2));
-                px1 = max(px1, (int32_t)(CLOCK_WIDTH / 2 + hubSize + 2));
-                py1 = max(py1, (int32_t)(CLOCK_HEIGHT / 2 + hubSize + 2));
+                px0 = min(px0, (int32_t)(hubX - hubSize - 2));
+                py0 = min(py0, (int32_t)(hubY - hubSize - 2));
+                px1 = max(px1, (int32_t)(hubX + hubSize + 2));
+                py1 = max(py1, (int32_t)(hubY + hubSize + 2));
             }
             px0 = max(px0, (int32_t)0);
             py0 = max(py0, (int32_t)0);
@@ -3473,17 +3486,20 @@
             if (compositeOk) compositeOk = drawCompositeInto(displayNum, rotation, hourAngle, minAngle, !subdial);
         }
         if (!compositeOk) loadClockFace(rotation);
-        if (subdial) {
+        if (plan.secUnder) {
             backgroundSprite.setPivot(subX, subY);
             secondHandSprite.pushRotatedWithAA(&backgroundSprite, secAngle, TRANSPARENT_COLOR);
             backgroundSprite.setPivot(centreX, centreY);
         }
         if (!compositeOk || subdial) {
+            backgroundSprite.setPivot(hmX, hmY);
             hourHandSprite.pushRotatedWithAA(&backgroundSprite, drawHourAngle, TRANSPARENT_COLOR);
             minuteHandSprite.pushRotatedWithAA(&backgroundSprite, drawMinAngle, TRANSPARENT_COLOR);
+            backgroundSprite.setPivot(centreX, centreY);
         }
 
-        if (drawSecond && !subdial) {
+        if (drawSecond && !plan.secUnder) {
+            if (subdial) backgroundSprite.setPivot(subX, subY); // auf dem Drehpunkt der anderen Zeiger / on the pivot of the other hands
 
             // Tickend wie schwingend: LovyanGFX pushRotatedWithAA() - dasselbe
             // Verfahren wie bei Stunden-/Minutenzeiger (buildHandComposite()),
@@ -3494,6 +3510,7 @@
             // computes in fixed point and is therefore fast enough for every frame.
 
             secondHandSprite.pushRotatedWithAA(&backgroundSprite, secAngle, TRANSPARENT_COLOR);
+            if (subdial) backgroundSprite.setPivot(centreX, centreY);
         }
 
 
@@ -3508,7 +3525,7 @@
             // Kantengeglaettet wie die Zeiger (gleiche Flaeche wie fillCircle())
             // anti-aliased like the hands (same area as fillCircle())
 
-            backgroundSprite.fillSmoothCircle(CLOCK_WIDTH / 2, CLOCK_HEIGHT / 2, hubSize, setPixelBrightness(hubColor));
+            backgroundSprite.fillSmoothCircle(hubX, hubY, hubSize, setPixelBrightness(hubColor));
         }
 
         // Solange die Zeit noch nicht bestaetigt ist (Zeiger stehen auf 12): kleiner Hinweis im unteren Teil des
@@ -3631,16 +3648,86 @@
 
     String stripConfigPath(const String& facePath) { return faceSidePath(facePath, "stripcfg_"); }
 
-    // Weitere Einstellungen des Zifferblatts auf allen Displays: /facecfg_<Name>.txt, "secX=..&secY=.." =
-    // Drehpunkt des Sekundenzeigers in Zifferblatt-Pixeln (-1 = Mitte). Ohne Datei: Mitte.
+    // Weitere Einstellungen des Zifferblatts auf allen Displays - Drehpunkte der Zeiger und die Lage des Sekundenzeigers -
+    // stecken in der Zifferblatt-Datei selbst. Hinter dem RLE-Datenstrom (Kopf 20 Byte + Laenge der Daten aus dem Kopf)
+    // steht ein Anhang: "SEC1" + x, y (je int16, little endian) = Drehpunkt des Sekundenzeigers, -1 = Mitte (8 Byte,
+    // aeltere Dateien); "SEC2" + x, y, hx, hy, order (je int16) = zusaetzlich der Drehpunkt von Stunden- und Minuten-
+    // zeiger (-1 = Mitte) und die Lage des Sekundenzeigers (0 automatisch, 1 ueber, 2 unter den anderen Zeigern), 14 Byte.
+    // Ohne Anhang: alles in der Mitte, automatisch. Aeltere Firmware liest nur die Daten laut Kopf und ignoriert den
+    // Anhang. Frueher lag der Drehpunkt des Sekundenzeigers in einer eigenen Datei /facecfg_<Name>.txt ("secX=..&secY=.."):
+    // sie wird noch gelesen und beim Start in das Zifferblatt uebernommen (migrateFaceCfgFiles()).
 
-    // Further settings of the clock face on all displays: /facecfg_<name>.txt, "secX=..&secY=.." = pivot of the
-    // second hand in clock face pixels (-1 = centre). Without a file: centre.
+    // Further settings of the clock face on all displays - pivots of the hands and the position of the second hand -
+    // are part of the clock face file itself. Behind the RLE data stream (20-byte header + data length from the header)
+    // there is a trailer: "SEC1" + x, y (int16 each, little endian) = pivot of the second hand, -1 = centre (8 bytes,
+    // older files); "SEC2" + x, y, hx, hy, order (int16 each) = additionally the pivot of the hour and minute hand
+    // (-1 = centre) and the position of the second hand (0 automatic, 1 over, 2 below the other hands), 14 bytes.
+    // Without a trailer: everything in the centre, automatic. Older firmware only reads the data given by the header
+    // and ignores the trailer. Formerly the pivot of the second hand was in a file of its own, /facecfg_<name>.txt
+    // ("secX=..&secY=.."): it is still read and moved into the clock face at start (migrateFaceCfgFiles()).
 
     String faceConfigPath(const String& facePath) { return faceSidePath(facePath, "facecfg_"); }
 
-    void readFaceSecPivot(const String& facePath, int16_t& x, int16_t& y) {
-        x = y = -1;
+    // Stelle hinter dem RLE-Datenstrom (Anfang des Anhangs); false, wenn die Datei kein RLEB-Zifferblatt ist
+    // Position behind the RLE data stream (start of the trailer); false if the file is not an RLEB clock face
+
+    bool faceTrailerOffset(File& f, size_t& off) {
+        uint8_t hdr[20];
+        if (!f.seek(0) || f.read(hdr, 20) != 20 || !isRleFace(hdr)) return false;
+        off = 20 + (size_t)(*(uint32_t*)&hdr[12]);
+        return f.size() >= off;
+    }
+
+    // Anhang lesen, ungekuerzt (die Groesse der Uhr bleibt unbeachtet - z.B. fuer Sicherungen anderer Uhren);
+    // true, wenn er vorhanden ist
+
+    // Read the trailer unclamped (the clock size is not considered - e.g. for backups of other clocks); true if
+    // it is present
+
+    bool readFaceTrailer(const String& facePath, FacePivots& out) {
+        out = FacePivots();
+        if (!facePath.length() || !LittleFS.exists(facePath)) return false;
+        File f = LittleFS.open(facePath, "r");
+        if (!f) return false;
+        size_t off = 0;
+        uint8_t t[14];
+        bool ok = false;
+        if (faceTrailerOffset(f, off) && f.seek(off)) {
+            size_t have = f.size() - off;
+            if (have >= 14 && f.read(t, 14) == 14 && memcmp(t, "SEC2", 4) == 0) {
+                out.secX = (int16_t)(t[4] | (t[5] << 8));
+                out.secY = (int16_t)(t[6] | (t[7] << 8));
+                out.hmX = (int16_t)(t[8] | (t[9] << 8));
+                out.hmY = (int16_t)(t[10] | (t[11] << 8));
+                out.order = (uint8_t)min(2, (int)(t[12] | (t[13] << 8)));
+                ok = true;
+            }
+            else if (have >= 8 && f.seek(off) && f.read(t, 8) == 8 && memcmp(t, "SEC1", 4) == 0) {
+                out.secX = (int16_t)(t[4] | (t[5] << 8));
+                out.secY = (int16_t)(t[6] | (t[7] << 8));
+                ok = true;
+            }
+        }
+        f.close();
+        return ok;
+    }
+
+    // Wie readFaceTrailer(), aber auf die Groesse dieser Uhr begrenzt; ohne Anhang gilt die alte Datei facecfg_*.txt
+    // (vor der Umstellung) fuer den Sekundenzeiger
+
+    // Like readFaceTrailer(), but limited to the size of this clock; without a trailer the old file facecfg_*.txt
+    // (before the change) applies to the second hand
+
+    void readFacePivots(const String& facePath, FacePivots& out) {
+        if (readFaceTrailer(facePath, out)) {
+            auto lim = [](int16_t v, int maxV) -> int16_t { return (int16_t)constrain((long)v, -1L, (long)maxV - 1); };
+            out.secX = lim(out.secX, CLOCK_WIDTH); out.secY = lim(out.secY, CLOCK_HEIGHT);
+            out.hmX = lim(out.hmX, CLOCK_WIDTH); out.hmY = lim(out.hmY, CLOCK_HEIGHT);
+            if (out.secX < 0 || out.secY < 0) out.secX = out.secY = -1;
+            if (out.hmX < 0 || out.hmY < 0) out.hmX = out.hmY = -1;
+            return;
+        }
+        out = FacePivots();
         String path = faceConfigPath(facePath);
         if (!path.length() || !LittleFS.exists(path)) return;
         File f = LittleFS.open(path, "r");
@@ -3649,23 +3736,94 @@
         f.close();
         int px = text.indexOf("secX="), py = text.indexOf("secY=");
         if (px < 0 || py < 0) return;
-        x = (int16_t)constrain(text.substring(px + 5).toInt(), -1L, (long)CLOCK_WIDTH - 1);
-        y = (int16_t)constrain(text.substring(py + 5).toInt(), -1L, (long)CLOCK_HEIGHT - 1);
-        if (x < 0 || y < 0) x = y = -1;
+        out.secX = (int16_t)constrain(text.substring(px + 5).toInt(), -1L, (long)CLOCK_WIDTH - 1);
+        out.secY = (int16_t)constrain(text.substring(py + 5).toInt(), -1L, (long)CLOCK_HEIGHT - 1);
+        if (out.secX < 0 || out.secY < 0) out.secX = out.secY = -1;
     }
 
-    bool saveFaceSettings(const String& facePath, int16_t x, int16_t y) {
-        String path = faceConfigPath(facePath);
-        if (!path.length()) return false;
-        if (x < 0 || y < 0) {
-            LittleFS.remove(path); // Mitte = Werkseinstellung, keine Datei / centre = default, no file
-            return true;
+    void readFaceSecPivot(const String& facePath, int16_t& x, int16_t& y) {
+        FacePivots p;
+        readFacePivots(facePath, p);
+        x = p.secX;
+        y = p.secY;
+    }
+
+    // Anhang in die Zifferblatt-Datei schreiben (immer als SEC2). Alles in der Mitte/automatisch ohne vorhandenen
+    // Anhang = Werkseinstellung, dann bleibt die Datei unveraendert. Eine alte facecfg_*.txt wird danach geloescht.
+    // false, wenn das Zifferblatt fehlt oder kein RLEB-Zifferblatt ist (dann bleibt die alte Datei bestehen).
+
+    // Write the trailer into the clock face file (always as SEC2). Everything centred/automatic without an existing
+    // trailer = default, then the file stays unchanged. An old facecfg_*.txt is deleted afterwards. false if the
+    // clock face is missing or not an RLEB clock face (the old file stays then).
+
+    bool saveFacePivots(const String& facePath, const FacePivots& in) {
+        if (!facePath.length() || !LittleFS.exists(facePath)) return false;
+        FacePivots p = in;
+        if (p.secX < 0 || p.secY < 0) p.secX = p.secY = -1;
+        if (p.hmX < 0 || p.hmY < 0) p.hmX = p.hmY = -1;
+        if (p.order > 2) p.order = 0;
+        FacePivots old;
+        bool had = readFaceTrailer(facePath, old);
+        bool same = had && old.secX == p.secX && old.secY == p.secY && old.hmX == p.hmX && old.hmY == p.hmY && old.order == p.order;
+        bool isDefault = p.secX < 0 && p.hmX < 0 && p.order == 0;
+        bool ok = true;
+        if (!(had ? same : isDefault)) {
+            File f = LittleFS.open(facePath, "r+");
+            if (!f) return false;
+            size_t off = 0;
+            ok = faceTrailerOffset(f, off) && f.seek(off);
+            if (ok) {
+                auto put = [](uint8_t* d, int16_t v) { d[0] = (uint8_t)(v & 0xFF); d[1] = (uint8_t)((v >> 8) & 0xFF); };
+                uint8_t t[14] = { 'S', 'E', 'C', '2' };
+                put(t + 4, p.secX); put(t + 6, p.secY); put(t + 8, p.hmX); put(t + 10, p.hmY); put(t + 12, p.order);
+                ok = f.write(t, 14) == 14;
+            }
+            f.close();
         }
-        File f = LittleFS.open(path, "w");
-        if (!f) return false;
-        f.print("secX=" + String(x) + "&secY=" + String(y));
-        f.close();
-        return true;
+        String legacy = faceConfigPath(facePath);
+        if (ok && legacy.length() && LittleFS.exists(legacy)) LittleFS.remove(legacy);
+        return ok;
+    }
+
+    // Nur den Drehpunkt des Sekundenzeigers setzen, Rest des Anhangs bleibt (Aufrufer ohne Stunden-/Minutenzeiger)
+    // Set only the pivot of the second hand, the rest of the trailer stays (callers without hour/minute hand)
+
+    bool saveFaceSettings(const String& facePath, int16_t x, int16_t y) {
+        FacePivots p;
+        readFaceTrailer(facePath, p);
+        p.secX = x;
+        p.secY = y;
+        return saveFacePivots(facePath, p);
+    }
+
+    // Beim Start: Dateien facecfg_*.txt in ihr Zifferblatt uebernehmen und loeschen (einmalig je Datei; auch nach
+    // dem Wiederherstellen einer aelteren Sicherung). Ohne Zifferblatt verwaiste Dateien werden geloescht.
+
+    // At start: move files facecfg_*.txt into their clock face and delete them (once per file; also after restoring
+    // an older backup). Files orphaned without a clock face are deleted.
+
+    void migrateFaceCfgFiles() {
+        std::vector<String> names;
+        File root = LittleFS.open("/");
+        if (!root) return;
+        for (File f = root.openNextFile(); f; f = root.openNextFile()) {
+            String n = f.name();
+            if (!f.isDirectory() && n.startsWith("facecfg_") && n.endsWith(".txt")) names.push_back(n);
+        }
+        root.close();
+        for (const String& n : names) {
+            String face = "/face_" + n.substring(8, n.length() - 4) + ".bmp";
+            if (!LittleFS.exists(face)) {
+                LittleFS.remove("/" + n);
+                continue;
+            }
+            FacePivots p;
+            readFacePivots(face, p);
+            if (saveFacePivots(face, p)) {
+                DEBUG_PRINTLN("[Face] Second hand pivot of " + face + " moved into the file");
+                faceSettingsFor = "?";
+            }
+        }
     }
 
     // Einstellungen des aktiven Zifferblatts laden, sobald es wechselt (wie ensureStripSettings())
@@ -3674,7 +3832,11 @@
     void ensureFaceSettings() {
         if (faceSettingsFor == selectedBackground) return;
         faceSettingsFor = selectedBackground;
-        readFaceSecPivot(selectedBackground, secPivotX, secPivotY);
+        FacePivots fp;
+        readFacePivots(selectedBackground, fp);
+        secPivotX = fp.secX; secPivotY = fp.secY;
+        hmPivotX = fp.hmX; hmPivotY = fp.hmY;
+        secOrder = fp.order;
         clockFrameDirty[0] = clockFrameDirty[1] = true;
     }
 
@@ -3684,16 +3846,54 @@
     // Pivot of the second hand on the display: clock face pixels, turned with the software rotation like
     // blitFaceIntoSprite(). false = centre.
 
+    // Punkt des Zifferblatts (Pixel) auf das Display abbilden: mit der Software-Rotation gedreht wie
+    // blitFaceIntoSprite()
+    // Map a point of the clock face (pixels) to the display: turned with the software rotation like
+    // blitFaceIntoSprite()
+
+    void pivotToDisplay(uint8_t rotation, float px, float py, float& x, float& y) {
+        const float n = CLOCK_WIDTH - 1;
+        switch (faceOrientationFor(rotation)) {
+            case 1:  x = n - py; y = px;     break;
+            case 2:  x = n - px; y = n - py; break;
+            case 3:  x = py;     y = n - px; break;
+            default: x = px;     y = py;     break;
+        }
+    }
+
     bool secondPivotAt(uint8_t rotation, float& x, float& y) {
         if (secPivotX < 0 || secPivotY < 0) return false;
-        const int n = CLOCK_WIDTH - 1;
-        switch (faceOrientationFor(rotation)) {
-            case 1:  x = n - secPivotY; y = secPivotX;     break;
-            case 2:  x = n - secPivotX; y = n - secPivotY; break;
-            case 3:  x = secPivotY;     y = n - secPivotX; break;
-            default: x = secPivotX;     y = secPivotY;     break;
-        }
+        pivotToDisplay(rotation, secPivotX, secPivotY, x, y);
         return true;
+    }
+
+    // Wo die Zeiger sitzen (Zifferblatt-Pixel, ohne Rotation): Stunden-/Minutenzeiger auf ihrem Drehpunkt oder in der
+    // Mitte, der Sekundenzeiger auf seinem eigenen oder - ohne eigenen - auf dem der anderen. Er liegt unter den
+    // anderen, wenn die Lage "unter" gewaehlt ist oder (automatisch) sein Drehpunkt abweicht (Sekundenfeld).
+
+    // Where the hands sit (clock face pixels, without rotation): hour/minute hand on their pivot or in the centre,
+    // the second hand on its own or - without one - on that of the others. It lies below the others if the position
+    // "below" is chosen or (automatic) its pivot differs (seconds subdial).
+
+    HandPlan makeHandPlanFrom(const FacePivots& p, bool drawSecond) {
+        HandPlan h;
+        h.hmCustom = p.hmX >= 0 && p.hmY >= 0;
+        h.hmX = h.hmCustom ? p.hmX : CLOCK_WIDTH / 2.0f;
+        h.hmY = h.hmCustom ? p.hmY : CLOCK_HEIGHT / 2.0f;
+        h.secOwn = p.secX >= 0 && p.secY >= 0;
+        h.secX = h.secOwn ? p.secX : h.hmX;
+        h.secY = h.secOwn ? p.secY : h.hmY;
+        const bool differs = fabsf(h.secX - h.hmX) > 0.5f || fabsf(h.secY - h.hmY) > 0.5f;
+        h.secUnder = drawSecond && (p.order == 2 || (p.order == 0 && differs));
+        return h;
+    }
+
+    HandPlan makeHandPlan(bool drawSecond) {
+        FacePivots p;
+        p.secX = secPivotX; p.secY = secPivotY;
+        p.hmX = hmPivotX; p.hmY = hmPivotY;
+        p.order = secOrder;
+        return makeHandPlanFrom(p, drawSecond);
     }
 
     // Standard-Streifen: weiss mit schwarzer Schrift FreeSans Bold, Uhrzeit und Datum automatisch, kein Wochentag
@@ -4904,7 +5104,20 @@
 
         bool setupBrightness = !timeEverValid || softAPIP || wpsPending;
 
-        if (setupBrightness) {
+        // Helligkeitstest (Weboberflaeche): der eingetragene Wert gilt sofort, ohne Anlauf, bis BRIGHTNESS_TEST_MS
+        // vorbei sind - dann greift wieder die normale Regelung.
+
+        // Brightness test (web interface): the entered value applies immediately, without a ramp, until
+        // BRIGHTNESS_TEST_MS are over - then the normal control applies again.
+
+        bool brightnessTestActive = brightnessTestUntil != 0 && (long)(brightnessTestUntil - millis()) > 0;
+        if (!brightnessTestActive) brightnessTestUntil = 0;
+
+        if (brightnessTestActive) {
+            targetBrightness = brightnessTestValue;
+            currentBrightness = targetBrightness;
+        }
+        else if (setupBrightness) {
             targetBrightness = useBacklight ? BACKLIGHT_SETUP_LEVEL : maxBrightness;
             currentBrightness = targetBrightness;
         }
@@ -7085,13 +7298,16 @@
         // Sekundenfeld des Zifferblatts: Sekundenzeiger zuerst und an seinem Drehpunkt (wie renderClockFrame())
         // Seconds subdial of the clock face: second hand first and at its pivot (as in renderClockFrame())
 
-        int16_t subX, subY;
-        readFaceSecPivot(faceFile, subX, subY);
-        const bool subdial = subX >= 0;
-        const struct { uint16_t* pix; float angle; bool sub; } previewHands[] = {
-            { subdial ? secondPix : nullptr, secondAngle, true },
-            { hourPix, hourAngle, false }, { minutePix, minuteAngle, false },
-            { subdial ? nullptr : secondPix, secondAngle, false }
+        FacePivots facePiv;
+        readFacePivots(faceFile, facePiv);
+        const HandPlan plan = makeHandPlanFrom(facePiv, showSecond);
+        const float hmPx = (plan.hmX + 0.5f) * handScale - 0.5f, hmPy = oy + (plan.hmY + 0.5f) * handScale - 0.5f;
+        const float secPx = (plan.secX + 0.5f) * handScale - 0.5f, secPy = oy + (plan.secY + 0.5f) * handScale - 0.5f;
+        enum { AT_HM, AT_SEC };
+        const struct { uint16_t* pix; float angle; int at; } previewHands[] = {
+            { plan.secUnder ? secondPix : nullptr, secondAngle, AT_SEC },
+            { hourPix, hourAngle, AT_HM }, { minutePix, minuteAngle, AT_HM },
+            { plan.secUnder ? nullptr : secondPix, secondAngle, AT_SEC }
         };
         for (const auto& h : previewHands) {
             if (!h.pix) continue;
@@ -7100,9 +7316,12 @@
                     if (h.pix[i] == 0xFFFF) h.pix[i] = TRANSPARENT_COLOR;
                 }
                 handSprite.pushImage(0, 0, HAND_WIDTH, HAND_HEIGHT, h.pix);
-                if (h.sub) canvas.setPivot((subX + 0.5f) * handScale - 0.5f, oy + (subY + 0.5f) * handScale - 0.5f);
+                const bool moved = h.at == AT_SEC ? (plan.secOwn || plan.hmCustom) : plan.hmCustom;
+                if (moved) {
+                    if (h.at == AT_SEC) canvas.setPivot(secPx, secPy); else canvas.setPivot(hmPx, hmPy);
+                }
                 handSprite.pushRotateZoomWithAA(&canvas, h.angle, handScale, handScale, TRANSPARENT_COLOR);
-                if (h.sub) canvas.setPivot(PREVIEW_SIZE / 2, oy + PREVIEW_SIZE / 2);
+                if (moved) canvas.setPivot(PREVIEW_SIZE / 2, oy + PREVIEW_SIZE / 2);
             }
             free(h.pix);
         }
@@ -7115,7 +7334,7 @@
 
         int hubRadius = (int)roundf(hubSize * handScale);
         if (hubRadius < 1) hubRadius = 1;
-        canvas.fillSmoothCircle(PREVIEW_SIZE / 2, oy + PREVIEW_SIZE / 2, hubRadius, hubColorRgb565);
+        canvas.fillSmoothCircle(plan.hmCustom ? (int)lroundf(hmPx) : PREVIEW_SIZE / 2, plan.hmCustom ? (int)lroundf(hmPy) : oy + PREVIEW_SIZE / 2, hubRadius, hubColorRgb565);
 
         // 5) Als Standard-BMP (mit BI_BITFIELDS-Header) senden - in Bloecken zu 8 Zeilen statt als ganze Kopie
         // im RAM (37 KB bei 100 x 186), die bei mehreren Anfragen kurz nacheinander oft nicht mehr frei waren.
