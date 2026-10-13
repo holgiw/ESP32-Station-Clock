@@ -18,7 +18,7 @@
 # uhr4_flash.zip is created as well, with the tools only (no builds, no publish_*.ps1), from the last commit.
 # To test without a release: $env:UHR4_BUILD_URL = 'file:///C:/test' before flashESP.bat or clocksetup.ps1.
 
-param([string]$OutDir, [switch]$Upload, [string]$Tag = 'v4', [switch]$Qualia)
+param([string]$OutDir, [switch]$Upload, [string]$Tag = 'v4')
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -26,9 +26,9 @@ if (-not $OutDir) { $OutDir = Join-Path ([System.IO.Path]::GetTempPath()) 'uhr4-
 New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 
 $files = @()
-# Das Qualia-Paket (ungetestet) nur mit -Qualia / the Qualia package (untested) only with -Qualia
-$chips = @('s2', 'c6', 's3', 's3lcd4')
-if ($Qualia) { $chips += 's3qualia' }
+# Das Qualia-Paket ist dabei, aber NICHT AM GERAET GETESTET (Release-Notizen und flashESP weisen darauf hin)
+# The Qualia package is included, but NOT TESTED ON THE DEVICE (release notes and flashESP point this out)
+$chips = @('s2', 'c6', 's3', 's3lcd4', 's3qualia')
 foreach ($chip in $chips) {
     $src = Join-Path $PSScriptRoot "esp32$chip"
     $parts = @('uhr4.ino.bootloader.bin', 'uhr4.ino.partitions.bin', 'uhr4.ino.bin')

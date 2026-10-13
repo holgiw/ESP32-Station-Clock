@@ -10,15 +10,14 @@
 # the latest GitHub release. The build time is in the .bin as marker "UHR4_FW_BUILD=...".
 # Usage: .\publish_s3_update.ps1 [-DryRun]
 
-param([switch]$DryRun, [switch]$Qualia)
+param([switch]$DryRun)
 
 $ErrorActionPreference = 'Stop'
 $boards = @(
     @{ Dir = 'esp32s3';     Asset = 'uhr4-s3' },
-    @{ Dir = 'esp32s3lcd4'; Asset = 'uhr4-s3lcd4' }
+    @{ Dir = 'esp32s3lcd4'; Asset = 'uhr4-s3lcd4' },
+    @{ Dir = 'esp32s3qualia'; Asset = 'uhr4-s3qualia' } # NICHT AM GERAET GETESTET / NOT TESTED ON THE DEVICE
 )
-# Das Qualia (ungetestet) nur mit -Qualia / the Qualia (untested) only with -Qualia
-if ($Qualia) { $boards += @{ Dir = 'esp32s3qualia'; Asset = 'uhr4-s3qualia' } }
 
 $work = Join-Path ([System.IO.Path]::GetTempPath()) ('uhr4-s3-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work | Out-Null
