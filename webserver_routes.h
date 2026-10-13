@@ -4749,7 +4749,7 @@
             delete[] bmpBytes;
             });
 
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
         webserver.on("/api/lcdstats", HTTP_GET, []() {
             String r = "{\"bounceLines\":" + String(lcd4BounceLines) + ",\"gapLimitUs\":" + String((uint32_t)lcd4BounceGapUs) +
                        ",\"maxGapUs\":" + String(lcd4MaxGapUs) + ",\"stallsBounce\":" + String(lcd4StallCount) +
@@ -5603,6 +5603,7 @@
                     { "ST7789", DISPLAY_TYPE_ST7789, "ST7789 (172x320, ESP32-C6-LCD-1.47) with time and date strip" },
                     { "ST7789_240", DISPLAY_TYPE_ST7789_240, "ST7789 (240x240, ESP32-C6-LCD-1.3)" },
                     { "ST7701_480", DISPLAY_TYPE_ST7701_480, "ST7701 (480x480, ESP32-S3-Touch-LCD-4)" },
+                    { "TL021_480", DISPLAY_TYPE_TL021_480, "TL021WVC02 (480x480 round, Adafruit Qualia)" },
                 };
                 chunk += "<div style='display:flex;flex-wrap:wrap;align-items:center;gap:6px;'>" + translate("Display type") + ": " + infoTip(withBacklightPin(translate("Type of the connected display - applies to both displays. BL = backlight: with BL the brightness is controlled via PWM on pin {pin} (same as the backlight checkbox in the brightness tab), without BL by darkening the pixels. Switching to another display type restarts the clock and resets backlight, brightness and hub size to the defaults of the new type; uploaded clock faces and hands only fit the size they were made for (GC9A01 and ILI9341 share the 240 size)"))) + " ";
                 chunk += "<select data-cur='" + String(curChoice) + "' data-t='" + String(displayType) + "' style='min-width:190px;max-width:100%;' onchange=\"var o=this.options[this.selectedIndex];if(confirm('" + translate("Change the display type to") + ": '+o.text+'?'+(o.dataset.t!=this.dataset.t?'\\n" + translate("The clock restarts to apply the display type") + ".':''))){var f=document.createElement('form');f.method='POST';f.action='/save_displaytype';var i=document.createElement('input');i.type='hidden';i.name='display';i.value=this.value;f.appendChild(i);document.body.appendChild(f);f.submit();}else{this.value=this.dataset.cur;}\">";

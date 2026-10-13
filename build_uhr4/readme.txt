@@ -3,7 +3,7 @@
 #######################################################################################
 # Flashen unter Windows (10, 11) getestet
 
-Für ESP32-S2 (Lolin S2 Pico), ESP32-C6, ESP32-S3 und ESP32-S3-Touch-LCD-4 (480x480) (Waveshare). Windows 7/8 haben keinen passenden
+Für ESP32-S2 (Lolin S2 Pico), ESP32-C6, ESP32-S3, ESP32-S3-Touch-LCD-4 (480x480, Waveshare) und Adafruit Qualia ESP32-S3 (2,1" rund, 480x480; ungetestet). Windows 7/8 haben keinen passenden
 USB-Treiber und werden nicht unterstützt. macOS: flashESP.sh läuft dort nicht - von Hand mit esptool
 flashen (siehe Linux-Abschnitt, Port /dev/cu.usbmodem...).
 
@@ -35,6 +35,11 @@ flashen (siehe Linux-Abschnitt, Port /dev/cu.usbmodem...).
 	  ESP32-C6: 1 = ST7789 (172x320, ESP32-C6-LCD-1.47), 2 = ST7789_240 (240x240, ESP32-C6-LCD-1.3)
 	  ESP32-S3 (ESP32-S3-LCD-1.28): keine Abfrage, das GC9A01 ist fest verbaut
 	  ESP32-S3-Touch-LCD-4 (EXPERIMENTELL): keine Abfrage, das ST7701 (480x480) ist fest verbaut
+	  Adafruit Qualia ESP32-S3 (EXPERIMENTELL, UNGETESTET): keine Abfrage, das runde TL021WVC02 (480x480) ist der einzige Typ.
+	  Beide 480x480-Boards melden sich am USB gleich: eine laufende uhr4 verrät es per Displaytyp (ST7701_480 bzw. TL021_480);
+	  sonst fragt flashESP.bat nach (Enter = Waveshare; nicht interaktiv: Umgebungsvariable UHR4_BOARD=s3qualia, sonst Waveshare).
+	  Ein fabrikneues Qualia (UF2-Bootloader/CircuitPython, USB-Kennung 239A) erkennt flashESP und erklaert den Weg in den
+	  Download-Modus: BOOT0 halten, Reset druecken und loslassen, BOOT0 loslassen. Das Flashen ersetzt den UF2-Bootloader.
 	  Enter = unverändert (Update einer eingerichteten Uhr).
 	Läuft auf der Uhr schon uhr4, fragt flashESP.bat ihren Displaytyp ab und wählt ihn vor (Enter
 	behält ihn). Hat sie noch keinen, muss er angegeben werden. Mit falschem Displaytyp zeigt das

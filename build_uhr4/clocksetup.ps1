@@ -19,11 +19,11 @@
 # (Waveshare ESP32-S3-LCD-1.28): fest GC9A01, keine Abfrage; 0 = unveraendert.
 # Das Board erkennt das Skript am USB-Port (303A:1001 = ESP32-C6 oder 480x480-Board ESP32-S3-Touch-LCD-4,
 # unterschieden per "UHR4 INFO" bzw. esptool chip_id; 1A86:55D3 = ESP32-S3 am CH343P) und
-# LAEDT den Build dieses Chips vom GitHub-Release (uhr4-esp32s2, -esp32c6, -esp32s3 bzw. -esp32s3lcd4 als Zip samt SHA-256, Pruefung vor dem Flashen). Dafuer braucht
+# LAEDT den Build dieses Chips vom GitHub-Release (uhr4-esp32s2, -esp32c6, -esp32s3, -esp32s3lcd4 bzw. -esp32s3qualia als Zip samt SHA-256, Pruefung vor dem Flashen). Dafuer braucht
 # der PC beim Flashen Internet; einen Rueckfall auf lokale Dateien gibt es nicht.
 #   -Local
 #        Nur fuer die Entwicklung: statt zu laden den Build aus dem Unterordner esp32s2,
-#        esp32c6, esp32s3 bzw. esp32s3lcd4 neben diesem Skript flashen (auch UHR4_LOCAL=1).
+#        esp32c6, esp32s3, esp32s3lcd4 bzw. esp32s3qualia neben diesem Skript flashen (auch UHR4_LOCAL=1).
 #        Die Umgebungsvariable UHR4_BUILD_URL ersetzt die Adresse des Releases (zum Testen).
 # Das WLAN-Passwort wird verdeckt eingegeben, bleibt nur im Speicher dieses
 # Skripts (keine Datei, keine Umgebungsvariable) und geht nur per USB an die Uhr.
@@ -52,11 +52,11 @@
 # (Waveshare ESP32-S3-LCD-1.28): fixed GC9A01, no question; 0 = unchanged.
 # The script recognizes the board by the USB port (303A:1001 = ESP32-C6 or 480x480 board ESP32-S3-Touch-LCD-4,
 # told apart by "UHR4 INFO" or esptool chip_id; 1A86:55D3 = ESP32-S3 on the CH343P) and DOWNLOADS the build of that chip from the GitHub
-# release (uhr4-esp32s2, -esp32c6, -esp32s3 or -esp32s3lcd4 as a zip with SHA-256, checked before
+# release (uhr4-esp32s2, -esp32c6, -esp32s3, -esp32s3lcd4 or -esp32s3qualia as a zip with SHA-256, checked before
 # flashing). The PC needs internet while flashing; there is no fallback to local files.
 #   -Local
 #        For development only: instead of downloading, flash the build from the subfolder
-#        esp32s2, esp32c6, esp32s3 or esp32s3lcd4 next to this script (also UHR4_LOCAL=1).
+#        esp32s2, esp32c6, esp32s3, esp32s3lcd4 or esp32s3qualia next to this script (also UHR4_LOCAL=1).
 #        The environment variable UHR4_BUILD_URL replaces the release address (for testing).
 # The WiFi password is entered hidden, stays only in this script's memory (no
 # file, no environment variable) and only goes to the clock via USB.
@@ -76,6 +76,9 @@ function Set-Board([string]$b) {
     if ($b -eq 'c6') {
         $script:names = @{ 1 = 'ST7789'; 2 = 'ST7789_240' }
         $script:labels = @{ 1 = 'ST7789 (172x320, Waveshare ESP32-C6-LCD-1.47) mit Streifen fuer Uhrzeit und Datum / with time and date strip'; 2 = 'ST7789 (240x240, Waveshare ESP32-C6-LCD-1.3)' }
+    } elseif ($b -eq 's3qualia') {
+        $script:names = @{ 1 = 'TL021_480' }
+        $script:labels = @{ 1 = 'TL021WVC02 (480x480 rund, Adafruit Qualia ESP32-S3)' }
     } elseif ($b -eq 's3lcd4') {
         $script:names = @{ 1 = 'ST7701_480' }
         $script:labels = @{ 1 = 'ST7701 (480x480, Waveshare ESP32-S3-Touch-LCD-4)' }
@@ -151,6 +154,7 @@ function Get-JtagBoard([int]$num, [bool]$withEsptool) {
         $sp.Close()
         if ($reply -match '^UHR4 OK INFO (\S+)') {
             if ($Matches[1] -eq 'ST7701_480') { return 's3lcd4' }
+            if ($Matches[1] -eq 'TL021_480') { return 's3qualia' }
             return 'c6'
         }
     } catch {
@@ -159,7 +163,16 @@ function Get-JtagBoard([int]$num, [bool]$withEsptool) {
     }
     if ($withEsptool) {
         $out = & (Join-Path $PSScriptRoot 'esptool.exe') --port "COM$num" chip_id 2>&1 | Out-String
-        if ($out -match 'ESP32-S3') { return 's3lcd4' }
+        if ($out -match 'ESP32-S3') {
+            # Beide 480x480-Boards sind ein ESP32-S3: Umgebungsvariable UHR4_BOARD (s3lcd4 oder s3qualia), sonst nachfragen
+            # Both 480x480 boards are an ESP32-S3: environment variable UHR4_BOARD (s3lcd4 or s3qualia), otherwise ask
+            if ($env:UHR4_BOARD -eq 's3qualia' -or $env:UHR4_BOARD -eq 's3lcd4') { return $env:UHR4_BOARD }
+            if ($script:askBoard) {
+                $a = Read-Host 'ESP32-S3 mit 480x480-Display: 1 = Waveshare ESP32-S3-Touch-LCD-4, 2 = Adafruit Qualia (Enter = 1) / 1 = Waveshare, 2 = Adafruit Qualia (Enter = 1) [1/2]'
+                if ($a -eq '2') { return 's3qualia' }
+            }
+            return 's3lcd4'
+        }
     }
     return 'c6'
 }
@@ -416,7 +429,7 @@ function Get-RunningClockPort {
     Get-CimInstance Win32_PnPEntity | Where-Object {
         $_.Name -match '\(COM(\d+)\)' -and
         $(if ($board -eq 's3') { $_.DeviceID -match 'VID_1A86&PID_55D3' }
-          elseif ($board -eq 'c6' -or $board -eq 's3lcd4') { $_.DeviceID -match 'VID_303A&PID_1001' }
+          elseif ($board -eq 'c6' -or $board -eq 's3lcd4' -or $board -eq 's3qualia') { $_.DeviceID -match 'VID_303A&PID_1001' }
           else { $_.DeviceID -match 'VID_303A' -and $_.DeviceID -notmatch 'PID_0002|PID_1001' })
     } | ForEach-Object { [int]([regex]::Match($_.Name, '\(COM(\d+)\)').Groups[1].Value) } | Select-Object -First 1
 }
@@ -569,6 +582,7 @@ elseif ($Send) {
 }
 elseif ($Flash) {
     $interactive = -not $Port
+    $script:askBoard = $interactive
 
     # Werkzeuge da? Fehlen sie, wurde meist direkt aus dem Zip gestartet oder der Virenscanner hat
     # esptool.exe entfernt.
@@ -596,9 +610,12 @@ elseif ($Flash) {
     # Board am Port erkennen und den Build dieses Chips laden (Get-BuildDir)
     # Recognize the board on the port and download the build of that chip (Get-BuildDir)
     Set-Board (Get-PortBoard $selPort $true)
-    Write-Host "$(if ($board -eq 's3lcd4') { 'ESP32-S3 (480x480)' } else { 'ESP32-' + $board.ToUpper() }) an / on COM$selPort"
+    Write-Host "$(if ($board -eq 's3lcd4') { 'ESP32-S3 (480x480)' } elseif ($board -eq 's3qualia') { 'ESP32-S3 Qualia (480x480 rund / round)' } else { 'ESP32-' + $board.ToUpper() }) an / on COM$selPort"
     if ($board -eq 's3lcd4') {
         Write-Host 'ESP32-S3-Touch-LCD-4 (480x480): EXPERIMENTELL / EXPERIMENTAL'
+    }
+    if ($board -eq 's3qualia') {
+        Write-Host 'Adafruit Qualia ESP32-S3 (2,1" rund): EXPERIMENTELL, NICHT AM GERAET GETESTET / EXPERIMENTAL, NOT TESTED ON THE DEVICE'
     }
     $binDir = Get-BuildDir $board
     $bins = @('uhr4.ino.bootloader.bin', 'uhr4.ino.partitions.bin', 'uhr4.ino.bin')
@@ -635,7 +652,7 @@ elseif ($Flash) {
                 if ($ok -notmatch '^[JjYy]') { exit 1 }
             }
         }
-        elseif ($board -eq 's3lcd4') { $c = 0 }
+        elseif ($board -eq 's3lcd4' -or $board -eq 's3qualia') { $c = 0 }
         else { $c = Read-DisplayChoice $info }
         Read-Wifi
     }
@@ -669,7 +686,7 @@ elseif ($Flash) {
     # previous firmware (e.g. Waveshare demo). ESP32-S2: bootloader at 0x1000.
     try {
         if ($board -ne 's2') {
-            $chipName = if ($board -eq 's3lcd4') { 'esp32s3' } else { "esp32$board" }
+            $chipName = if ($board -eq 's3lcd4' -or $board -eq 's3qualia') { 'esp32s3' } else { "esp32$board" }
             & $esptool --chip $chipName --port "COM$comPort" --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode keep --flash_freq keep --flash_size keep 0x0 uhr4.ino.bootloader.bin 0x8000 uhr4.ino.partitions.bin 0xe000 boot_app0.bin 0x10000 uhr4.ino.bin
         } else {
             & $esptool --chip esp32-S2 --port "COM$comPort" --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode keep --flash_freq keep --flash_size keep 0x1000 uhr4.ino.bootloader.bin 0x8000 uhr4.ino.partitions.bin 0x10000 uhr4.ino.bin

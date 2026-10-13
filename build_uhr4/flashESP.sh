@@ -104,6 +104,7 @@ port_state() {
         303a:1001) echo c6 ;;
         303a:*)    echo running ;;
         1a86:55d3) echo s3 ;;
+        239a:*)    echo adafruit ;;
         *)         echo other ;;
     esac
 }
@@ -137,7 +138,7 @@ find_running_port() {
     for dev in $(list_ports); do
         state=$(port_state "$dev")
         case "$BOARD:$state" in
-            s2:running|c6:c6|s3lcd4:c6|s3:s3|:running|:c6|:s3) echo "$dev"; return 0 ;;
+            s2:running|c6:c6|s3lcd4:c6|s3qualia:c6|s3:s3|:running|:c6|:s3) echo "$dev"; return 0 ;;
         esac
     done
     return 1
@@ -429,6 +430,12 @@ send_time() {
 # Displayname aus Nummer oder Name (je nach Board), leer bei ungueltig
 # Display name from number or name (depending on the board), empty if invalid
 display_name() {
+    if [ "$BOARD" = s3qualia ]; then
+        case "${1^^}" in
+            1|TL021_480) echo TL021_480 ;;
+        esac
+        return
+    fi
     if [ "$BOARD" = s3lcd4 ]; then
         case "${1^^}" in
             1|ST7701_480) echo ST7701_480 ;;
@@ -497,14 +504,20 @@ detect_jtag_board() {
     JTAG_BOARD="${UHR4_BOARD:-c6}"
     CLOCK_NAME=""
     if query_clock_info "$dev"; then
-        [ "$CLOCK_NAME" = ST7701_480 ] && JTAG_BOARD=s3lcd4 || JTAG_BOARD=c6
+        case "$CLOCK_NAME" in
+            ST7701_480) JTAG_BOARD=s3lcd4 ;;
+            TL021_480)  JTAG_BOARD=s3qualia ;;
+            *)          JTAG_BOARD=c6 ;;
+        esac
         return
     fi
     for tool in esptool esptool.py; do
         command -v "$tool" >/dev/null 2>&1 || continue
         out=$("$tool" -p "$dev" chip_id 2>&1) || out=$("$tool" -p "$dev" chip-id 2>&1)
         case "$out" in
-            *ESP32-S3*) JTAG_BOARD=s3lcd4 ;;
+            *ESP32-S3*)
+                # Waveshare oder Qualia: UHR4_BOARD (s3lcd4 oder s3qualia), sonst Waveshare / Waveshare or Qualia: UHR4_BOARD (s3lcd4 or s3qualia), otherwise Waveshare
+                case "${UHR4_BOARD:-}" in s3qualia) JTAG_BOARD=s3qualia ;; *) JTAG_BOARD=s3lcd4 ;; esac ;;
             *ESP32-C6*) JTAG_BOARD=c6 ;;
         esac
         return
@@ -574,6 +587,15 @@ normalize_port() {
     esac
 }
 
+adafruit_hint() {
+    echo "Adafruit-Board (Qualia) im UF2-Modus oder mit CircuitPython erkannt. Zum Flashen in den Download-Modus bringen:"
+    echo "  BOOT0-Taste halten, Reset-Taste druecken und loslassen, danach BOOT0 loslassen. Das Board meldet sich dann als"
+    echo "  Espressif-Geraet (303A:1001) - flashESP.bat erneut starten. Hinweis: Das Flashen ersetzt den Adafruit-UF2-Bootloader."
+    echo "Adafruit board (Qualia) found in UF2 mode or running CircuitPython. To flash it, put it into download mode:"
+    echo "  hold the BOOT0 button, press and release Reset, then release BOOT0. The board then shows up as an"
+    echo "  Espressif device (303A:1001) - start flashESP.bat again. Note: flashing replaces the Adafruit UF2 bootloader."
+}
+
 # Nur Uhrzeit setzen / only set the time
 if [ "$1" = "--time" ]; then
     dev=""
@@ -601,6 +623,7 @@ if [ -z "$PORT" ]; then
     echo "Serielle Schnittstellen / serial ports:"
     clocks=()
     any=0
+    adafruit_seen=0
     for dev in $(list_ports); do
         any=1
         state=$(port_state "$dev")
@@ -609,6 +632,7 @@ if [ -z "$PORT" ]; then
             running)  text="UHR ESP32-S2 - laeuft / running"; clocks+=("$dev") ;;
             c6)       text="UHR ESP32-C6 oder S3-480 / or S3-480 (USB-Serial-JTAG)"; clocks+=("$dev") ;;
             s3)       text="UHR ESP32-S3 (CH343)?"; clocks+=("$dev") ;;
+            adafruit) text="Adafruit-Board (UF2/CircuitPython) - erst Download-Modus noetig / download mode needed first"; adafruit_seen=1 ;;
             *)        text="-" ;;
         esac
         echo "  $dev  $text  [$(usb_id "$dev")]"
@@ -624,6 +648,7 @@ if [ -z "$PORT" ]; then
             echo "Mehrere Uhren gefunden - bitte nur eine anschliessen oder die Schnittstelle angeben."
             echo "Several clocks found - connect only one or enter the port."
         else
+            [ "$adafruit_seen" = 1 ] && { adafruit_hint; echo; }
             echo "Keine Uhr erkannt. Bitte pruefen:"
             echo "  * Taucht die Uhr nach dem Anstecken mit 'dmesg | tail -n 20' bzw. 'lsusb'"
             echo "    (Espressif 303a) auf und hat sie eine Schnittstelle /dev/ttyACM... bekommen?"
@@ -651,6 +676,10 @@ if [ ! -e "$PORT" ]; then
 fi
 
 state=$(port_state "$PORT")
+if [ "$state" = adafruit ]; then
+    adafruit_hint
+    exit 1
+fi
 if [ "$state" = other ]; then
     echo "Hinweis: an $PORT wurde keine Uhr erkannt - es wird trotzdem versucht (als ESP32-S2)."
     echo "Note: no clock detected on $PORT - trying anyway (as ESP32-S2)."
@@ -663,8 +692,9 @@ case "$state" in
     s3) BOARD=s3 ;;
     *)  BOARD=s2 ;;
 esac
-if [ "$BOARD" = s3lcd4 ]; then echo "ESP32-S3 (480x480) an / on $PORT"; else echo "ESP32-${BOARD^^} an / on $PORT"; fi
+if [ "$BOARD" = s3lcd4 ]; then echo "ESP32-S3 (480x480) an / on $PORT"; elif [ "$BOARD" = s3qualia ]; then echo "ESP32-S3 Qualia (480x480 rund / round) an / on $PORT"; else echo "ESP32-${BOARD^^} an / on $PORT"; fi
 [ "$BOARD" = s3lcd4 ] && echo "ESP32-S3-Touch-LCD-4 (480x480): EXPERIMENTELL / EXPERIMENTAL"
+[ "$BOARD" = s3qualia ] && echo "Adafruit Qualia ESP32-S3: EXPERIMENTELL, NICHT AM GERAET GETESTET / EXPERIMENTAL, NOT TESTED ON THE DEVICE"
 if [ "${UHR4_LOCAL:-}" = 1 ]; then
     BIN_DIR="esp32$BOARD"
 else
@@ -736,7 +766,7 @@ if [ -z "$1" ]; then
             read -r -p "An $PORT antwortet keine uhr4 - trotzdem den ESP32-S3-Build flashen? / no uhr4 replies on $PORT - flash the ESP32-S3 build anyway? [j/N, y/N] " ok
             [[ "$ok" =~ ^[JjYy] ]] || exit 1
         fi
-    elif [ "$BOARD" = s3lcd4 ]; then
+    elif [ "$BOARD" = s3lcd4 ] || [ "$BOARD" = s3qualia ]; then
         :   # ESP32-S3-Touch-LCD-4: Display fest verbaut - keine Abfrage / display built in - no question
     else
         ask_display
@@ -789,7 +819,7 @@ fi
 # firmware (e.g. OTA)
 if [ "$BOARD" != s2 ]; then
     CHIP="esp32$BOARD"
-    [ "$BOARD" = s3lcd4 ] && CHIP=esp32s3
+    { [ "$BOARD" = s3lcd4 ] || [ "$BOARD" = s3qualia ]; } && CHIP=esp32s3
     "$ESPTOOL" --chip "$CHIP" -p "$PORT" -b 921600 "$WRITE" \
         0x0 "$BIN_DIR/uhr4.ino.bootloader.bin" 0x8000 "$BIN_DIR/uhr4.ino.partitions.bin" 0xe000 "$BIN_DIR/boot_app0.bin" \
         0x10000 "$BIN_DIR/uhr4.ino.bin"

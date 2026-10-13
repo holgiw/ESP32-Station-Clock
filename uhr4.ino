@@ -716,7 +716,7 @@ void setup() {
             }
         }
         else {
-#if !BOARD_WAVESHARE_S3_LCD4 // Port-Expander und Touch brauchen Wire / the port expander and the touch need Wire
+#if !BOARD_RGB_PANEL // Port-Expander und Touch brauchen Wire / the port expander and the touch need Wire
             Wire.end();
 #endif
             rtcOk = RTC_NOT_AVAILABLE;
@@ -1164,7 +1164,7 @@ void setup() {
         // Wenn Button1 oder BOOT_BUTTON gedrückt ist, alle Zugangsdaten löschen
         // If Button1 or BOOT_BUTTON is pressed, clear all credentials
 
-        if (digitalRead(BUTTON1) == HIGH || digitalRead(BOOT_BUTTON) == LOW) {
+        if (digitalRead(BUTTON1) == HIGH || digitalRead(BOOT_BUTTON) == LOW || extraButtonDown()) {
             DEBUG_PRINTLN("[SETUP] Reset button pressed, clearing WiFi credentials and starting AP..");
             showButtonMessage(TFT_YELLOW, "WiFi Reset", "...", "", TFT_DARKGREY);
             delay(1000);
@@ -1253,13 +1253,13 @@ void setup() {
 
     void loop() {
 
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
         // Erst ab hier (setup() ist fertig): Speichern/Hochladen zeigt eine ruhige Flaeche statt Flackern. Waehrend setup()
         // schriebe das Anlegen der Startdateien sonst die Anzeige des Starts weg.
         // Only from here on (setup() is done): saving/uploading shows a calm area instead of flicker. During setup()
         // creating the starter files would otherwise overwrite the start display.
 
-        if (!fsWriteHook) fsWriteHook = [](const char*) { lcd4BusyBegin(); };
+        if (!fsWriteHook && millis() > 30000) fsWriteHook = [](const char*) { lcd4BusyBegin(); }; // erst 30 s nach dem Start: Dateien, die der Start selbst anlegt, sollen die Anzeige nicht blau schalten / only 30 s after the start: files the start itself creates must not turn the display blue
 #endif
 
         // Firmware-Update ueber WLAN (nur ESP32-S3): waehrend es laeuft, pausiert alles andere

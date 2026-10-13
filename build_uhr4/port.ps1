@@ -38,6 +38,9 @@ function Get-ComPorts {
         # 303A:1001 = built-in USB serial JTAG (ESP32-C6, likewise S3/C3) - running and in download mode
         elseif ($_.DeviceID -match 'VID_303A&PID_1001') { $state = 'c6' }
         elseif ($_.DeviceID -match 'VID_303A') { $state = 'running' }
+        # 239A = Adafruit (UF2-Bootloader oder CircuitPython, z.B. Qualia ab Werk): kein Download-Modus, siehe Hinweis unten
+        # 239A = Adafruit (UF2 bootloader or CircuitPython, e.g. Qualia as delivered): not a download mode, see the hint below
+        elseif ($_.DeviceID -match 'VID_239A') { $state = 'adafruit' }
         # 1A86:55D3 = CH343P (Waveshare ESP32-S3-LCD-1.28) - sitzt auch auf fremden Geraeten, clocksetup.ps1
         # fragt die Uhr deshalb vorher per "UHR4 INFO"
         # 1A86:55D3 = CH343P (Waveshare ESP32-S3-LCD-1.28) - also found on other devices, so clocksetup.ps1
@@ -53,8 +56,18 @@ function Get-StateText($state) {
         'running'  { 'UHR - laeuft / running' }
         'c6'       { 'UHR ESP32-C6 oder S3-480 / or S3-480 (USB-Serial-JTAG)' }
         's3'       { 'UHR ESP32-S3 (CH343)?' }
+        'adafruit' { 'Adafruit-Board (UF2/CircuitPython) - erst Download-Modus noetig / download mode needed first' }
         default    { '-' }
     }
+}
+
+function Show-AdafruitHint {
+    Write-Host 'Adafruit-Board (Qualia) im UF2-Modus oder mit CircuitPython erkannt. Zum Flashen in den Download-Modus bringen:'
+    Write-Host '  BOOT0-Taste halten, Reset-Taste druecken und loslassen, danach BOOT0 loslassen. Das Board meldet sich dann als'
+    Write-Host '  Espressif-Geraet (303A:1001) - flashESP.bat erneut starten. Hinweis: Das Flashen ersetzt den Adafruit-UF2-Bootloader.'
+    Write-Host 'Adafruit board (Qualia) found in UF2 mode or running CircuitPython. To flash it, put it into download mode:'
+    Write-Host '  hold the BOOT0 button, press and release Reset, then release BOOT0. The board then shows up as an'
+    Write-Host '  Espressif device (303A:1001) - start flashESP.bat again. Note: flashing replaces the Adafruit UF2 bootloader.'
 }
 
 $ports = @(Get-ComPorts)
@@ -75,6 +88,7 @@ if (-not $PortArg) {
             Write-Host 'Mehrere Uhren gefunden - bitte nur eine anschliessen oder die Nummer angeben.'
             Write-Host 'Several clocks found - connect only one or enter the number.'
         } else {
+            if ($ports | Where-Object { $_.State -eq 'adafruit' }) { Show-AdafruitHint; Write-Host '' }
             Write-Host 'Keine Uhr erkannt. Bitte pruefen:'
             Write-Host '  * Taucht die Uhr im Geraetemanager (devmgmt.msc) unter "Anschluesse (COM & LPT)" auf'
             Write-Host '    und hat sie dort einen COM-Port bekommen?'
@@ -102,6 +116,11 @@ $port = $ports | Where-Object { $_.Num -eq $num } | Select-Object -First 1
 
 if (-not $port) {
     Write-Host "COM$num nicht vorhanden / not present."
+    exit 0
+}
+
+if ($port.State -eq 'adafruit') {
+    Show-AdafruitHint
     exit 0
 }
 

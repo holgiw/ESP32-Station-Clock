@@ -42,7 +42,7 @@ function Get-TargetBuild([string]$chip) {
     try { return [datetime]::ParseExact($stamp, 'MMM d yyyy HH:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture).ToString('yyyy-MM-dd HH:mm:ss') }
     catch { return $null }
 }
-$target = @{ S2 = Get-TargetBuild 's2'; C6 = Get-TargetBuild 'c6'; S3 = Get-TargetBuild 's3'; 'S3-480' = Get-TargetBuild 's3lcd4' }
+$target = @{ S2 = Get-TargetBuild 's2'; C6 = Get-TargetBuild 'c6'; S3 = Get-TargetBuild 's3'; 'S3-480' = Get-TargetBuild 's3lcd4'; 'S3-QUALIA' = Get-TargetBuild 's3qualia' }
 
 # Netz des PCs bestimmen (erste drei Zahlen der Adresse), falls kein -Subnet angegeben ist
 # Determine the PC's network (first three numbers of its address) if no -Subnet is given
@@ -177,4 +177,4 @@ if ($All) {
 if ($PassThru) { return @($rows) }
 if (-not $rows) { Write-Host 'Keine uhr4 gefunden. / No uhr4 found.'; exit 1 }
 $rows | Sort-Object IP | Format-Table -AutoSize
-Write-Host ('Soll / target:  S2 {0}   C6 {1}   S3 {2}   S3-480 {3}' -f $target.S2, $target.C6, $target.S3, $target['S3-480'])
+Write-Host ('Soll / target:  S2 {0}   C6 {1}   S3 {2}   S3-480 {3}   S3-QUALIA {4}' -f $target.S2, $target.C6, $target.S3, $target['S3-480'], $target['S3-QUALIA'])

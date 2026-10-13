@@ -27,7 +27,7 @@
 
     void showOtaStatus(const String& line2) {
 #if HAS_OTA
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
 
         // Kein Text, nur die ruhige blaue Flaeche (Text und Fortschritt flackerten bei den Flash-Schreibzugriffen)
         // No text, only the calm blue area (text and progress flickered during the flash writes)
@@ -49,7 +49,7 @@
         int percent = (int)min((size_t)100, done * 100 / total);
         if (otaShownPercent >= 0 && percent < otaShownPercent + 5) return;
         otaShownPercent = percent;
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
         // 480x480: kein Fortschritt - die blaue Flaeche bleibt unveraendert / no progress - the blue area stays unchanged
 #else
         updateButtonLine(TFT_CYAN, String(percent) + " %"); // nur die Zahl, ohne Flackern / only the number, no flicker

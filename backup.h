@@ -1439,7 +1439,7 @@
             delete backupRestore;
             backupRestore = new (std::nothrow) BackupRestoreState();
             if (!backupRestore) return;
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
 
             // Schwarzer Hinweisbildschirm: Verschiebungen durch die Flash-Schreibzugriffe fallen darauf kaum auf
             // Black notice screen: shifts caused by the flash writes are hardly visible on it

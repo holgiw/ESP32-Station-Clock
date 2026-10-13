@@ -85,6 +85,7 @@
     bool displayTypeSupported(uint8_t type) {
         bool c6Type = type == DISPLAY_TYPE_ST7789 || type == DISPLAY_TYPE_ST7789_240;
         if (BOARD_WAVESHARE_S3_LCD4) return type == DISPLAY_TYPE_ST7701_480;
+        if (BOARD_QUALIA) return type == DISPLAY_TYPE_TL021_480;
         if (BOARD_WAVESHARE_S3_GC9A01) return type == DISPLAY_TYPE_GC9A01;
         return BOARD_WAVESHARE_C6_ST7789 ? c6Type : type < DISPLAY_TYPE_ST7701_480 && !c6Type;
     }
@@ -94,6 +95,7 @@
 
     const char* supportedDisplayNames() {
         if (BOARD_WAVESHARE_S3_LCD4) return "ST7701_480";
+        if (BOARD_QUALIA) return "TL021_480";
         if (BOARD_WAVESHARE_S3_GC9A01) return "GC9A01, GC9A01_WITH_BACKLIGHT";
         return BOARD_WAVESHARE_C6_ST7789 ? "ST7789, ST7789_240" : "GC9A01, GC9A01_WITH_BACKLIGHT, GC9D01, ILI9341";
     }
@@ -114,6 +116,7 @@
         else if (name == "ST7789") { type = DISPLAY_TYPE_ST7789; backlight = true; }
         else if (name == "ST7789_240") { type = DISPLAY_TYPE_ST7789_240; backlight = true; }
         else if (name == "ST7701_480") { type = DISPLAY_TYPE_ST7701_480; backlight = true; } // PWM ueber den Port-Expander / PWM via the port expander
+        else if (name == "TL021_480") { type = DISPLAY_TYPE_TL021_480; backlight = false; } // Beleuchtung nur an/aus / backlight only on/off
         else return false;
         return displayTypeSupported(type);
     }
@@ -130,6 +133,7 @@
         if (type == DISPLAY_TYPE_ST7789) return "ST7789";
         if (type == DISPLAY_TYPE_ST7789_240) return "ST7789_240";
         if (type == DISPLAY_TYPE_ST7701_480) return "ST7701_480";
+        if (type == DISPLAY_TYPE_TL021_480) return "TL021_480";
         return backlight ? "GC9A01_WITH_BACKLIGHT" : "GC9A01";
     }
 
@@ -200,7 +204,7 @@
     // GC9D01 stayed black, hence pin_rst = -1.
 
     void resetPanels() {
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
 
         // Reset ueber den Port-Expander und ST7701-Startfolge (lgfx_config.h), kein Reset-Pin am Chip
         // Reset via the port expander and ST7701 start-up sequence (lgfx_config.h), no reset pin on the chip
@@ -883,7 +887,7 @@
     // HIGH at boot too - a floating BL input would otherwise stay dark on some modules.
 
     void applyBacklightPin() {
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
         // Kein Pin: die PWM sitzt im Port-Expander (lcd4SetBacklight()); ohne Haken volle Helligkeit
         // No pin: the PWM is in the port expander (lcd4SetBacklight()); without the checkbox full brightness
 
@@ -2493,7 +2497,7 @@
     }
 
 
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
 
     // 480x480: Der Sekundenzeiger liegt als Sprite in doppelter Aufloesung vor (SECOND_HAND_SS) und wird mit Zoom 0,5 und
     // Kantenglaettung gezeichnet: Die Kante bekommt so Zwischenstufen (Deckung aus 2 x 2 Unterpixeln), auch wenn die
@@ -2582,7 +2586,7 @@
     // Draws the second hand rotated and anti-aliased into the target (480x480: from the double resolution sprite).
 
     void drawSecondHand(LGFX_Sprite* dst, float angle) {
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
         if (secondHandSS) {
             secondHandSprite.pushRotateZoomWithAA(dst, angle, 1.0f / SECOND_HAND_SS, 1.0f / SECOND_HAND_SS, TRANSPARENT_COLOR);
             return;
@@ -2626,7 +2630,7 @@
 
         for (auto& h : hands) {
             loadHandOrDefault(setId, h.label, pix);
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
             if (h.sprite == &secondHandSprite) {
                 if (buildSecondHandSS(pix)) continue;
                 secondHandSS = false;
@@ -2828,7 +2832,7 @@
     }
 
 
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
 
     // 480x480: weiches Gleiten von Stunden-/Minutenzeiger zum neuen Wert, zeitgesteuert (LCD4_HAND_EASE_MS, sanfter
     // Anfang und Ende) statt in Schritten je Bild - die Dauer haengt so nicht von der Bildrate ab. slot 0 =
@@ -3081,7 +3085,7 @@
 
         float secAngle = t.tm_sec * 6.0f;
         float minAngle = t.tm_min * 6.0f;
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
 
         // 480x480: Stundenzeiger nur im Minutentakt (zusammen mit dem Minutenzeiger) - jede Aenderung kostet ein
         // aufwaendiges Bild; 0,5 Grad je Minute sind am Zeigerende knapp 2 Pixel
@@ -3459,7 +3463,7 @@
                 if (fabs(angleDiff) > HAND_MOVE_THRESHOLD_DEG) {
                     lastMinuteAngleRef = targetMinAngle; // grosser Sprung: animateHand() / large jump: animateHand()
                 }
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
 
                 // 480x480: zeitgesteuert gleiten (easeHandTimed()) - nur die Zeigerrechtecke werden neu gezeichnet
                 // 480x480: glide time-controlled (easeHandTimed()) - only the hand rectangles are redrawn
@@ -3489,7 +3493,7 @@
         if (fabs(hourAngleDiff) > HAND_MOVE_THRESHOLD_DEG) {
             lastHourAngleRef = targetHourAngle; // grosser Sprung: animateHand() / large jump: animateHand()
         }
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
         else {
             lastHourAngleRef = easeHandTimed(displayNum - 1, 1, lastHourAngleRef, targetHourAngle); // 480x480: zeitgesteuert / time-controlled
         }
@@ -3663,12 +3667,12 @@
         const float drawMinAngle = (subdial && partial) ? lastFrame.minuteAngle : minAngle;
 
         int32_t px0 = INT32_MAX, py0 = INT32_MAX, px1 = INT32_MIN, py1 = INT32_MIN;
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
         bool handsMoved = false;
 #endif
         if (partial) {
             if (subdial) backgroundSprite.setPivot(subX, subY);
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
             const float secScale = secondHandSS ? 1.0f / SECOND_HAND_SS : 1.0f;
 #else
             const float secScale = 1.0f;
@@ -3682,7 +3686,7 @@
                 px1 = max(px1, (int32_t)(hubX + hubSize + 2));
                 py1 = max(py1, (int32_t)(hubY + hubSize + 2));
             }
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
 
             // Haben sich Stunden-/Minutenzeiger bewegt (nur im Minutentakt), kommen ihre alten und neuen Flaechen
             // ins Rechteck und das Zwischenbild wird nur dort neu aufgebaut (updateCompositeRect()).
@@ -3710,7 +3714,7 @@
             partial = (px1 >= px0 && py1 >= py0);
         }
         if (partial) backgroundSprite.setClipRect(px0, py0, px1 - px0 + 1, py1 - py0 + 1);
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
         if (partial && handsMoved) {
             updateCompositeRect(handComposite[(displayNum == 1) ? 0 : 1], rotation, hourAngle, minAngle, px0, py0, px1, py1);
         }
@@ -3731,7 +3735,7 @@
             backgroundSprite.clearClipRect();
             if (compositeOk) compositeOk = drawCompositeInto(displayNum, rotation, hourAngle, minAngle, !subdial);
         }
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
         const uint32_t profB = micros();
 #endif
         if (!compositeOk) loadClockFace(rotation);
@@ -3819,7 +3823,7 @@
             }
         }
 
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
         const uint32_t profC = micros();
 #endif
         if (partial) {
@@ -3840,7 +3844,7 @@
             backgroundSprite.pushSprite(ox, oy);
         }
         lastRenderPartial = partial;
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
 
         // Zeitaufteilung fuer /api/lcdstats: Rechteck/Zwischenbild, Zeiger und Nabe, Senden (Mikrosekunden)
         // Time split for /api/lcdstats: rectangle/composite, hands and hub, sending (microseconds)
@@ -7752,7 +7756,7 @@
         if (handSpritesCreated &&
             hourHandSprite.width() == newHourWidth &&
             minuteHandSprite.width() == newMinuteWidth &&
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
             (secondHandSS ? secondHandBuiltW : secondHandSprite.width()) == newSecondWidth) {
 #else
             secondHandSprite.width() == newSecondWidth) {

@@ -1,9 +1,10 @@
 @echo off
-rem Baut die Firmware mit arduino-cli (der Arduino IDE) fuer ESP32-S3, ESP32-S2, ESP32-C6 und das 480x480-Board nacheinander.
-rem   buildAll.bat              alle vier Ziele (Reihenfolge s3, s2, c6, s3lcd4)
+rem Baut die Firmware mit arduino-cli (der Arduino IDE) fuer ESP32-S3, ESP32-S2, ESP32-C6 und das Waveshare-480x480-Board nacheinander.
+rem   buildAll.bat              alle vier Ziele (Reihenfolge s3, s2, c6, s3lcd4); das Qualia nur, wenn es genannt wird
 rem   buildAll.bat s3 c6        nur die genannten Chips
 rem   buildAll.bat s3lcd4       nur das Waveshare ESP32-S3-Touch-LCD-4 (480x480, PSRAM octal)
-rem Nach jedem erfolgreichen Build werden die fertigen Dateien nach build_uhr4\esp32s3, esp32s2, esp32c6 bzw. esp32s3lcd4 kopiert.
+rem   buildAll.bat s3qualia      nur das Adafruit Qualia ESP32-S3 mit dem 2,1" runden Display (480x480, PSRAM octal; nie automatisch, ungetestet)
+rem Nach jedem erfolgreichen Build werden die fertigen Dateien nach build_uhr4\esp32s3, esp32s2, esp32c6, esp32s3lcd4 bzw. esp32s3qualia kopiert.
 rem Die Zwischenstaende liegen in %TEMP%\uhr4-build\[chip] (spaetere Laeufe sind schneller), das Protokoll in
 rem %TEMP%\uhr4-build\[chip].log. Die Chips werden nacheinander gebaut: parallele Laeufe teilen sich Zwischenordner im
 rem Sketch-Cache und stoeren einander. S2 und S3 brauchen -mtext-section-literals (sonst Linkerfehler "l32r: literal
@@ -11,11 +12,12 @@ rem target out of range"). Der C6 braucht die Partitionstabelle uhr4_c6: die Dat
 rem diesem Ordner werden dafuer bei Bedarf in den Arduino-Core kopiert. Beim S3 muss PSRAM an sein (PSRAM=enabled). Der S2 hat
 rem DebugLevel=none ("Core Debug Level: None" in Visual Micro): spart 56 KB, die S2-App ist fast voll (2 MB).
 rem
-rem Builds the firmware with arduino-cli (from the Arduino IDE) for ESP32-S3, ESP32-S2, ESP32-C6 and the 480x480 board one after another.
-rem   buildAll.bat              all four targets (order s3, s2, c6, s3lcd4)
+rem Builds the firmware with arduino-cli (from the Arduino IDE) for ESP32-S3, ESP32-S2, ESP32-C6 and the Waveshare 480x480 board one after another.
+rem   buildAll.bat              all four targets (order s3, s2, c6, s3lcd4); the Qualia only when it is named
 rem   buildAll.bat s3 c6        only the named chips
 rem   buildAll.bat s3lcd4       only the Waveshare ESP32-S3-Touch-LCD-4 (480x480, PSRAM octal)
-rem After every successful build the finished files are copied to build_uhr4\esp32s3, esp32s2, esp32c6 or esp32s3lcd4.
+rem   buildAll.bat s3qualia      only the Adafruit Qualia ESP32-S3 with the 2.1" round display (480x480, PSRAM octal; never automatic, untested)
+rem After every successful build the finished files are copied to build_uhr4\esp32s3, esp32s2, esp32c6, esp32s3lcd4 or esp32s3qualia.
 rem The intermediate state is in %TEMP%\uhr4-build\[chip] (later runs are faster), the log in
 rem %TEMP%\uhr4-build\[chip].log. The chips are built one after another: parallel runs share intermediate folders in
 rem the sketch cache and disturb each other. S2 and S3 need -mtext-section-literals (otherwise linker error "l32r:
@@ -97,8 +99,13 @@ if /i "%CHIP%"=="s3lcd4" (
     set "FQBN=esp32:esp32:esp32s3:UploadSpeed=921600,USBMode=hwcdc,CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=cdc,CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,DebugLevel=none,PSRAM=opi,LoopCore=1,EventsCore=1,JTAGAdapter=default,ZigbeeMode=default"
     set "PROP=--build-property "compiler.cpp.extra_flags=-mtext-section-literals -DUHR4_BOARD_S3_LCD4""
 )
+if /i "%CHIP%"=="s3qualia" (
+    set "DIR=esp32s3qualia"
+    set "FQBN=esp32:esp32:esp32s3:UploadSpeed=921600,USBMode=hwcdc,CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=cdc,CPUFreq=240,FlashMode=qio,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,DebugLevel=none,PSRAM=opi,LoopCore=1,EventsCore=1,JTAGAdapter=default,ZigbeeMode=default"
+    set "PROP=--build-property "compiler.cpp.extra_flags=-mtext-section-literals -DUHR4_BOARD_QUALIA""
+)
 if not defined FQBN (
-    echo Unbekannter Chip / unknown chip: %CHIP% ^(s3, s2, c6, s3lcd4^)
+    echo Unbekannter Chip / unknown chip: %CHIP% ^(s3, s2, c6, s3lcd4, s3qualia^)
     set "RESULT=!RESULT! %CHIP%=unbekannt/unknown"
     exit /b 1
 )

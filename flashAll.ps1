@@ -42,7 +42,7 @@ else {
 # ---- 2. ESP32-S3 und S3-480 per OTA / ESP32-S3 and S3-480 via OTA
 # Jedes Board bekommt NUR seinen eigenen Build - die beiden S3-Firmwares sind nicht austauschbar.
 # Each board gets ONLY its own build - the two S3 firmwares are not interchangeable.
-$otaBins = @{ 'S3' = 'build_uhr4\esp32s3\uhr4.ino.bin'; 'S3-480' = 'build_uhr4\esp32s3lcd4\uhr4.ino.bin' }
+$otaBins = @{ 'S3' = 'build_uhr4\esp32s3\uhr4.ino.bin'; 'S3-480' = 'build_uhr4\esp32s3lcd4\uhr4.ino.bin'; 'S3-QUALIA' = 'build_uhr4\esp32s3qualia\uhr4.ino.bin' }
 $failed = 0
 foreach ($c in ($clocks | Where-Object { $otaBins.ContainsKey($_.Chip) -and ($_.Stand -eq 'aelter' -or $Force) })) {
     $bin = Join-Path $root $otaBins[$c.Chip]
@@ -70,7 +70,7 @@ $boards = @(Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match 'COM
     $port = [int]([regex]::Match($_.Name, 'COM(\d+)\)').Groups[1].Value)
     # 303A:1001 ist der ESP32-C6 oder das 480x480-Board - clocksetup.ps1 erkennt es beim Flashen
     # 303A:1001 is the ESP32-C6 or the 480x480 board - clocksetup.ps1 recognizes it when flashing
-    $chip = if ($_.DeviceID -match 'VID_1A86') { 'S3' } elseif ($_.DeviceID -match 'PID_1001') { 'C6/S3-480' } else { 'S2' }
+    $chip = if ($_.DeviceID -match 'VID_1A86') { 'S3' } elseif ($_.DeviceID -match 'PID_1001') { 'C6/S3-480/QUALIA' } else { 'S2' }
     [pscustomobject]@{ Port = $port; Chip = $chip }
 })
 if ($boards.Count -eq 0) { Write-Host 'Keine Uhr am USB. / No clock on USB.' }

@@ -9,6 +9,11 @@
   Build (`esp32s3lcd4`, PSRAM octal). Das Bild kommt aus einem eigenen Puffer im PSRAM; nach Flash-Schreibzugriffen
   (Firmware-Update, Backup einspielen) wird das Panel neu synchronisiert. Beim Firmware-Update zeigt das
   Display nur eine ruhige blaue Fläche (kein Text), bei der Backup-Wiederherstellung kurz den Text und danach Blau.
+- Neues Ziel (EXPERIMENTELL, NICHT AM GERÄT GETESTET): Adafruit Qualia ESP32-S3 mit dem 2,1" runden Display TL021WVC02 (480x480, Touch CST826,
+  Port-Expander PCA9554A). Eigener Build (`esp32s3qualia`, Option `-DUHR4_BOARD_QUALIA`), Displaytyp `TL021_480`; Pins, Zeiten und Startfolge
+  nach den Unterlagen von Adafruit. Beleuchtung nur an/aus (Helligkeit durch Abdunkeln der Pixel); die Tasten UP/DOWN am Expander zählen wie der
+  Taster. `buildAll.bat`, `flashESP`, `flashAll`, `checkClocks` und `publish_*.ps1` kennen das Board; `flashESP` erkennt ein fabrikneues
+  Qualia (Adafruit-Kennung 239A) und erklärt den Weg in den Download-Modus (BOOT0 halten, Reset drücken).
 - 480x480: Berührung des Displays zeigt 5 Sekunden lang die Seite mit WLAN und IP-Adresse.
 - 480x480: Die Helligkeit wird über das PWM-Register des Port-Expanders geregelt („Hintergrundbeleuchtung PWM“, ab
   Werk an); der Test-Knopf in den Helligkeitseinstellungen funktioniert wie bei den anderen Uhren.
@@ -449,6 +454,11 @@
   build (`esp32s3lcd4`, octal PSRAM). The image comes from its own buffer in PSRAM; after flash writes (firmware update,
   restoring a backup) the panel is re-synchronised. During a firmware update the display shows only a calm blue
   area (no text), during a backup restore briefly the text and then blue.
+- New target (EXPERIMENTAL, NOT TESTED ON THE DEVICE): Adafruit Qualia ESP32-S3 with the 2.1" round display TL021WVC02 (480x480, CST826 touch,
+  PCA9554A port expander). Own build (`esp32s3qualia`, option `-DUHR4_BOARD_QUALIA`), display type `TL021_480`; pins, timings and start-up
+  sequence according to Adafruit's documents. Backlight only on/off (brightness by darkening the pixels); the buttons UP/DOWN on the expander
+  count like the button. `buildAll.bat`, `flashESP`, `flashAll`, `checkClocks` and `publish_*.ps1` know the board; `flashESP` recognizes a
+  factory-new Qualia (Adafruit id 239A) and explains how to enter download mode (hold BOOT0, press reset).
 - 480x480: touching the display shows the page with WiFi and IP address for 5 seconds.
 - 480x480: brightness is controlled via the PWM register of the port expander ("Backlight PWM", on by default); the test
   button in the brightness settings works as on the other clocks.

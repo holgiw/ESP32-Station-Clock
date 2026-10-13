@@ -110,7 +110,7 @@
     // entries and restarts; from 30 s full factory reset.
 
     void checkButton() {
-        if (digitalRead(BUTTON1) == HIGH || digitalRead(BOOT_BUTTON) == LOW) {
+        if (digitalRead(BUTTON1) == HIGH || digitalRead(BOOT_BUTTON) == LOW || extraButtonDown()) {
 
             const unsigned long WIFI_RESET_HOLD = 2 * WAIT_10s;
             const unsigned long FACTORY_RESET_HOLD = 3 * WAIT_10s;
@@ -118,7 +118,7 @@
             int shownStage = 0;   // 0 = WLAN-Anzeige, 1 = WLAN-Countdown, 2 = Werksreset-Countdown
                                   // 0 = WiFi info, 1 = WiFi countdown, 2 = factory reset countdown
             int shownSecs = -1;
-            DEBUG_PRINTLN(String("[BUTTON] Pressed (") + (digitalRead(BUTTON1) == HIGH ? "button" : "boot button") + ")");
+            DEBUG_PRINTLN(String("[BUTTON] Pressed (") + (digitalRead(BUTTON1) == HIGH ? "button" : (digitalRead(BOOT_BUTTON) == LOW ? "boot button" : "extra button")) + ")");
 
             clearTFT();
 
@@ -130,7 +130,7 @@
             // Blockierender Loop während Button gedrückt
             // Blocking loop while button is pressed
 
-            while (digitalRead(BUTTON1) == HIGH || digitalRead(BOOT_BUTTON) == LOW) {
+            while (digitalRead(BUTTON1) == HIGH || digitalRead(BOOT_BUTTON) == LOW || extraButtonDown()) {
                 unsigned long held = millis() - pressStart;
 
                 if (held >= FACTORY_RESET_HOLD) {
@@ -208,6 +208,8 @@
         }
     }
 
+#if BOARD_RGB_PANEL
+
 #if BOARD_WAVESHARE_S3_LCD4
 
     // Touch (GT911 am I2C 15/7, nach dem Reset auf 0x14 oder 0x5D) direkt per Wire lesen - LovyanGFX' Touch_GT911 meldete
@@ -239,14 +241,48 @@
     }
 
 
+    // Waehrend die Beruehrung abgefragt wird, sucht lcd4TouchPressed() den Touch-Chip alle 2 s, bis er antwortet. Waveshare: GT911,
+    // Status in 0x814E (Bit 7 = Daten bereit, Bits 0-3 = Anzahl Punkte), danach quittieren.
+    // While touches are polled, lcd4TouchPressed() searches the touch chip every 2 s until it answers. Waveshare: GT911, status
+    // in 0x814E (bit 7 = data ready, bits 0-3 = number of points), acknowledged afterwards.
+
+    bool lcd4TouchPressed() {
+        static unsigned long lastProbe = 0;
+        if (!gt911Addr) {
+            if (millis() - lastProbe < 2000) return false;
+            lastProbe = millis();
+            for (uint8_t a : { (uint8_t)0x14, (uint8_t)0x5D }) {
+                Wire.beginTransmission(a);
+                if (Wire.endTransmission() == 0) { gt911Addr = a; break; }
+            }
+            if (gt911Addr) DEBUG_PRINTLN("[TOUCH] GT911 found at 0x" + String(gt911Addr, HEX));
+            return false;
+        }
+
+        uint8_t status = 0;
+        if (!gt911Read(0x814E, &status, 1) || !(status & 0x80)) return false;
+        gt911Write(0x814E, 0);
+        return (status & 0x0F) != 0;
+    }
+
+    void lcd4TouchDone() { gt911Write(0x814E, 0); }
+
+#else
+
+    void lcd4TouchDone() {} // Qualia: lcd4TouchPressed() meldet jede Beruehrung nur einmal / reports every touch only once
+
+#endif
+
     // Beruehrung des Displays: wie ein kurzer Tastendruck die WLAN-Anzeige (Name, IP-Adresse) fuer 5 Sekunden zeigen,
-    // dann zurueck zur Uhr. Der Touch-Chip wird alle 2 s gesucht, bis er antwortet; abgefragt wird alle 25 ms.
+    // dann zurueck zur Uhr. Abgefragt wird alle 25 ms; der Touch-Chip je Board in lcd4TouchPressed() (Waveshare: system_utils.h,
+    // Qualia: lgfx_qualia.h).
 
     // Touching the display: like a short button press show the WiFi info (name, IP address) for 5 seconds, then back to
-    // the clock. The touch chip is searched every 2 s until it answers; it is polled every 25 ms.
+    // the clock. Polled every 25 ms; the touch chip per board in lcd4TouchPressed() (Waveshare: system_utils.h, Qualia:
+    // lgfx_qualia.h).
 
     void checkTouch() {
-        static unsigned long lastPoll = 0, lastProbe = 0, lastReinit = 0, lastExpander = 0;
+        static unsigned long lastPoll = 0, lastReinit = 0, lastExpander = 0;
 
         // Beeper aus und Beleuchtung wieder setzen, ein Register alle 300 ms (siehe lcd4ExpanderRefresh())
         // Buzzer off and set the backlight again, one register every 300 ms (see lcd4ExpanderRefresh())
@@ -271,21 +307,7 @@
         if (millis() - lastPoll < 25) return;
         lastPoll = millis();
 
-        if (!gt911Addr) {
-            if (millis() - lastProbe < 2000) return;
-            lastProbe = millis();
-            for (uint8_t a : { (uint8_t)0x14, (uint8_t)0x5D }) {
-                Wire.beginTransmission(a);
-                if (Wire.endTransmission() == 0) { gt911Addr = a; break; }
-            }
-            if (gt911Addr) DEBUG_PRINTLN("[TOUCH] GT911 found at 0x" + String(gt911Addr, HEX));
-            return;
-        }
-
-        uint8_t status = 0;
-        if (!gt911Read(0x814E, &status, 1) || !(status & 0x80)) return;
-        gt911Write(0x814E, 0);
-        if ((status & 0x0F) == 0) return;
+        if (!lcd4TouchPressed()) return;
 
         DEBUG_PRINTLN("[TOUCH] Touch - showing the WiFi info for 5 s");
         clearTFT();
@@ -295,7 +317,7 @@
             if (backgroundWorkAllowed()) webserver.handleClient();
             delay(10);
         }
-        gt911Write(0x814E, 0);
+        lcd4TouchDone();
         firstRun = true; // Zeiger springen sofort auf die aktuelle Zeit / the hands snap to the current time
     }
 

@@ -173,7 +173,7 @@ protected:
     // One device for BOTH displays: CS is switched manually (setCS1()/setCS2() in display.h), hence
     // pin_cs = -1. Five panel drivers, chosen by the display type via selectPanel() BEFORE tft.init() (setup()).
 
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
 
     // Waveshare ESP32-S3-Touch-LCD-4 (V2/V3): ST7701 ueber RGB-Bus. Pins, Timings und Startfolge stammen aus dem
     // Demo-Code von Waveshare (ESP32-S3-Touch-LCD-4_democode_V2.zip) und dem Treibertest tools/lcd4_test. Auf dem
@@ -190,6 +190,8 @@ protected:
 #include <lgfx/v1/platforms/esp32s3/Bus_RGB.hpp>
 #include <esp_lcd_panel_ops.h>
 #include <esp_lcd_panel_rgb.h>
+
+#if BOARD_WAVESHARE_S3_LCD4
 
     // Port-Expander der V3: Waveshare-Chip CH32V003 (nicht TCA9554) mit eigenen Registern: Richtung (1 = Ausgang),
     // Ausgang, PWM-Helligkeit der Beleuchtung (1..247). EXIO5 ist der Beeper (high = an).
@@ -212,6 +214,13 @@ constexpr uint8_t LCD4_BACKLIGHT_PWM = 10;
 constexpr uint8_t LCD4_EXIO_BL_EN = 1, LCD4_EXIO_LCD_RST = 2;     // Beleuchtung an/aus, LCD-Reset
 constexpr uint8_t LCD4_EXIO_TP_RST = 0, LCD4_EXIO_SD_CS = 3;      // Touch-Reset (hier nur HIGH), SD-Chip-Select
 constexpr int LCD4_PIN_SPI_SCK = 2, LCD4_PIN_SPI_SDA = 1;         // 3-Draht-SPI zum ST7701 (CS = CS_1) / 3-wire SPI to the ST7701
+
+#endif
+
+// Zeitaufteilung der Bilder fuer /api/lcdstats ([0] Teilbild, [1] volles Bild: Anzahl, Vorbereitung, Zwischenbild, Zeiger, Senden in us)
+// Frame time split for /api/lcdstats ([0] partial frame, [1] full frame: count, preparation, composite, hands, send in us)
+inline volatile uint32_t lcd4Prof[2][5] = {};
+inline volatile uint32_t lcd4ProfPixels = 0;
 
     // Pixeltakt des RGB-Busses: 12 MHz = 42 Bilder/s. Das Nachfuellen der Bounce-Puffer aus dem PSRAM schafft bei den
     // 16 MHz des Waveshare-Demos (32 MB/s) nur knapp - bei jeder weiteren Speicherlast fehlten Zeilen und das Bild rollte.
@@ -236,6 +245,8 @@ constexpr int LCD4_BOUNCE_LINES = 16;
     // switches to a fixed colour then (lcd4StaticOn), hence 0; the value stays for tuning.
 
 constexpr uint32_t LCD4_FLASH_PAUSE_MS = 0;
+
+#if BOARD_WAVESHARE_S3_LCD4
 
     // ST7701-Startfolge als Liste: Befehl, Anzahl Daten (Bit 7 = danach 120 ms warten), Daten; Ende mit Anzahl 0xFF.
     // ST7701 start-up sequence as a list: command, number of data bytes (bit 7 = wait 120 ms afterwards), data; the
@@ -349,10 +360,6 @@ inline void lcd4BuzzerOff() {
     // calls this only every 300 ms. Catches a disturbance or a short voltage dip.
     // (a read changes the registers, see above).
 
-// Zeitaufteilung der Bilder fuer /api/lcdstats ([0] Teilbild, [1] volles Bild: Anzahl, Vorbereitung, Zwischenbild, Zeiger, Senden in us)
-// Frame time split for /api/lcdstats ([0] partial frame, [1] full frame: count, preparation, composite, hands, send in us)
-inline volatile uint32_t lcd4Prof[2][5] = {};
-inline volatile uint32_t lcd4ProfPixels = 0;
 
 inline volatile uint8_t lcd4BacklightPwm = LCD4_BACKLIGHT_PWM; // aktueller PWM-Wert (Register 0x05) / current PWM value (register 0x05)
 
@@ -419,6 +426,12 @@ inline void lcd4PanelInit() {
     }
     digitalWrite(CS_1, HIGH);
 }
+
+#else
+
+#include "lgfx_qualia.h" // Adafruit Qualia: Startfolge, Expander, Touch
+
+#endif
 
     // RGB-Bus ueber den ESP-IDF-Treiber (esp_lcd) im Bounce-Betrieb ohne eigenen Bildspeicher des Treibers: Das Bild liegt
     // in einem eigenen Speicher im PSRAM (LovyanGFX zeichnet dorthin), der DMA liest aus zwei kleinen Puffern im internen RAM,
@@ -711,6 +724,7 @@ public:
             auto cfg = _bus_rgb.config();
             cfg.panel = &_panel_rgb;
 
+#if BOARD_WAVESHARE_S3_LCD4
             // Datenleitungen B0..B4, G0..G5, R0..R4 (RGB565)
             // Data lines B0..B4, G0..G5, R0..R4 (RGB565)
 
@@ -732,6 +746,30 @@ public:
             cfg.pclk_active_neg = 0;
             cfg.pclk_idle_high = 0;
             cfg.de_idle_high = 0;
+#else
+
+            // Adafruit Qualia (Variante adafruit_qualia_s3_rgb666): B1..B5, G0..G5, R1..R5 in der Reihenfolge B0..B4, G0..G5, R0..R4
+            // Adafruit Qualia (variant adafruit_qualia_s3_rgb666): B1..B5, G0..G5, R1..R5 in the order B0..B4, G0..G5, R0..R4
+
+            static const int8_t pins[16] = { 40, 39, 38, 0, 45, 48, 47, 21, 14, 13, 12, 11, 10, 9, 46, 3 };
+            for (int i = 0; i < 16; i++) cfg.pin_data[i] = pins[i];
+            cfg.pin_henable = 2; // DE
+            cfg.pin_vsync = 42;
+            cfg.pin_hsync = 41;
+            cfg.pin_pclk = 1;
+            cfg.freq_write = LCD4_PCLK_HZ;
+            cfg.hsync_polarity = 1;
+            cfg.hsync_front_porch = 40;
+            cfg.hsync_pulse_width = 20;
+            cfg.hsync_back_porch = 40;
+            cfg.vsync_polarity = 1;
+            cfg.vsync_front_porch = 40;
+            cfg.vsync_pulse_width = 10;
+            cfg.vsync_back_porch = 40;
+            cfg.pclk_active_neg = 0;
+            cfg.pclk_idle_high = 0;
+            cfg.de_idle_high = 0;
+#endif
             _bus_rgb.config(cfg);
             _panel_rgb.setBus(&_bus_rgb);
         }
@@ -878,7 +916,7 @@ public:
     }
 };
 
-#endif // BOARD_WAVESHARE_S3_LCD4
+#endif // BOARD_RGB_PANEL
 
 
     // Beleuchtung per PWM setzen (0-255): ESP32-S3-Touch-LCD-4 ueber den Port-Expander, sonst ledcWrite() am
@@ -888,9 +926,17 @@ public:
     // backlight pin.
 
 inline void backlightWrite(uint8_t level) {
-#if BOARD_WAVESHARE_S3_LCD4
+#if BOARD_RGB_PANEL
     lcd4SetBacklight(level);
 #else
     ledcWrite(TFT_Backlight, level);
 #endif
 }
+
+
+    // Weitere Taster ausser BUTTON1/BOOT_BUTTON (Qualia: UP/DOWN am Port-Expander); sonst nie gedrueckt
+    // Further buttons besides BUTTON1/BOOT_BUTTON (Qualia: UP/DOWN on the port expander); otherwise never pressed
+
+#if !BOARD_QUALIA
+inline bool extraButtonDown() { return false; }
+#endif
