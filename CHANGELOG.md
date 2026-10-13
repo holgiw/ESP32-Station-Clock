@@ -20,8 +20,11 @@
   Build und wird nicht nach dem Displaytyp gefragt. publish_builds.ps1 und publish_s3_update.ps1 veröffentlichen auch
   `uhr4-esp32s3lcd4` bzw. `uhr4-s3lcd4`.
 
+- Zifferblatt-Designer: Knopf „Schärfen“ (Unschärfemaske) mit einstellbarer Stärke (10 bis 300 %); schärft das ganze Zifferblatt, ist mehrfach anwendbar und mit „Rückgängig“ zurückzunehmen.
+
 ### Geändert
 - Zeigersatz „Sekundenfeld“ (Satz 3): Die Nabe des Sekundenzeigers ist noch einmal halbiert.
+- ESP32-S3-Touch-LCD-4: Der Sekundenzeiger wird in doppelter Auflösung gehalten und mit Kantenglättung auf halbe Größe gedreht (Deckung aus 2 × 2 Unterpixeln); hochgerechnete Zeiger wirken dadurch weniger pixelig.
 - `flashESP.bat` lässt nach dem Flashen die COM-Schnittstelle frei (kein serieller Monitor mehr); den Monitor gibt es mit
   `clocksetup.ps1 -Flash -Monitor`.
 - Eine ganz neu geflashte Uhr startet mit der Helligkeit „dunkel“ (Min. Helligkeit) 75 statt 100 bzw. 5; Updates ändern
@@ -455,8 +458,11 @@
   asked for the display type. publish_builds.ps1 and publish_s3_update.ps1 also publish `uhr4-esp32s3lcd4` and
   `uhr4-s3lcd4`.
 
+- Clock face designer: "Sharpen" button (unsharp mask) with adjustable strength (10 to 300 %); sharpens the whole clock face, can be applied repeatedly and undone with "Undo".
+
 ### Changed
 - Hand set "seconds subdial" (set 3): the hub of the second hand is halved once more.
+- ESP32-S3-Touch-LCD-4: the second hand is held in double resolution and rotated with anti-aliasing at half size (coverage from 2 × 2 sub-pixels); scaled-up hands look less pixelated.
 - `flashESP.bat` leaves the COM port free after flashing (no serial monitor any more); the monitor is available with
   `clocksetup.ps1 -Flash -Monitor`.
 - A completely freshly flashed clock starts with the "dark" brightness (min. brightness) 75 instead of 100 or 5;

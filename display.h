@@ -2495,6 +2495,104 @@
     }
 
 
+#if BOARD_WAVESHARE_S3_LCD4
+
+    // 480x480: Der Sekundenzeiger liegt als Sprite in doppelter Aufloesung vor (SECOND_HAND_SS) und wird mit Zoom 0,5 und
+    // Kantenglaettung gezeichnet: Die Kante bekommt so Zwischenstufen (Deckung aus 2 x 2 Unterpixeln), auch wenn die
+    // Zeigerdatei klein war und hochgerechnet wurde. Beim Vergroessern folgt die Kante der interpolierten Deckung statt
+    // den Stufen der Datei. Das Sprite ist auf den sichtbaren Bereich zugeschnitten - das spart Rechenzeit.
+
+    // 480x480: The second hand is a sprite in double resolution (SECOND_HAND_SS) and is drawn with zoom 0.5 and
+    // anti-aliasing: the edge gets intermediate steps (coverage from 2 x 2 sub-pixels), even if the hand file was
+    // small and was scaled up. When enlarging, the edge follows the interpolated coverage instead of the steps of
+    // the file. The sprite is cropped to the visible area - this saves computing time.
+
+    const int SECOND_HAND_SS = 2;
+    bool secondHandSS = false;   // Sprite in doppelter Aufloesung vorhanden / double resolution sprite present
+    int secondHandBuiltW = 0;    // secondHandWidth beim Aufbau / secondHandWidth when built
+
+    bool buildSecondHandSS(const uint16_t* pix) {
+        const int W = HAND_WIDTH, H = HAND_HEIGHT, SS = SECOND_HAND_SS;
+        int c0 = W, c1 = -1, r0 = H, r1 = -1;
+        for (int y = 0; y < H; y++) {
+            for (int x = 0; x < W; x++) {
+                uint16_t v = pix[y * W + x];
+                if (v == 0xFFFF || v == TRANSPARENT_COLOR) continue;
+                if (x < c0) c0 = x;
+                if (x > c1) c1 = x;
+                if (y < r0) r0 = y;
+                if (y > r1) r1 = y;
+            }
+        }
+        if (c1 < 0) return false;
+        c0 = max(0, c0 - 1); c1 = min(W - 1, c1 + 1); r0 = max(0, r0 - 1); r1 = min(H - 1, r1 + 1);
+        const int cw = c1 - c0 + 1, ch = r1 - r0 + 1, dw = cw * SS, dh = ch * SS;
+        if (dw > 400) return false; // rowBuffer reicht nicht / rowBuffer would be too small
+        secondHandSprite.deleteSprite();
+        if (!createSprite16(secondHandSprite, dw, dh)) return false;
+
+        // Drehpunkt in Dateikoordinaten wie beim normalen Sprite (mittiger Zuschnitt, siehe pushHandRowCentered()),
+        // dann auf das zugeschnittene, vergroesserte Sprite umgerechnet (Pixelmitte bei +0,5)
+        // Pivot in file coordinates as for the normal sprite (centre crop, see pushHandRowCentered()), then converted
+        // to the cropped, enlarged sprite (pixel centre at +0.5)
+
+        const int sw = min(secondHandWidth, W);
+        const int pivotCol = (sw < W ? (W - sw) / 2 : 0) + sw / 2;
+        secondHandSprite.setPivot(((pivotCol - c0) + 0.5f) * SS - 0.5f, ((HAND_PIVOT_Y - r0) + 0.5f) * SS - 0.5f);
+
+        for (int Y = 0; Y < dh; Y++) {
+            const float sy = (Y + 0.5f) / SS - 0.5f + r0;
+            const int y0 = (int)floorf(sy);
+            const float fy = sy - y0;
+            for (int X = 0; X < dw; X++) {
+                const float sx = (X + 0.5f) / SS - 0.5f + c0;
+                const int x0 = (int)floorf(sx);
+                const float fx = sx - x0;
+                float a = 0.0f, r = 0.0f, g = 0.0f, bl = 0.0f;
+                for (int j = 0; j < 2; j++) {
+                    for (int i = 0; i < 2; i++) {
+                        const int xx = x0 + i, yy = y0 + j;
+                        if (xx < 0 || xx >= W || yy < 0 || yy >= H) continue;
+                        const uint16_t v = pix[yy * W + xx];
+                        if (v == 0xFFFF || v == TRANSPARENT_COLOR) continue;
+                        const float w = (i ? fx : 1.0f - fx) * (j ? fy : 1.0f - fy);
+                        a += w;
+                        r += w * ((v >> 11) & 31);
+                        g += w * ((v >> 5) & 63);
+                        bl += w * (v & 31);
+                    }
+                }
+                uint16_t px = TRANSPARENT_COLOR;
+                if (a >= 0.5f) {
+                    px = (uint16_t)(((int)(r / a + 0.5f) << 11) | ((int)(g / a + 0.5f) << 5) | (int)(bl / a + 0.5f));
+                    if (px == 0xFFFF) px = 0xFFDF;
+                    else if (px == TRANSPARENT_COLOR) px = 0x0100;
+                    px = setPixelBrightness(px);
+                }
+                rowBuffer[X] = px;
+            }
+            secondHandSprite.pushImage(0, Y, dw, 1, rowBuffer);
+        }
+        secondHandSS = true;
+        secondHandBuiltW = secondHandWidth;
+        return true;
+    }
+
+#endif
+
+    // Zeichnet den Sekundenzeiger gedreht und kantengeglaettet ins Ziel (480x480: aus dem Sprite in doppelter Aufloesung).
+    // Draws the second hand rotated and anti-aliased into the target (480x480: from the double resolution sprite).
+
+    void drawSecondHand(LGFX_Sprite* dst, float angle) {
+#if BOARD_WAVESHARE_S3_LCD4
+        if (secondHandSS) {
+            secondHandSprite.pushRotateZoomWithAA(dst, angle, 1.0f / SECOND_HAND_SS, 1.0f / SECOND_HAND_SS, TRANSPARENT_COLOR);
+            return;
+        }
+#endif
+        secondHandSprite.pushRotatedWithAA(dst, angle, TRANSPARENT_COLOR);
+    }
+
     void loadHandSprites() {
 
         // Zwischenbilder ungueltig machen: sie enthalten die alten Zeigerbilder
@@ -2530,6 +2628,15 @@
 
         for (auto& h : hands) {
             loadHandOrDefault(setId, h.label, pix);
+#if BOARD_WAVESHARE_S3_LCD4
+            if (h.sprite == &secondHandSprite) {
+                if (buildSecondHandSS(pix)) continue;
+                secondHandSS = false;
+                secondHandSprite.deleteSprite();
+                createSprite16(secondHandSprite, secondHandWidth, HAND_HEIGHT);
+                secondHandSprite.setPivot(secondHandWidth / 2, HAND_PIVOT_Y);
+            }
+#endif
 
             // Zeilenweise, damit der mittige Zuschnitt fuer schmalere Sprites greift
             // (siehe pushHandRowCentered()); jede Zeile wird komplett geschrieben.
@@ -2834,7 +2941,7 @@
     // Extends the rectangle by the area of a hand drawn via pushRotated*() - same mapping as LovyanGFX (pixel
     // centre +0.5, rotation matrix), plus 2 px margin for the anti-aliased edges.
 
-    void addRotatedSpriteBounds(LGFX_Sprite& sprite, float angleDeg, int32_t& x0, int32_t& y0, int32_t& x1, int32_t& y1) {
+    void addRotatedSpriteBounds(LGFX_Sprite& sprite, float angleDeg, int32_t& x0, int32_t& y0, int32_t& x1, int32_t& y1, float scale = 1.0f) {
         const float rad = fmodf(angleDeg, 360.0f) * (float)DEG_TO_RAD;
         const float c = cosf(rad), s = sinf(rad);
         const float dstX = backgroundSprite.getPivotX() + 0.5f;
@@ -2846,8 +2953,8 @@
         const float cornersY[4] = { 0.0f, 0.0f, h, h };
         for (int i = 0; i < 4; i++) {
             float u = cornersX[i] - srcX, v = cornersY[i] - srcY;
-            float x = dstX + u * c - v * s;
-            float y = dstY + u * s + v * c;
+            float x = dstX + (u * c - v * s) * scale;
+            float y = dstY + (u * s + v * c) * scale;
             x0 = min(x0, (int32_t)floorf(x) - 2);
             y0 = min(y0, (int32_t)floorf(y) - 2);
             x1 = max(x1, (int32_t)ceilf(x) + 2);
@@ -3563,8 +3670,13 @@
 #endif
         if (partial) {
             if (subdial) backgroundSprite.setPivot(subX, subY);
-            addRotatedSpriteBounds(secondHandSprite, lastFrame.secondAngle, px0, py0, px1, py1);
-            addRotatedSpriteBounds(secondHandSprite, secAngle, px0, py0, px1, py1);
+#if BOARD_WAVESHARE_S3_LCD4
+            const float secScale = secondHandSS ? 1.0f / SECOND_HAND_SS : 1.0f;
+#else
+            const float secScale = 1.0f;
+#endif
+            addRotatedSpriteBounds(secondHandSprite, lastFrame.secondAngle, px0, py0, px1, py1, secScale);
+            addRotatedSpriteBounds(secondHandSprite, secAngle, px0, py0, px1, py1, secScale);
             backgroundSprite.setPivot(centreX, centreY);
             if (drawHub) {
                 px0 = min(px0, (int32_t)(hubX - hubSize - 2));
@@ -3627,7 +3739,7 @@
         if (!compositeOk) loadClockFace(rotation);
         if (plan.secUnder) {
             backgroundSprite.setPivot(subX, subY);
-            secondHandSprite.pushRotatedWithAA(&backgroundSprite, secAngle, TRANSPARENT_COLOR);
+            drawSecondHand(&backgroundSprite, secAngle);
             backgroundSprite.setPivot(centreX, centreY);
         }
         if (!compositeOk || subdial) {
@@ -3648,7 +3760,7 @@
             // method as for the hour/minute hands (buildHandComposite()),
             // computes in fixed point and is therefore fast enough for every frame.
 
-            secondHandSprite.pushRotatedWithAA(&backgroundSprite, secAngle, TRANSPARENT_COLOR);
+            drawSecondHand(&backgroundSprite, secAngle);
             if (subdial) backgroundSprite.setPivot(centreX, centreY);
         }
 
@@ -7642,7 +7754,11 @@
         if (handSpritesCreated &&
             hourHandSprite.width() == newHourWidth &&
             minuteHandSprite.width() == newMinuteWidth &&
+#if BOARD_WAVESHARE_S3_LCD4
+            (secondHandSS ? secondHandBuiltW : secondHandSprite.width()) == newSecondWidth) {
+#else
             secondHandSprite.width() == newSecondWidth) {
+#endif
             return;
         }
 

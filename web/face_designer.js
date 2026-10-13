@@ -21,6 +21,8 @@
       pickBtn: 'Aufnehmen', pickTip: 'Farbe aus einem Pixel aufnehmen - auch per Rechtsklick in die Zeichenfl\u00e4che oder Klick in die Vorschau',
       color: 'Farbe', std: 'Standardfarben', pal: 'Palette', free: 'Beliebige Farbe', hexHint: '#RRGGBB oder RGB565 (0xFFFF)',
       edit: 'Bearbeiten', undo: 'R\u00fcckg\u00e4ngig', redo: 'Wiederholen', clear: 'Alles f\u00fcllen',
+      sharp: 'Sch\u00e4rfen', sharpAmt: 'St\u00e4rke:',
+      sharpTip: 'Sch\u00e4rft das ganze Zifferblatt (Unsch\u00e4rfemaske); mit R\u00fcckg\u00e4ngig zur\u00fcck, mehrfach anwendbar',
       import: 'Bild laden', cover: 'Fl\u00e4che f\u00fcllen', contain: 'ganz zeigen',
       gen: 'Zifferblatt erzeugen', bg: 'Hintergrund', ring: 'Rand', hourM: 'Stundenstriche', minM: 'Minutenstriche',
       num: 'Ziffern', nSize: 'Ziffern-Gr\u00f6\u00dfe', nDist: 'Ziffern Abstand', nFont: 'Schrift',
@@ -87,6 +89,8 @@
       pickBtn: 'Pick', pickTip: 'Pick the colour of a pixel - also by right-clicking the drawing area or clicking the preview',
       color: 'Colour', std: 'Standard colours', pal: 'Palette', free: 'Any colour', hexHint: '#RRGGBB or RGB565 (0xFFFF)',
       edit: 'Edit', undo: 'Undo', redo: 'Redo', clear: 'Fill all',
+      sharp: 'Sharpen', sharpAmt: 'Strength:',
+      sharpTip: 'Sharpens the whole clock face (unsharp mask); undo brings it back, can be applied repeatedly',
       import: 'Load image', cover: 'fill area', contain: 'show whole',
       gen: 'Generate clock face', bg: 'Background', ring: 'Rim', hourM: 'Hour marks', minM: 'Minute marks',
       num: 'Numerals', nSize: 'Numeral size', nDist: 'Numeral distance', nFont: 'Font',
@@ -673,6 +677,51 @@
     if (confirm(t('confirmClear'))) commit(new Uint16Array(N).fill(color));
   };
 
+  // Schaerfen (Unscharfmaske): Zifferblatt-Zeilen mit einem 3x3-Gauss-Weichzeichner mischen, die Differenz mit der
+  // Staerke addieren, je Farbkanal auf 0-255 begrenzen und wieder auf RGB565 runden. Flaechen ohne Kanten bleiben
+  // exakt gleich. Der Streifen bleibt unveraendert.
+
+  // Sharpen (unsharp mask): blend the clock face rows with a 3x3 Gaussian blur, add the difference times the
+  // strength, clamp each colour channel to 0-255 and round back to RGB565. Areas without edges stay exactly the
+  // same. The strip stays unchanged.
+
+  function sharpen(buf, amount) {
+    var out = buf.slice(), y0 = OY, y1 = OY + FH - 1;
+    var R = new Float32Array(N), G = new Float32Array(N), B = new Float32Array(N);
+    for (var i = 0; i < N; i++) {
+      var v = buf[i];
+      R[i] = ((v >> 11) & 31) * 255 / 31; G[i] = ((v >> 5) & 63) * 255 / 63; B[i] = (v & 31) * 255 / 31;
+    }
+    function blur(P, x, y) {
+      var s = 0, k = 0;
+      for (var dy = -1; dy <= 1; dy++) {
+        var yy = Math.min(y1, Math.max(y0, y + dy));
+        for (var dx = -1; dx <= 1; dx++) {
+          var xx = Math.min(W - 1, Math.max(0, x + dx)), w = (2 - Math.abs(dx)) * (2 - Math.abs(dy));
+          s += P[yy * W + xx] * w; k += w;
+        }
+      }
+      return s / k;
+    }
+    function clamp(x) { return x < 0 ? 0 : (x > 255 ? 255 : x); }
+    for (var y = y0; y <= y1; y++) {
+      for (var x = 0; x < W; x++) {
+        var j = y * W;
+        j += x;
+        out[j] = rgb565(clamp(R[j] + amount * (R[j] - blur(R, x, y))),
+                        clamp(G[j] + amount * (G[j] - blur(G, x, y))),
+                        clamp(B[j] + amount * (B[j] - blur(B, x, y))));
+      }
+    }
+    return out;
+  }
+  $('sharpBtn').onclick = function () {
+    var a = parseFloat($('sharpAmt').value);
+    if (!(a >= 10)) a = 100;
+    if (a > 300) a = 300;
+    commit(sharpen(pix, a / 100));
+  };
+
   // Bild laden: 16-Bit-BMPs selbst dekodieren (nicht jeder Browser zeigt sie an),
   // alles andere ueber <img>; Transparenz liegt ueber dem bisherigen Zifferblatt.
 
@@ -1234,6 +1283,7 @@
   $('pickBtn').textContent = t('pickBtn'); $('pickBtn').title = t('pickTip');
   $('color').title = t('free'); $('colorHex').placeholder = '#RRGGBB'; $('colorHex').title = t('hexHint');
   $('undoBtn').textContent = t('undo'); $('redoBtn').textContent = t('redo'); $('clearBtn').textContent = t('clear');
+  $('tSharp').textContent = t('sharpAmt'); $('sharpBtn').textContent = t('sharp'); $('sharpBtn').title = t('sharpTip');
   $('genBtn').textContent = t('genBtn');
   $('txtSize').value = Math.round(W * 0.09);
   $('logoW').value = Math.round(W * 0.3);
