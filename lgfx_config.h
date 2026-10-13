@@ -468,6 +468,11 @@ constexpr int LCD4_TILE_H = 32;
     // Text und Fortschritt (aus line2, zum Beispiel "45 %") in die Kachel: oben eine Textzeile, unten ein 4 Punkte hoher Balken
     // Text and progress (from line2, for example "45 %") into the tile: a text line on top, a bar 4 dots high at the bottom
 
+// Textstreifen leeren: die feste Farbe bleibt ohne jeden Text / clear the text banner: the fixed colour stays without any text
+inline void lcd4StaticTextClear() {
+    if (lcd4BannerBuf) lcd4Banner.fillSprite(0);
+}
+
 inline void lcd4StaticText(const String& line1, const String& line2, bool rot180 = false) {
     if (!lcd4BannerBuf) {
         lcd4Banner.setPsram(false);
@@ -617,6 +622,15 @@ inline void lcd4FlashPause() {
     if (LCD4_FLASH_PAUSE_MS) delay(LCD4_FLASH_PAUSE_MS);
 }
 
+// Schreibzugriffe auf den Flash (Speichern von Zifferblatt/Zeiger, Hochladen): ruhige blaue Flaeche ohne Text, bis 1,5 s nach
+// dem letzten Aufruf - statt eines flackernden Bildes. Jeder Aufruf verlaengert die Zeit.
+// Writes to the flash (saving a clock face/hand, uploading): a calm blue area without text until 1.5 s after the last call -
+// instead of a flickering image. Every call extends the time.
+inline void lcd4BusyBegin() {
+    lcd4StaticTextClear();
+    lcd4FlashPause();
+}
+
 class Bus_EspLcdRGB : public lgfx::Bus_RGB {
 public:
     bool init(void) override {
@@ -739,6 +753,7 @@ inline void lcd4FlashPause() {}
 inline void lcd4Resync() {}
 inline void lcd4StaticText(const String&, const String&, bool = false) {}
 inline void lcd4StaticBegin() {}
+inline void lcd4BusyBegin() {}
 inline void lcd4ExpanderRefresh() {}
 inline void lcd4SetBacklight(uint8_t) {}
 

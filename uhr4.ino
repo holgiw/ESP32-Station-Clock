@@ -62,6 +62,7 @@
                            // LovyanGFX: bus, panel, init sequence (pins from config.h)
 #include <Preferences.h>
 #include <LittleFS.h>
+#include "fs_cache.h"   // Zwischenspeicher fuer LittleFS-Abfragen, ersetzt LittleFS per Makro / cache for LittleFS queries, replaces LittleFS via macro
 #include <set>
 #include "nvs_flash.h"
 #include <DNSServer.h>
@@ -1251,6 +1252,15 @@ void setup() {
     // Main loop
 
     void loop() {
+
+#if BOARD_WAVESHARE_S3_LCD4
+        // Erst ab hier (setup() ist fertig): Speichern/Hochladen zeigt eine ruhige Flaeche statt Flackern. Waehrend setup()
+        // schriebe das Anlegen der Startdateien sonst die Anzeige des Starts weg.
+        // Only from here on (setup() is done): saving/uploading shows a calm area instead of flicker. During setup()
+        // creating the starter files would otherwise overwrite the start display.
+
+        if (!fsWriteHook) fsWriteHook = [](const char*) { lcd4BusyBegin(); };
+#endif
 
         // Firmware-Update ueber WLAN (nur ESP32-S3): waehrend es laeuft, pausiert alles andere
         // Firmware update over WiFi (ESP32-S3 only): while it runs, everything else pauses

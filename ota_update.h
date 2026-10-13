@@ -29,12 +29,10 @@
 #if HAS_OTA
 #if BOARD_WAVESHARE_S3_LCD4
 
-        // Nur "Update" fuer 1 Sekunde, danach eine ruhige blaue Flaeche (Text und Fortschritt flackerten bei den
-        // Flash-Schreibzugriffen); line2 wird hier nicht angezeigt
-        // Only "Update" for 1 second, then a calm blue area (text and progress flickered during the flash writes);
-        // line2 is not shown here
+        // Kein Text, nur die ruhige blaue Flaeche (Text und Fortschritt flackerten bei den Flash-Schreibzugriffen)
+        // No text, only the calm blue area (text and progress flickered during the flash writes)
 
-        lcd4StaticText("Update", "", tftRotation1 == 2);
+        lcd4StaticTextClear();
         lcd4StaticBegin();
 #else
         showButtonMessage(TFT_CYAN, "Firmware Update", line2, "", TFT_DARKGREY);

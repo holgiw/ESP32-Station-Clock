@@ -22,6 +22,8 @@
       color: 'Farbe', std: 'Standardfarben', pal: 'Palette', free: 'Beliebige Farbe', hexHint: '#RRGGBB oder RGB565 (0xFFFF)',
       edit: 'Bearbeiten', undo: 'R\u00fcckg\u00e4ngig', redo: 'Wiederholen', clear: 'Alles f\u00fcllen',
       sharp: 'Sch\u00e4rfen', sharpAmt: 'St\u00e4rke:',
+      shift: 'Verschieben:',
+      shiftTip: 'Verschiebt das ganze Zifferblatt um 1 Pixel (mit Umschalt um 10); frei werdende R\u00e4nder bekommen die gew\u00e4hlte Farbe',
       sharpTip: 'Sch\u00e4rft das ganze Zifferblatt (Unsch\u00e4rfemaske); mit R\u00fcckg\u00e4ngig zur\u00fcck, mehrfach anwendbar',
       import: 'Bild laden', cover: 'Fl\u00e4che f\u00fcllen', contain: 'ganz zeigen',
       gen: 'Zifferblatt erzeugen', bg: 'Hintergrund', ring: 'Rand', hourM: 'Stundenstriche', minM: 'Minutenstriche',
@@ -90,6 +92,8 @@
       color: 'Colour', std: 'Standard colours', pal: 'Palette', free: 'Any colour', hexHint: '#RRGGBB or RGB565 (0xFFFF)',
       edit: 'Edit', undo: 'Undo', redo: 'Redo', clear: 'Fill all',
       sharp: 'Sharpen', sharpAmt: 'Strength:',
+      shift: 'Shift:',
+      shiftTip: 'Shifts the whole clock face by 1 pixel (10 with Shift); edges that become free get the selected colour',
       sharpTip: 'Sharpens the whole clock face (unsharp mask); undo brings it back, can be applied repeatedly',
       import: 'Load image', cover: 'fill area', contain: 'show whole',
       gen: 'Generate clock face', bg: 'Background', ring: 'Rim', hourM: 'Hour marks', minM: 'Minute marks',
@@ -715,6 +719,22 @@
     }
     return out;
   }
+  // Verschieben: das Zifferblatt (ohne Streifen) um dx/dy Pixel, frei werdende Raender in der gewaehlten Farbe
+  // Shift: the clock face (without the strip) by dx/dy pixels, edges that become free in the selected colour
+
+  function shiftImage(buf, dx, dy, fill) {
+    var out = buf.slice();
+    for (var y = 0; y < FH; y++) {
+      for (var x = 0; x < W; x++) {
+        var sx = x - dx, sy = y - dy;
+        out[(OY + y) * W + x] = (sx >= 0 && sx < W && sy >= 0 && sy < FH) ? buf[(OY + sy) * W + sx] : fill;
+      }
+    }
+    return out;
+  }
+  [['shL', -1, 0], ['shR', 1, 0], ['shU', 0, -1], ['shD', 0, 1]].forEach(function (b) {
+    $(b[0]).onclick = function (e) { var n = e.shiftKey ? 10 : 1; commit(shiftImage(pix, b[1] * n, b[2] * n, color)); };
+  });
   $('sharpBtn').onclick = function () {
     var a = parseFloat($('sharpAmt').value);
     if (!(a >= 10)) a = 100;
@@ -1284,6 +1304,8 @@
   $('color').title = t('free'); $('colorHex').placeholder = '#RRGGBB'; $('colorHex').title = t('hexHint');
   $('undoBtn').textContent = t('undo'); $('redoBtn').textContent = t('redo'); $('clearBtn').textContent = t('clear');
   $('tSharp').textContent = t('sharpAmt'); $('sharpBtn').textContent = t('sharp'); $('sharpBtn').title = t('sharpTip');
+  $('tShift').textContent = t('shift');
+  ['shL', 'shU', 'shD', 'shR'].forEach(function (id) { $(id).title = t('shiftTip'); });
   $('genBtn').textContent = t('genBtn');
   $('txtSize').value = Math.round(W * 0.09);
   $('logoW').value = Math.round(W * 0.3);

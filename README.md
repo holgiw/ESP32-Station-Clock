@@ -84,7 +84,7 @@ Eine Firmware je ESP. Den Displaytyp wählt man im Tab „Uhr Einstellungen“ o
 - Weitere Wege ins WLAN: WPS oder der Einrichtungs-Access-Point (SSID `clock123`, Passwort `clocksetup`). Den Access Point startet die Uhr nur beim Start, wenn kein WLAN gespeichert oder keins erreichbar ist (mit RTC oder mit Zeit aus einem offenen WLAN nur ohne gespeichertes WLAN). Bricht das WLAN im Betrieb weg, bleibt die Uhr im WLAN-Modus und versucht es mit „WLAN neu verbinden“ erneut – zuerst 5 Minuten nach dem Start, danach stündlich, im AP-Modus nur stündlich – der AP bleibt dabei erreichbar.
 - Änderungen an den WLAN-Netzen (hinzufügen, überschreiben, wechseln, löschen) gelten sofort. Die Weboberfläche unterscheidet nicht zwischen Zugriff aus dem Heimnetz und von außen – die Uhr deshalb nicht per Port-Weiterleitung oder DMZ aus dem Internet erreichbar machen.
 - NTP, bei Ausfall DCF77. Sobald die Uhr eine gültige Uhrzeit hat, ist sie selbst NTP-Server für andere Geräte im Netz.
-- Uhrzeit aus offenen WLANs (Tab „NTP Zeitzone“, ab Werk an): Kann sich die Uhr beim Start mit keinem gespeicherten WLAN verbinden (außer Reichweite oder kein Zugang, z. B. falsches Passwort) und ist keine RTC eingebaut, verbindet sich die Uhr kurz mit bis zu sechs offenen WLANs (gleiche Namen nur einmal, je 15 s, insgesamt höchstens 60 s) und holt die Zeit per NTP oder aus dem `Date:`-Kopf einer HTTP- bzw. HTTPS-Antwort, auch der Anmeldeseite eines Hotspots. Danach trennt sie wieder und läuft mit dieser Zeit normal weiter, ohne WPS und Access Point. Jeder Schritt steht im Log (Logging einschalten). Das sind fremde Netze – nur nutzen, wenn erlaubt.
+- Uhrzeit aus offenen WLANs (Kästchen im Tab „Uhr Einstellungen“, ab Werk an): Kann sich die Uhr beim Start mit keinem gespeicherten WLAN verbinden (außer Reichweite oder kein Zugang, z. B. falsches Passwort) und ist keine RTC eingebaut, verbindet sich die Uhr kurz mit bis zu sechs offenen WLANs (gleiche Namen nur einmal, je 15 s, insgesamt höchstens 60 s) und holt die Zeit per NTP oder aus dem `Date:`-Kopf einer HTTP- bzw. HTTPS-Antwort, auch der Anmeldeseite eines Hotspots. Danach trennt sie wieder und läuft mit dieser Zeit normal weiter, ohne WPS und Access Point. Jeder Schritt steht im Log (Logging einschalten). Das sind fremde Netze – nur nutzen, wenn erlaubt.
 - Bis zu 15 eigene NTP-Server. Ohne eigenen Server nutzt die Uhr `pool.ntp.org` und `ptbtime1.ptb.de`; sind die eigenen Server nicht erreichbar, versucht sie diese beiden zuletzt.
 
 ---
@@ -93,7 +93,7 @@ Eine Firmware je ESP. Den Displaytyp wählt man im Tab „Uhr Einstellungen“ o
 
 - Einstellungen in Tabs mit dunklem Design: WLAN, Uhr Einstellungen, Helligkeit, NTP Zeitzone, Status, Log und Rocrail (bei aktivierter Anbindung). Weitere Seiten über die Navigation: Vorschau, Uhren Sets, Zifferblatt, Zeiger, Dateimanager, DCF77, Sicherung, Werkseinstellungen.
 - Deutsch und Englisch.
-- Zifferblätter und Zeigersätze kommen aus den Designern, über den Dateimanager (Hochladen) und über die Sicherung auf die Uhr. Die Zeigersatz-Seite hat kein Upload-Formular, beide Seiten keinen GitHub-Download.
+- Zifferblätter und Zeigersätze kommen aus den Designern, über die Sicherung und über das Upload-Formular der Seite „Zifferblatt“ auf die Uhr; es nimmt neben `face_*.bmp` auch Zeigersatz-Dateien (`hand_set<N>_hour/minute/second.bmp`) an. Die Seite „Zeiger“ und der Dateimanager haben kein Upload-Formular. Einen Download von GitHub gibt es nur für die Firmware (Seite „Sicherung“, ESP32-S3 und ESP32-S3-Touch-LCD-4), nicht für Zifferblätter oder Zeiger.
 - Rocrail-Tab für die Modellzeit (Abschnitt 11).
 
 ---
@@ -260,7 +260,7 @@ One firmware per ESP. The display type is chosen in the "Clock Setup" tab or whe
 - Other ways into WiFi: WPS or the setup access point (SSID `clock123`, password `clocksetup`). The clock only starts the access point at boot when no WiFi is stored or none is reachable (with an RTC or with a time from an open WiFi only without a stored WiFi). If WiFi drops during operation, the clock stays in WiFi mode and retries with "Reconnect WiFi" – first 5 minutes after boot, then hourly, in AP mode only hourly – the AP stays reachable meanwhile.
 - Changes to the WiFi networks (add, overwrite, switch, delete) apply immediately. The web interface does not distinguish between access from the home network and from outside – so do not expose the clock to the internet via a port forward or DMZ.
 - NTP, with DCF77 as a fallback. Once the clock has a valid time, it is an NTP server for other devices on the network.
-- Time from open WiFis ("NTP Timezone" tab, on by default): if the clock cannot connect to any stored WiFi at boot (out of range or no access, e.g. a wrong password) and there is no RTC, the clock briefly connects to up to six open WiFis (each name once, 15 s each, 60 s in total at most) and gets the time via NTP or from the `Date:` header of an HTTP or HTTPS reply, including the login page of a hotspot. Then it disconnects again and runs normally with that time, without WPS and access point. Every step is in the log (enable logging). These are networks of others – only use it if allowed.
+- Time from open WiFis (checkbox in the "Clock Setup" tab, on by default): if the clock cannot connect to any stored WiFi at boot (out of range or no access, e.g. a wrong password) and there is no RTC, the clock briefly connects to up to six open WiFis (each name once, 15 s each, 60 s in total at most) and gets the time via NTP or from the `Date:` header of an HTTP or HTTPS reply, including the login page of a hotspot. Then it disconnects again and runs normally with that time, without WPS and access point. Every step is in the log (enable logging). These are networks of others – only use it if allowed.
 - Up to 15 custom NTP servers. Without a custom server the clock uses `pool.ntp.org` and `ptbtime1.ptb.de`; if the custom servers are unreachable, it tries these two last.
 
 ---
@@ -269,7 +269,7 @@ One firmware per ESP. The display type is chosen in the "Clock Setup" tab or whe
 
 - Settings in tabs with a dark theme: WiFi Settings, Clock Setup, Brightness, NTP Timezone, Status, Log and Rocrail (when the connection is enabled). Further pages via the navigation bar: Preview, Presets, Clock Face, Hand Set, File Manager, DCF77, Backup, Factory Reset.
 - German and English.
-- Clock faces and hand sets come from the designers, via the file manager (upload) and via the backup. The hand set page has no upload form, neither page a GitHub download.
+- Clock faces and hand sets come onto the clock from the designers, via the backup and via the upload form of the "Clock Face" page; besides `face_*.bmp` it also accepts hand set files (`hand_set<N>_hour/minute/second.bmp`). The "Hand Set" page and the file manager have no upload form. A download from GitHub exists only for the firmware ("Backup" page, ESP32-S3 and ESP32-S3-Touch-LCD-4), not for clock faces or hands.
 - Rocrail tab for the model time (section 11).
 
 ---

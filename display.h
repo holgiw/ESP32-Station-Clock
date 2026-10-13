@@ -1666,14 +1666,12 @@
 
     void completeHandSets() {
         std::set<String> ids;
-        File root = LittleFS.open("/");
-        for (File f = root.openNextFile(); f; f = root.openNextFile()) {
-            String n = f.name();
-            if (f.isDirectory() || !n.startsWith("hand_set") || !n.endsWith(".bmp")) continue;
+        for (const FsEntry& f : LittleFS.rootEntries()) {
+            const String& n = f.name;
+            if (f.dir || !n.startsWith("hand_set") || !n.endsWith(".bmp")) continue;
             int us = n.indexOf('_', 8);
             if (us > 8) ids.insert(n.substring(8, us));
         }
-        root.close();
         for (const String& id : ids) completeHandSet(id);
     }
 

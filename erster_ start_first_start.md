@@ -80,7 +80,7 @@ Soll die Uhr komplett neu eingerichtet werden (z.B. Umzug, neuer Router), gibt e
 3. Im Abschnitt **„neue Zifferblätter hochladen"** über **„Datei auswählen"** eine oder mehrere `.bmp`-Dateien wählen (Mehrfachauswahl möglich) und auf **„Hochladen BMP"** klicken.
 4. Nach dem Upload erscheint das neue Zifferblatt in der Übersicht als Miniaturbild und kann dort per Klick als aktives Zifferblatt ausgewählt werden.
 
-**Tipp:** Passende Zifferblätter (und Zeigersätze) lassen sich auch direkt als ZIP-Datei aus dem GitHub-Repository des Projekts herunterladen und anschließend über dasselbe Formular hochladen – der Link dazu steht oben auf derselben Seite.
+**Tipp:** Passende Zifferblätter (und Zeigersätze) lassen sich auch direkt als ZIP-Datei aus dem GitHub-Repository des Projekts herunterladen und anschließend über dasselbe Formular hochladen. Die Seite verlinkt sie nicht; sie liegen im Ordner `graphic` des Repositories.
 
 **Hinweis:** Zifferblätter z. B. im Layout der Deutschen Bahn oder anderer Gesellschaften lassen sich selbst hochladen oder im Zifferblatt-Designer (Link **„Designer"** unter jedem Zifferblatt) erstellen.
 
@@ -98,7 +98,7 @@ Soll die Uhr komplett neu eingerichtet werden (z.B. Umzug, neuer Router), gibt e
      - `hand_set<N>_second.bmp` (Sekundenzeiger)
      - Beispiel für Satz 1: `hand_set1_hour.bmp`, `hand_set1_minute.bmp`, `hand_set1_second.bmp`
    - Der Drehpunkt (Pivot) liegt in der halben Breite und im neuen Format bei Zeile 120 (160er: 80) – so kann der Zeiger bis zum Displayrand reichen. Im alten Format 21 x 131 liegt er bei Spalte 10 / Zeile 100 (160er: 6 / 66). Am einfachsten gestaltest du Zeiger mit dem Zeiger-Designer (Link **„Designer"** unter jedem Zeigersatz), der den Drehpunkt automatisch berücksichtigt.
-3. Im Abschnitt **„Neuen Zeigersatz hochladen"** die Dateien auswählen und auf **„Set hochladen"** klicken.
+3. Die Dateien über das Formular **„neue Zifferblätter hochladen"** auf der Seite **„Zifferblatt"** hochladen – es nimmt auch Zeigersatz-Dateien (`hand_set<N>_…`) an. Die Seite „Zeiger" hat kein Upload-Formular. Alternativ den Zeigersatz im Zeiger-Designer erstellen.
 4. Der neue Zeigersatz erscheint danach in der Übersicht und kann dort ausgewählt werden.
 
 **Hinweis:** Zeiger z. B. der Deutschen Bahn oder anderer Gesellschaften lassen sich selbst hochladen oder im Zeiger-Designer erstellen.
@@ -149,7 +149,7 @@ Im Abschnitt **„Presets sichern / wiederherstellen"**:
 | Nur WLAN zurücksetzen (Sets bleiben) | Web-UI → „Werkseinstellungen" → „Gespeicherte Netzwerke zurücksetzen" |
 | Displaytyp ändern | Web-UI → Tab „Uhr Einstellungen" → „Display-Typ" |
 | Zifferblatt hochladen | Nav → „Zifferblatt" → `face_*.bmp`, 240×240, RGB565 |
-| Zeigersatz hochladen | Nav → „Zeiger" → `hand_set<N>_hour/minute/second.bmp`, 25×151 (alt: 21×131), RGB565 |
+| Zeigersatz hochladen | Nav → „Zifferblatt" (Upload-Formular) oder „Zeiger" → Zeiger-Designer → `hand_set<N>_hour/minute/second.bmp`, 25×151 (alt: 21×131), RGB565 |
 | Uhren-Set anlegen | Nav → „Uhren Sets" → „Erzeuge ein Set aus den aktuellen Einstellungen" |
 | Alles sichern (auch auf andere Uhr) | Nav → „Sicherung" |
 | Nur die Uhrzeit vom PC setzen | `setTime.bat` / `bash setTime.sh` |
@@ -237,7 +237,7 @@ If the clock needs to be set up from scratch (e.g. a move, a new router), there 
 3. In the **"Upload New Clock Face"** section, choose one or more `.bmp` files (multiple selection is supported) and click **"Upload BMP"**.
 4. After uploading, the new face appears in the overview as a thumbnail and can be selected there as the active clock face by clicking it.
 
-**Tip:** Matching clock faces (and hand sets) can also be downloaded directly as a ZIP file from the project's GitHub repository and then uploaded via the same form - the link for this is at the top of the same page.
+**Tip:** Matching clock faces (and hand sets) can also be downloaded directly as a ZIP file from the project's GitHub repository and then uploaded via the same form. The page does not link to them; they are in the folder `graphic` of the repository.
 
 **Note:** Clock faces, e.g. in the layout of Deutsche Bahn or other companies, can be uploaded yourself or created in the clock face designer (**"Designer"** link below each clock face).
 
@@ -255,7 +255,7 @@ If the clock needs to be set up from scratch (e.g. a move, a new router), there 
      - `hand_set<N>_second.bmp` (second hand)
      - Example for set 1: `hand_set1_hour.bmp`, `hand_set1_minute.bmp`, `hand_set1_second.bmp`
    - The pivot sits at half the width and, in the new format, at row 120 (160 display: 80) - so the hand can reach the display edge. In the old 21 x 131 format it sits at column 10 / row 100 (160 display: 6 / 66). The easiest way is the hand designer (**"Designer"** link below each hand set), which takes the pivot into account automatically.
-3. In the **"Upload New Hand Set"** section, choose the files and click **"Upload to Set"**.
+3. Upload the files with the form **"Upload New Clock Face"** on the **"Clock Face"** page - it also accepts hand set files (`hand_set<N>_...`). The "Hand Set" page has no upload form. Alternatively create the hand set in the hand designer.
 4. The new hand set then appears in the overview and can be selected there.
 
 **Note:** Hands, e.g. those of Deutsche Bahn or other companies, can be uploaded yourself or created in the hand designer.
@@ -301,7 +301,7 @@ Each preset in the list has its own links/buttons for renaming and deleting (wit
 | Reset WiFi only (presets kept) | Web UI → "Factory Reset" → "Reset Saved Networks" |
 | Change the display type | Web UI → "Clock Setup" tab → "Display type" |
 | Upload a clock face | Nav → "Clock Face" → `face_*.bmp`, 240×240, RGB565 |
-| Upload a hand set | Nav → "Hand Set" → `hand_set<N>_hour/minute/second.bmp`, 25×151 (old: 21×131), RGB565 |
+| Upload a hand set | Nav → "Clock Face" (upload form) or "Hand Set" → hand designer → `hand_set<N>_hour/minute/second.bmp`, 25×151 (old: 21×131), RGB565 |
 | Create a preset | Nav → "Presets" → "Create Preset from Current Settings" |
 | Back up everything (also for another clock) | Nav → "Backup" |
 | Only set the time from the PC | `setTime.bat` / `bash setTime.sh` |

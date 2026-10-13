@@ -1042,9 +1042,16 @@
 
     String selectWithoutReloadScript(const String& message, const String& activeText) {
         String html = "<div id='selMsg' class='msg ok' style='display:none' data-act='" + activeText + "'>" + message + "</div>";
+
+        // Das aktive Feld bekommt einen roten Rahmen (Klasse isact, als Umriss - verschiebt nichts), der mit der Auswahl wandert
+        // The active item gets a red frame (class isact, as an outline - moves nothing) that follows the selection
+
+        html += "<style>.isact{outline:3px solid #e2001a;outline-offset:2px;border-radius:6px;}</style>";
         html += "<script>function pickItem(a,cls){fetch(a.href+'&ajax=1').then(function(r){if(!r.ok)throw 0;"
                 "var m=document.getElementById('selMsg');"
                 "document.querySelectorAll('.'+cls).forEach(function(e){e.textContent='';});"
+                "document.querySelectorAll('.isact').forEach(function(e){e.classList.remove('isact');});"
+                "a.parentNode.classList.add('isact');"
                 "a.parentNode.querySelector('.'+cls).textContent=' ('+m.dataset.act+')';"
                 "m.style.display='block';clearTimeout(window.selT);window.selT=setTimeout(function(){m.style.display='none';},4000);"
                 "}).catch(function(){location.href=a.href;});return false;}</script>";
@@ -3371,12 +3378,7 @@
                 time_t modified;
             };
             std::vector<FileEntry> entries;
-            File root = LittleFS.open("/");
-            File file = root.openNextFile();
-            while (file) {
-                entries.push_back({ String(file.name()), file.size(), file.getLastWrite() });
-                file = root.openNextFile();
-            }
+            for (const FsEntry& fe : LittleFS.rootEntries()) entries.push_back({ fe.name, fe.size, fe.modified });
             for (size_t i = 1; i < entries.size(); i++) { // Einfuegesortieren wie naturalSortNames()
                                                           // insertion sort like naturalSortNames()
                 FileEntry current = entries[i];
@@ -4868,19 +4870,15 @@
             // The default clock face is never missing from the list (e.g. recreated after deletion)
 
             ensureDefaultFace();
-            File root = LittleFS.open("/");
-            File file = root.openNextFile();
 
             // Erst alle passenden Zifferblatt-Dateinamen sammeln und sortieren
             // First collect and sort all matching clock-face filenames
 
             std::vector<String> faceNames;
-            while (file) {
-                String name = file.name();
-                if (!file.isDirectory() && name.startsWith("face_") && name.endsWith(".bmp")) {
-                    faceNames.push_back(name);
+            for (const FsEntry& fe : LittleFS.rootEntries()) {
+                if (!fe.dir && fe.name.startsWith("face_") && fe.name.endsWith(".bmp")) {
+                    faceNames.push_back(fe.name);
                 }
-                file = root.openNextFile();
             }
             naturalSortNames(faceNames);
 
@@ -4914,7 +4912,7 @@
 
                 String safeName = escapeHtmlText(name);
                 String safeShortName = escapeHtmlText(shortName);
-                chunk += "<div style='text-align:center;width:100px;'>";
+                chunk += String("<div") + (isActive ? " class='isact'" : "") + " style='text-align:center;width:100px;'>";
                 chunk += "<a href='/setbackground?file=" + safeShortName + "' onclick='return pickItem(this,\"fa\")'>";
                 chunk += faceThumb("/facepreview?file=" + safeName + "&v=" + fileVersion("/" + name), safeName);
                 chunk += "</a><br>" + escapeHtmlText(displayName) + "<span class='fa'>" + String(isActive ? " (" + translate("active") + ")" : "") + "</span>";
@@ -6702,12 +6700,10 @@
             std::map<int, String> numericSets;
             std::vector<String> otherSets;
 
-            File root = LittleFS.open("/");
-            File file = root.openNextFile();
-            while (file) {
-                String name = file.name();
+            for (const FsEntry& fe : LittleFS.rootEntries()) {
+                const String& name = fe.name;
 
-                if (!file.isDirectory() && name.startsWith("hand_set") && name.endsWith(".bmp")) {
+                if (!fe.dir && name.startsWith("hand_set") && name.endsWith(".bmp")) {
                     int start = 8;
                     int end = name.indexOf('_', start);
                     if (end > start) {
@@ -6723,7 +6719,6 @@
                         }
                     }
                 }
-                file = root.openNextFile();
             }
 
             // Jeden gefundenen Zeigersatz SOFORT senden statt zu sammeln - so liegt
@@ -6743,7 +6738,7 @@
                 // filesystem paths, which need the real name.
 
                 String safeSetId = escapeHtmlText(setId);
-                chunk = "<div style='text-align:center;border:1px solid #ccc;border-radius:6px;padding:8px;'>";
+                chunk = String("<div") + (setId == activeSet ? " class='isact'" : "") + " style='text-align:center;border:1px solid #ccc;border-radius:6px;padding:8px;'>";
                 chunk += "<a href='/sethandset?set=" + safeSetId + "' onclick='return pickItem(this,\"ha\")'>";
 
                 // Fehlende Zeiger eines Satzes zeigt die Uhr aus dem Standardsatz 0 - hier ebenso
@@ -6989,11 +6984,9 @@
             std::vector<String> otherSets;
             std::set<String> seenSetIds;
             ensureDefaultHands();
-            File root = LittleFS.open("/");
-            File file = root.openNextFile();
-            while (file) {
-                String name = file.name();
-                if (!file.isDirectory() && name.startsWith("hand_set") && name.endsWith(".bmp")) {
+            for (const FsEntry& fe : LittleFS.rootEntries()) {
+                const String& name = fe.name;
+                if (!fe.dir && name.startsWith("hand_set") && name.endsWith(".bmp")) {
                     int end = name.indexOf('_', 8);
                     if (end > 8) {
                         String setIdStr = jsSafe(name.substring(8, end));
@@ -7007,7 +7000,6 @@
                         }
                     }
                 }
-                file = root.openNextFile();
             }
 
             String setsJs;
@@ -7974,6 +7966,7 @@
         else if (upload.status == UPLOAD_FILE_WRITE) {
             if (uploadSuccess && uploadFile) {
                 uploadFile.write(upload.buf, upload.currentSize);
+                lcd4FlashPause(); // 480x480: ruhige Flaeche waehrend des Schreibens / calm area while writing
             }
         }
         else if (upload.status == UPLOAD_FILE_END) {

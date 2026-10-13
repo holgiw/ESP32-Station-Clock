@@ -737,12 +737,12 @@
             return;
         }
 
-        size_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
+        size_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytesFresh();
         if (freeSpace < 15 * 1024) { // Weniger als 15 KB frei
                                      // Less than 15 KB free
             deleteAllLogFiles(); // Alle Logdateien löschen, um Platz zu schaffen
                                  // Delete all log files to free up space
-            freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
+            freeSpace = LittleFS.totalBytes() - LittleFS.usedBytesFresh();
             if (freeSpace < 10 * 1024) {
                 if (loggingEnabled) Serial.println("[LOG] Not enough free space on LittleFS. Log will not be written");
                 return;

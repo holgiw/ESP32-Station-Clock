@@ -7,8 +7,8 @@
 ### Hinzugefügt
 - Neues Ziel (EXPERIMENTELL): Waveshare ESP32-S3-Touch-LCD-4 (480x480, ST7701 am RGB-Bus, Touch GT911, Port-Expander CH32V003). Eigener
   Build (`esp32s3lcd4`, PSRAM octal). Das Bild kommt aus einem eigenen Puffer im PSRAM; nach Flash-Schreibzugriffen
-  (Firmware-Update, Backup einspielen) wird das Panel neu synchronisiert. Während Update und Backup-Wiederherstellung zeigt
-  das Display kurz den Text und danach eine ruhige blaue Fläche.
+  (Firmware-Update, Backup einspielen) wird das Panel neu synchronisiert. Beim Firmware-Update zeigt das
+  Display nur eine ruhige blaue Fläche (kein Text), bei der Backup-Wiederherstellung kurz den Text und danach Blau.
 - 480x480: Berührung des Displays zeigt 5 Sekunden lang die Seite mit WLAN und IP-Adresse.
 - 480x480: Die Helligkeit wird über das PWM-Register des Port-Expanders geregelt („Hintergrundbeleuchtung PWM“, ab
   Werk an); der Test-Knopf in den Helligkeitseinstellungen funktioniert wie bei den anderen Uhren.
@@ -21,6 +21,10 @@
   `uhr4-esp32s3lcd4` bzw. `uhr4-s3lcd4`.
 
 - Zifferblatt-Designer: Knopf „Schärfen“ (Unschärfemaske) mit einstellbarer Stärke (10 bis 300 %); schärft das ganze Zifferblatt, ist mehrfach anwendbar und mit „Rückgängig“ zurückzunehmen.
+- Zifferblatt-Designer: Pfeilknöpfe „Verschieben“ schieben das ganze Zifferblatt um 1 Pixel (mit Umschalt um 10) nach links, rechts, oben oder unten; frei werdende Ränder erhalten die gewählte Farbe. Rückgängig ist möglich.
+- Zifferblatt- und Zeigersatz-Seite: Das aktive Zifferblatt bzw. der aktive Zeigersatz hat einen roten Rahmen; er wandert mit der Auswahl.
+- Abfragen des Dateisystems werden zwischengespeichert (`fs_cache.h`: freier Platz, Existenz von Dateien, Dateiliste): Seiten wie „Zeiger“ (vorher 1,7 s) und der Zeigerdesigner (0,5 s) laden in etwa 0,5 s bzw. 0,1 s, der Sekundenzeiger steht beim Seitenaufruf kürzer still. Nach jedem Schreibzugriff werden die Werte neu gelesen.
+- 480x480: Beim Speichern eines Zifferblatts oder Zeigers und beim Hochladen zeigt das Display eine ruhige blaue Fläche statt zu flackern (bis 1,5 s nach dem letzten Schreibzugriff).
 
 ### Geändert
 - Zeigersatz „Sekundenfeld“ (Satz 3): Die Nabe des Sekundenzeigers ist noch einmal halbiert.
@@ -443,8 +447,8 @@
 ### Added
 - New target (EXPERIMENTAL): Waveshare ESP32-S3-Touch-LCD-4 (480x480, ST7701 on the RGB bus, GT911 touch, CH32V003 port expander). Own
   build (`esp32s3lcd4`, octal PSRAM). The image comes from its own buffer in PSRAM; after flash writes (firmware update,
-  restoring a backup) the panel is re-synchronised. During update and backup restore the display briefly shows the text,
-  then a calm blue area.
+  restoring a backup) the panel is re-synchronised. During a firmware update the display shows only a calm blue
+  area (no text), during a backup restore briefly the text and then blue.
 - 480x480: touching the display shows the page with WiFi and IP address for 5 seconds.
 - 480x480: brightness is controlled via the PWM register of the port expander ("Backlight PWM", on by default); the test
   button in the brightness settings works as on the other clocks.
@@ -459,6 +463,10 @@
   `uhr4-s3lcd4`.
 
 - Clock face designer: "Sharpen" button (unsharp mask) with adjustable strength (10 to 300 %); sharpens the whole clock face, can be applied repeatedly and undone with "Undo".
+- Clock face designer: arrow buttons "Shift" move the whole clock face by 1 pixel (10 with Shift) left, right, up or down; edges that become free get the selected colour. Undo is possible.
+- Clock face and hand set pages: the active clock face or hand set has a red frame; it follows the selection.
+- File system queries are cached (`fs_cache.h`: free space, existence of files, file list): pages such as "Hand Set" (before 1.7 s) and the hand designer (0.5 s) load in about 0.5 s and 0.1 s, the second hand stands still for a shorter time when a page is opened. After every write access the values are read again.
+- 480x480: when saving a clock face or hand and when uploading, the display shows a calm blue area instead of flickering (until 1.5 s after the last write access).
 
 ### Changed
 - Hand set "seconds subdial" (set 3): the hub of the second hand is halved once more.
