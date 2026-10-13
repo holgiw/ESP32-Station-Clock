@@ -43,7 +43,7 @@
       <button type="button" class="tb" id="copyBtn">OK</button>
     </div>
 
-    <div class="card">
+    <div class="card edcard">
       <div style="text-align:center">
         <button type="button" class="tb" id="zoomOut">&minus;</button>
         <span id="zoomInfo" style="display:inline-block;min-width:70px"></span>
@@ -55,6 +55,13 @@
     </div>
 
     <div class="card stick" style="max-width:300px">
+      <div class="pvbox">
+        <h3 id="tPreview"></h3>
+        <canvas id="pv"></canvas>
+        <label><input type="checkbox" id="live" checked><span id="tLive"></span></label>
+        <small id="modeInfo"></small>
+        <select id="bgSel"></select>
+      </div>
       <h3 id="tGen"></h3>
       <div class="grid2">
         <span id="tLen"></span><input type="number" class="num" id="gLen" min="1">
@@ -66,11 +73,6 @@
         <span id="tDiscPos"></span><input type="number" class="num" id="gDiscPos" min="0">
       </div>
       <button type="button" id="genBtn"></button>
-      <h3 id="tPreview"></h3>
-      <canvas id="pv"></canvas>
-      <label><input type="checkbox" id="live" checked><span id="tLive"></span></label>
-      <small id="modeInfo"></small>
-      <select id="bgSel"></select>
     </div>
   </div>
 </div>

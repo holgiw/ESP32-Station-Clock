@@ -1,4 +1,4 @@
-.hd{max-width:1150px;margin:0 auto;text-align:left}
+.hd{max-width:none;margin:0 auto;text-align:left}
 .hd .row{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;align-items:flex-start}
 .hd .card{background:var(--panel);border:1px solid var(--panel-border);border-radius:10px;padding:10px 12px}
 .hd h3{margin:4px 0 8px;font-size:1rem}
@@ -15,7 +15,12 @@
 .hd .hex{width:86px;font-family:monospace}
 .hd.stickon .stick{position:sticky;top:var(--hdTop,70px);max-height:calc(100vh - var(--hdTop,70px) - 8px);overflow-y:auto}
 .hd .num{width:72px;padding:6px 4px 6px 8px}
+.hd .card{max-width:none;margin:0}
+.hd .edcard{flex:1 1 300px;min-width:200px}
+.hd .pvbox{position:sticky;top:0;z-index:2;background:var(--panel);padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid var(--panel-border)}
+.hd:not(.stickon) .pvbox{top:var(--hdTop,70px)}
+.hd #pv{width:240px;max-width:100%;height:auto}
 .hd label{white-space:nowrap;display:inline-flex;align-items:center;gap:4px;margin:3px 6px 3px 0}
 .hd .grid2{display:grid;grid-template-columns:auto auto;gap:2px 8px;align-items:center}
-.hd .msg{margin:8px 0;max-width:none}
+.hd .msg{margin:8px 0;max-width:420px}
 .hd small{display:block;margin:4px 0}

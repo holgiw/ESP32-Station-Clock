@@ -477,6 +477,10 @@ void setup() {
         // Buzzer off right away (the expander starts with all outputs high), also starts Wire
 
         lcd4BuzzerOff();
+
+        // Beim Start kurz piepen (500 ms) / beep briefly at start (500 ms)
+
+        lcd4Beep(500);
 #endif
 
         // CS_1 (Display-1-Chip-Select) manuell auf Output/LOW setzen - LovyanGFX

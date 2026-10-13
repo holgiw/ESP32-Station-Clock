@@ -908,6 +908,7 @@
         sig += "|" + String(hubColor);
         sig += "|" + String(hubSize);
         sig += "|" + String(preferences.getBool(PK_SHOW_SECOND_HAND, true) ? 1 : 0);
+        if (TFT_HEIGHT <= CLOCK_HEIGHT) sig += "|" + String(infoOverlayRevision); // Uhrzeit/Datum/Wochentag auf dem Zifferblatt / time/date/weekday on the clock face
         return sig;
     }
 
@@ -4198,6 +4199,10 @@
             // browser scales it smoothed - pixel by pixel the digits would become uneven.
 
             int stripPrevH = (TFT_HEIGHT > CLOCK_HEIGHT) ? previewSize * (TFT_HEIGHT - CLOCK_HEIGHT) / CLOCK_WIDTH : 0;
+            ensureStripSettings();
+            const bool ovPreview = TFT_HEIGHT <= CLOCK_HEIGHT && !lowMemoryFace() && (stripShowTime || stripShowDate || stripShowWeekday);
+            char ovFgHex[8];
+            snprintf(ovFgHex, sizeof(ovFgHex), "%06lx", (unsigned long)(stripFgRgb & 0xFFFFFF));
             String stripCanvas = "";
             if (stripPrevH > 0) {
                 stripCanvas = "<canvas id='liveStrip' width='" + String(TFT_WIDTH) + "' height='" + String(TFT_HEIGHT - CLOCK_HEIGHT) +
@@ -4225,6 +4230,16 @@
                      String(stripPrevH > 0 ? "outline:3px solid #333;" : "") + "'>";
             if (stripBefore) chunk += stripCanvas;
             chunk += "<div style='width:" + String(previewSize) + "px;height:" + String(previewSize) + "px;box-sizing:border-box;" + String(stripPrevH > 0 ? "" : "border:3px solid #333;") + String(displayGeom->round ? "border-radius:50%;" : "") + "background:#fff url(/currentfacebg) center/cover no-repeat;overflow:hidden;position:relative;'>";
+
+            // Uhrzeit, Datum, Wochentag auf dem Zifferblatt (Displays ohne Streifen): eine durchsichtige Ebene unter den Zeigern, die
+            // Uhr liefert nur die Zeilen mit Text (/api/stripimg?text=3)
+            // Time, date, weekday on the clock face (displays without a strip): a transparent layer below the hands, the clock
+            // delivers only the rows with text (/api/stripimg?text=3)
+
+            if (ovPreview) {
+                chunk += "<canvas id='liveOverlay' width='" + String(CLOCK_WIDTH) + "' height='" + String(CLOCK_HEIGHT) +
+                         "' style='position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;'></canvas>";
+            }
 
             // Drehpunkte wie in renderClockFrame(): Stunde/Minute auf ihrem Drehpunkt oder in der Mitte, der Sekundenzeiger
             // auf seinem eigenen (Sekundenfeld) oder dem der anderen, darunter oder darueber je nach Lage
@@ -4308,12 +4323,13 @@
             // once a minute. Each fetch briefly stalls the clock (about 130 ms), hence at most once per second.
 
             chunk += "  var stripCv = document.getElementById('liveStrip');";
+            chunk += "  var ovCv = document.getElementById('liveOverlay'), ovFg = parseInt('" + String(ovFgHex) + "', 16);";
             chunk += "  var stripSec = " + String(stripShowsSeconds() ? "true" : "false") + ", stripKey = null, stripBusy = false, stripLastAt = 0;";
             chunk += "  function syncStrip(m, s) {";
             chunk += "    var key = stripSec ? m * 60 + s : m;";
-            chunk += "    if (!stripCv || key === stripKey || stripBusy || performance.now() - stripLastAt < 900) return;";
+            chunk += "    if ((!stripCv && !ovCv) || key === stripKey || stripBusy || performance.now() - stripLastAt < 900) return;";
             chunk += "    stripKey = key; stripBusy = true; stripLastAt = performance.now();";
-            chunk += "    setTimeout(function() { loadStrip().then(function() { stripBusy = false; }); }, 200);";
+            chunk += "    setTimeout(function() { (stripCv ? loadStrip : loadOverlay)().then(function() { stripBusy = false; }); }, 200);";
             chunk += "  }";
             chunk += "  function loadStrip() {";
             chunk += "    return fetch('/api/stripimg', {cache:'no-store'}).then(function(r) { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); }).then(function(ab) {";
@@ -4325,6 +4341,27 @@
             chunk += "        id.data[i * 4] = (v >> 11) * 255 / 31; id.data[i * 4 + 1] = ((v >> 5) & 63) * 255 / 63; id.data[i * 4 + 2] = (v & 31) * 255 / 31; id.data[i * 4 + 3] = 255;";
             chunk += "      }";
             chunk += "      ctx.putImageData(id, 0, 0);";
+            chunk += "    }).catch(function() {});";
+            chunk += "  }";
+            // Zeilen mit Text der Uhr (4 Byte Kopf: Anfangszeile, Zeilenzahl; dann RGB565, weisse Schrift auf Schwarz): Helligkeit
+            // = Deckkraft, Farbe aus den Einstellungen
+            // Rows with text from the clock (4-byte header: first row, row count; then RGB565, white text on black): brightness =
+            // opacity, colour from the settings
+            chunk += "  function loadOverlay() {";
+            chunk += "    return fetch('/api/stripimg?text=3', {cache:'no-store'}).then(function(r) { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); }).then(function(ab) {";
+            chunk += "      var b = new Uint8Array(ab), w = ovCv.width;";
+            chunk += "      if (b.length < 4) return;";
+            chunk += "      var y0 = (b[0] << 8) | b[1], rows = (b[2] << 8) | b[3], ctx = ovCv.getContext('2d');";
+            chunk += "      ctx.clearRect(0, 0, w, ovCv.height);";
+            chunk += "      if (!rows || b.length < 4 + rows * w * 2) return;";
+            chunk += "      var id = ctx.createImageData(w, rows), n = w * rows;";
+            chunk += "      for (var i = 0; i < n; i++) {";
+            chunk += "        var v = (b[4 + 2 * i] << 8) | b[5 + 2 * i];";
+            chunk += "        var a = ((v >> 11) * 255 / 31 + ((v >> 5) & 63) * 255 / 63 + (v & 31) * 255 / 31) / 765;";
+            chunk += "        if (a < 0.03) continue;";
+            chunk += "        id.data[i * 4] = (ovFg >> 16) & 255; id.data[i * 4 + 1] = (ovFg >> 8) & 255; id.data[i * 4 + 2] = ovFg & 255; id.data[i * 4 + 3] = Math.round(Math.min(1, a) * 255);";
+            chunk += "      }";
+            chunk += "      ctx.putImageData(id, 0, y0);";
             chunk += "    }).catch(function() {});";
             chunk += "  }";
             chunk += "  var hintEl = document.getElementById('rocrailPreviewHint');";
@@ -4790,7 +4827,9 @@
                      ",\"hands\":" + String(lcd4Prof[k][3] / n) + ",\"send\":" + String(lcd4Prof[k][4] / n) + "}" + (k ? "" : ",");
                 for (int j = 0; j < 5; j++) lcd4Prof[k][j] = 0;
             }
-            r += String(",\"sumPixelsPartial\":") + String(lcd4ProfPixels) + "}}";
+            r += String(",\"sumPixelsPartial\":") + String(lcd4ProfPixels) + ",\"why\":[";
+            for (int j = 0; j < 16; j++) { r += String(j ? "," : "") + String(lcd4Why[j]); if (j < 13) lcd4Why[j] = 0; }
+            r += "],\"beep\":[" + String(lcd4BeepWrites) + "," + String(lcd4BeepAcked) + "]}}";
             lcd4ProfPixels = 0;
             lcd4MaxGapUs = 0;
             webserver.send(200, "application/json", r);
@@ -7146,13 +7185,14 @@
 
             String stripJs = "null";
             ensureStripSettings();
-            if (TFT_HEIGHT > CLOCK_HEIGHT) {
+            {
                 char bgHex[8], fgHex[8];
                 snprintf(bgHex, sizeof(bgHex), "#%06lx", (unsigned long)stripBgRgb);
                 snprintf(fgHex, sizeof(fgHex), "#%06lx", (unsigned long)stripFgRgb);
-                stripJs = "{w:" + String(TFT_WIDTH) + ",h:" + String(TFT_HEIGHT - CLOCK_HEIGHT) + ",bg:'" + String(bgHex) +
+                const bool onFace = TFT_HEIGHT <= CLOCK_HEIGHT; // ohne Streifen: Anzeige auf dem Zifferblatt / without a strip: shown on the clock face
+                stripJs = "{ov:" + String(onFace ? 1 : 0) + ",w:" + String(TFT_WIDTH) + ",h:" + String(onFace ? CLOCK_HEIGHT : TFT_HEIGHT - CLOCK_HEIGHT) + ",bg:'" + String(bgHex) +
                           "',fg:'" + String(fgHex) + "',font:" + String(stripFont) + ",before:" + String(stripBefore ? 1 : 0) +
-                          ",blink:" + String(stripBlink ? 1 : 0) + ",tfmt:" + String(stripTimeFmt) + ",sec:" + String(stripSeconds) + ",dfmt:" + String(stripDateFmt) +
+                          ",blink:" + String(stripBlink ? 1 : 0) + ",tfmt:" + String(stripTimeFmt) + ",sec:" + String(stripSeconds) + ",dfmt:" + String(stripDateFmt) + ",wfmt:" + String(stripWeekdayFmt) +
                           ",vlw:'" + vlwNameJs + "',vt:" + String(stripVlwTimeSize) + ",vd:" + String(stripVlwDateSize) +
                           ",ts:" + String(stripTimeScale) + ",ds:" + String(stripDateScale) +
                           ",st:" + String(stripShowTime ? 1 : 0) + ",sd:" + String(stripShowDate ? 1 : 0) +
@@ -7272,7 +7312,7 @@
                 return (int16_t)min(v, (long)maxValue);
             };
             int stripW = TFT_WIDTH;
-            int stripH = max(0, TFT_HEIGHT - CLOCK_HEIGHT);
+            int stripH = TFT_HEIGHT > CLOCK_HEIGHT ? TFT_HEIGHT - CLOCK_HEIGHT : CLOCK_HEIGHT; // ohne Streifen: Hoehe des Zifferblatts / without a strip: height of the clock face
             ensureStripSettings();
             stripBgRgb = colorArg("bg", stripBgRgb);
             stripFgRgb = colorArg("fg", stripFgRgb);
@@ -7282,6 +7322,7 @@
             }
             if (webserver.hasArg("tfmt")) stripTimeFmt = (uint8_t)constrain(webserver.arg("tfmt").toInt(), 0L, 2L);
             if (webserver.hasArg("sec")) stripSeconds = (uint8_t)constrain(webserver.arg("sec").toInt(), 0L, 2L);
+            if (webserver.hasArg("wfmt")) stripWeekdayFmt = (uint8_t)constrain(webserver.arg("wfmt").toInt(), 0L, 1L);
             if (webserver.hasArg("dfmt")) stripDateFmt = (uint8_t)constrain(webserver.arg("dfmt").toInt(), 0L, (long)STRIP_DATE_FMT_COUNT - 1);
             if (webserver.hasArg("vlw")) stripVlwName = webserver.arg("vlw").substring(0, 40);
             if (webserver.hasArg("vt")) stripVlwTimeSize = (uint8_t)constrain(webserver.arg("vt").toInt(), 8L, 120L);
@@ -7317,7 +7358,9 @@
                 }
             }
             infoStripDirty[0] = infoStripDirty[1] = true;
+            infoOverlayRevision++;
             drawInfoStrips();
+            if (TFT_HEIGHT <= CLOCK_HEIGHT) renderStripPreview(CLOCK_WIDTH, CLOCK_HEIGHT, true); // berechnet die automatischen Hoehen fuers Zifferblatt / computes the automatic heights for the clock face
             setCSIdle();
             webserver.send(200, "application/json", "{\"ok\":true,\"aty\":" + String(stripAutoTimeY) + ",\"ady\":" + String(stripAutoDateY) + ",\"awy\":" + String(stripAutoWeekdayY) + "}");
             });
@@ -7331,7 +7374,7 @@
         // the hands of the designer preview without live time.
 
         webserver.on("/api/stripimg", HTTP_GET, []() {
-            int w = TFT_WIDTH, h = TFT_HEIGHT - CLOCK_HEIGHT;
+            int w = TFT_WIDTH, h = TFT_HEIGHT > CLOCK_HEIGHT ? TFT_HEIGHT - CLOCK_HEIGHT : CLOCK_HEIGHT; // ohne Streifen: Text fuers Zifferblatt / without a strip: text for the clock face
             ensureStripSettings();
             struct tm fixed = timeinfo;
             bool useFixed = webserver.hasArg("h");
@@ -7347,6 +7390,52 @@
             // text=2: only the text, once on black and once on white one after the other - from the difference
             // the designer computes each pixel's opacity, so anti-aliased text lies cleanly over its drawing
 
+            // text=3 (nur Anzeige auf dem Zifferblatt): weisse Schrift auf Schwarz, einmal und nur die Zeilen mit Text -
+            // 4 Byte vorweg (Anfangszeile, Zeilenzahl, je 16 Bit), danach die Zeilen. Der Designer kennt die Schriftfarbe.
+            // Das kurze Bild haelt die Uhr kaum an (voll waeren es 920 KB).
+
+            // text=3 (display on the clock face only): white text on black, once and only the rows with text - 4 bytes
+            // first (first row, row count, 16 bits each), then the rows. The designer knows the text colour. The short
+            // image hardly stalls the clock (in full it would be 920 KB).
+
+            if (webserver.arg("text") == "3" && TFT_HEIGHT <= CLOCK_HEIGHT) {
+                // Positionen aus der Adresse (tx, ty, dx, dy, wx, wy; -1 = automatisch) nur fuer diese Vorschau, die Anzeige der Uhr bleibt
+                // Positions from the address (tx, ty, dx, dy, wx, wy; -1 = automatic) only for this preview, the clock's display stays
+
+                int16_t* const posVars[6] = { &stripTimeX, &stripTimeY, &stripDateX, &stripDateY, &stripWeekdayX, &stripWeekdayY };
+                const char* const posArgs[6] = { "tx", "ty", "dx", "dy", "wx", "wy" };
+                int16_t savedPos[6];
+                for (int i = 0; i < 6; i++) {
+                    savedPos[i] = *posVars[i];
+                    if (webserver.hasArg(posArgs[i])) {
+                        const long v = webserver.arg(posArgs[i]).toInt();
+                        *posVars[i] = v < 0 ? (int16_t)-1 : (int16_t)min(v, (long)max(w, h));
+                    }
+                }
+                const uint32_t savedFg = stripFgRgb;
+                stripFgRgb = 0xFFFFFF;
+                const bool rendered = renderStripPreview(w, h, true, useFixed ? &fixed : nullptr, 0x0000);
+                stripFgRgb = savedFg;
+                for (int i = 0; i < 6; i++) *posVars[i] = savedPos[i];
+                if (!rendered) {
+                    webserver.send(404, "text/plain", "no strip");
+                    return;
+                }
+                int y0 = 0, rows = 0;
+                if (stripPreviewBox[3] >= stripPreviewBox[1]) {
+                    y0 = max(0, (int)stripPreviewBox[1] - 2);
+                    rows = min(h - 1, (int)stripPreviewBox[3] + 2) - y0 + 1;
+                }
+                const size_t bytes = (size_t)rows * w * 2;
+                webserver.setContentLength(4 + bytes);
+                webserver.send(200, "application/octet-stream", "");
+                const uint8_t head[4] = { (uint8_t)(y0 >> 8), (uint8_t)y0, (uint8_t)(rows >> 8), (uint8_t)rows };
+                webserver.sendContent((const char*)head, 4);
+                const char* data = (const char*)infoStripSprite.getBuffer() + (size_t)y0 * w * 2;
+                for (size_t off = 0; off < bytes; off += 4096) webserver.sendContent(data + off, min((size_t)4096, bytes - off));
+                return;
+            }
+
             const bool twoPass = webserver.arg("text") == "2";
             const bool textOnly = twoPass || webserver.arg("text") == "1";
             const struct tm* when = useFixed ? &fixed : nullptr;
@@ -7360,6 +7449,59 @@
             webserver.sendContent((const char*)infoStripSprite.getBuffer(), n);
             if (twoPass && renderStripPreview(w, h, true, when, 0xFFFF)) {
                 webserver.sendContent((const char*)infoStripSprite.getBuffer(), n);
+            }
+            });
+
+        // Zifferblatt-Cache so, wie er zum Display geht (helligkeitsangepasst, mit Uhrzeit/Datum/Wochentag), RGB565
+        // big-endian, CLOCK_WIDTH x CLOCK_HEIGHT - zur Kontrolle der Anzeige auf dem Zifferblatt.
+
+        // Clock face cache as it goes to the display (brightness-adjusted, with time/date/weekday), RGB565
+        // big-endian, CLOCK_WIDTH x CLOCK_HEIGHT - to check the display on the clock face.
+
+#if BOARD_WAVESHARE_S3_LCD4
+
+        // Beeper-Versuch: /api/beeptest?pin=4..7&ms=500&tone=0|1 (nur zur Fehlersuche, aus dem privaten Netz)
+        // Buzzer experiment: /api/beeptest?pin=4..7&ms=500&tone=0|1 (for troubleshooting only, from the private network)
+
+        webserver.on("/api/beeptest", HTTP_GET, []() {
+            if (!isPrivateNetworkIp(webserver.client().remoteIP())) {
+                webserver.send(403, "text/plain", "private network only");
+                return;
+            }
+            const int pin = constrain((int)webserver.arg("pin").toInt(), 4, 7);
+            const int ms = webserver.hasArg("ms") ? constrain((int)webserver.arg("ms").toInt(), 50, 1500) : 500;
+            lcd4BeepPin((uint8_t)pin, (uint16_t)ms, webserver.arg("tone") == "1");
+            webserver.send(200, "text/plain", "ok pin " + String(pin) + (webserver.arg("tone") == "1" ? " tone " : " level ") + String(ms) + " ms");
+            });
+#endif
+
+        // Das zuletzt gezeichnete Bild (backgroundSprite, mit Zeigern), RGB565 big-endian, CLOCK_WIDTH x CLOCK_HEIGHT.
+        // The last drawn frame (backgroundSprite, with hands), RGB565 big-endian, CLOCK_WIDTH x CLOCK_HEIGHT.
+
+        webserver.on("/api/frameimg", HTTP_GET, []() {
+            const uint8_t* buf = (const uint8_t*)backgroundSprite.getBuffer();
+            if (!buf || backgroundSprite.width() != CLOCK_WIDTH || backgroundSprite.height() != CLOCK_HEIGHT) {
+                webserver.send(404, "text/plain", "no frame");
+                return;
+            }
+            const size_t total = (size_t)CLOCK_WIDTH * CLOCK_HEIGHT * 2;
+            webserver.setContentLength(total);
+            webserver.send(200, "application/octet-stream", "");
+            for (size_t off = 0; off < total; off += 4096) {
+                webserver.sendContent((const char*)buf + off, min((size_t)4096, total - off));
+            }
+            });
+
+        webserver.on("/api/faceimg", HTTP_GET, []() {
+            if (prepareClockFaceCache() != 2 || !clockFaceBrightBuffer) {
+                webserver.send(404, "text/plain", "no face cache");
+                return;
+            }
+            const size_t total = (size_t)CLOCK_WIDTH * CLOCK_HEIGHT * 2;
+            webserver.setContentLength(total);
+            webserver.send(200, "application/octet-stream", "");
+            for (size_t off = 0; off < total; off += 4096) {
+                webserver.sendContent((const char*)clockFaceBrightBuffer + off, min((size_t)4096, total - off));
             }
             });
 
@@ -7454,7 +7596,7 @@
 
             html += "<h3>" + translate("Restore Backup") + "</h3>";
             html += "<p>" + translate("Takes over the settings of the backup and adds its presets, clock faces and hand sets - existing ones stay, same-named ones are replaced by the backup. The clock restarts afterwards") + ".</p>";
-            html += "<p><small>" + translate("Display type, rotation, backlight and light sensor of this clock stay unchanged. From a clock with another display type only clock faces, hands, presets and general settings are restored, scaled to this clock - its clock faces must be 240x240") + ". " + translate("This clock") + ": " + String(displayChoiceName(displayType, useBacklight)) + ".</small></p>";
+            html += "<p><small>" + translate("Display type, rotation, backlight and light sensor of this clock stay unchanged. From a clock with another display type only clock faces, hands, presets and general settings are restored, scaled to this clock - its clock faces must be at least 240x240") + ". " + translate("This clock") + ": " + String(displayChoiceName(displayType, useBacklight)) + ".</small></p>";
             html += "<form method='POST' action='/backup/restore' enctype='multipart/form-data' id='restoreForm' data-ask='" + translate("Take over the settings of the backup? Existing clock faces, hand sets and presets stay, same-named ones are replaced.") + "'>";
             html += "<label><input type='checkbox' name='restoreWifi' value='1' style='width:auto;margin:0 6px 0 0;'>" + translate("Restore WiFi credentials (network names, passwords, hostname)") + "</label>";
             html += "<p><small>" + translate("Without this option the clock keeps its own WiFi and hostname - recommended when transferring the settings to another clock") + ".</small></p>";

@@ -246,7 +246,10 @@
     String stripPathForFace(const String& facePath) ;
     bool ensureStripImage() ;
     bool drawStripImageStreamed(LGFX_Sprite& s, bool landscape, bool push) ;
-    void renderInfoStrip(int x, int y, int w, int h, bool landscape, const String* lines, uint8_t count, bool colon, const String& suffix, uint16_t bg, uint16_t fg, bool push, bool useImage) ;
+    void renderInfoStrip(int x, int y, int w, int h, bool landscape, const String* lines, uint8_t count, bool colon, const String& suffix, uint16_t bg, uint16_t fg, bool push, bool useImage, uint16_t* overlayBuf = nullptr) ;
+    uint32_t infoOverlayKeyNow() ;
+    void applyInfoOverlay(uint16_t* buf) ;
+    void infoOverlayRefresh(uint32_t key) ;
     void stripDateText(const struct tm& t, String& full, String& a, String& b) ;
     String stripWeekdayText(const struct tm& t) ;
     void stripContent(bool landscape, String* lines, uint8_t& count, bool& colon, String& suffix, const struct tm* fixedTime = nullptr) ;
@@ -255,6 +258,7 @@
     bool stripShowsSeconds() ;
     bool renderFaceStripPreview(const String& faceFile, bool& before) ;
     void drawStripThumb(LGFX_Sprite& canvas, int y0, int w, int h) ;
+    void drawFaceOverlayThumb(LGFX_Sprite& canvas, const String& faceFile, int size) ;
     bool generateFaceStripBmp(const String& faceFile, int outW, uint8_t** outBytes, size_t& outSize) ;
     void drawInfoStrips() ;
     void updateClock() ;

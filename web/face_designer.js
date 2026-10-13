@@ -6,7 +6,8 @@
   // With a strip (ILI9341) the drawing area is the whole display: clock face (FH high) plus strip (SH), the
   // strip on top (OY = SH) or at the bottom (OY = 0). CX/CY is the clock centre, not the image centre.
 
-  var FH = FD.h, SH = FD.strip ? FD.strip.h : 0, OY = (FD.strip && FD.strip.before) ? SH : 0;
+  var OV = !!(FD.strip && FD.strip.ov); // Anzeige auf dem Zifferblatt statt im Streifen (Displays ohne Streifen) / shown on the clock face instead of in a strip (displays without a strip)
+  var FH = FD.h, SH = (FD.strip && !OV) ? FD.strip.h : 0, OY = (FD.strip && !OV && FD.strip.before) ? SH : 0;
   var W = FD.w, H = FH + SH, N = W * H, CX = W / 2, CY = OY + FH / 2, R = Math.min(W, FH) / 2;
   var DEF = '/face_default.bmp';
 
@@ -49,6 +50,7 @@
       h_circf: 'Kreis gef\u00fcllt: im Mittelpunkt ansetzen und ziehen, wie Kreis.',
       h_fill: 'F\u00fcllen: f\u00e4rbt die zusammenh\u00e4ngende gleichfarbige Fl\u00e4che um.',
       h_pick: 'Pipette: Klick \u00fcbernimmt die Farbe des Pixels.',
+      move: 'Anzeige', h_move: 'Anzeige verschieben: Uhrzeit, Datum oder Wochentag mit der Maus anfassen und ziehen (die Zeile steht danach auf fester Position, \u201eautomatisch\u201c wird abgew\u00e4hlt). Zur Uhr gesendet wird die neue Position erst beim Speichern.',
       h_poly: 'Polygon: Punkte anklicken, Doppelklick oder Klick auf den ersten Punkt schlie\u00dft, Esc bricht ab.',
       h_text: 'Text: gerade - Klick setzt den Text mittig an die Stelle; im Bogen - Klick legt Radius und Mitte des Bogens fest. Einstellungen darunter.',
       h_stamp: 'Logo: unter "Logo" ein Bild laden und die Breite einstellen, dann per Klick mittig an die Stelle setzen.',
@@ -62,11 +64,16 @@
       modeAs: 'Wie auf der Uhr:', mStation: 'Sekunde wartet auf 12', mSecSmooth: 'Sekunde schleichend', mSecTick: 'Sekunde tickend',
       mMinSmooth: 'Minute schleichend', mMinJump: 'Minute springt',
       strip: 'Streifen Uhrzeit/Datum', sPos: 'Lage:', sBelow: 'unter der Uhr (quer: rechts)', sAbove: '\u00fcber der Uhr (quer: links)', sBg: 'Hintergrund:', sFg: 'Schriftfarbe:', sFont: 'Schriftart:',
-      sTime: 'Uhrzeit', sDate: 'Datum', sWday: 'Wochentag (ausgeschrieben)', sShow: 'anzeigen', sSize: 'Gr\u00f6\u00dfe:', sXY: 'Position:', sAuto: 'automatisch', sBlink: 'Doppelpunkt blinkt (ohne Sekunden)', sDef: 'Standard', sSave: 'Streifen speichern',
+      sTime: 'Uhrzeit', sDate: 'Datum', sWday: 'Wochentag', sWFmt: 'Wochentagformat:', wf0: 'ausgeschrieben (Montag)', wf1: 'kurz (Mo)', sShow: 'anzeigen', sSize: 'Gr\u00f6\u00dfe:', sXY: 'Position:', sAuto: 'automatisch', sBlink: 'Doppelpunkt blinkt (ohne Sekunden)', sDef: 'Standard', sSave: 'Streifen speichern',
       stripHint: 'Der Streifen geh\u00f6rt zum Zifferblatt: Grafik (strip_Name.bmp) und diese Einstellungen (stripcfg_Name.txt). '
       + '\u00c4nderungen hier zeigt die Uhr sofort an, gespeichert werden sie mit \u201eStreifen speichern\u201c oder mit dem Zifferblatt. '
       + 'Ein Zifferblatt ohne eigene Einstellungen bekommt den Standard. ' + 'X/Y = Mitte der Zeile im Streifen (hochkant); quer stehen die Zeilen automatisch untereinander.',
       stripSaved: 'Streifen gespeichert.', stripErr: 'Streifen konnte nicht an die Uhr gesendet werden.',
+      stripOv: 'Uhrzeit, Datum, Wochentag auf dem Zifferblatt', stripOvSave: 'Anzeige speichern',
+      pickFgTip: 'Schriftfarbe aus dem Zifferblatt oder der Vorschau aufnehmen: danach in die Zeichenfl\u00e4che oder die Vorschau klicken',
+      stripOvHint: 'Die Anzeige geh\u00f6rt zum Zifferblatt (Einstellungen in stripcfg_Name.txt) und liegt hinter den Zeigern. '
+      + '\u00c4nderungen hier zeigt die Uhr sofort an, gespeichert werden sie mit \u201eAnzeige speichern\u201c oder mit dem Zifferblatt. '
+      + 'Ab Werk ist alles aus. X/Y = Mitte der Zeile auf dem Zifferblatt; ohne Sekunden und ohne blinkenden Doppelpunkt, die Anzeige \u00e4ndert sich nur einmal pro Minute. Ohne PSRAM nicht verf\u00fcgbar.',
       hub: 'Nabe und Sekundenzeiger', hubSize: 'Nabe:', hubColor: 'Farbe:', hubTake: 'Aktuelle Farbe', hubTakeTip: 'Farbe aus dem Werkzeugkasten (Pipette, Palette, Farbfeld) f\u00fcr die Nabe \u00fcbernehmen', hubSave: 'Speichern',
       secPiv: 'Drehpunkt Sekundenzeiger:', secCtr: 'Mitte', hmPiv: 'Drehpunkt Stunde und Minute:', secOver: 'Sekundenzeiger \u00fcber den anderen Zeigern',
       hubHint: 'Nabe = Mittelpunkt \u00fcber den Zeigern, 0 = keine Nabe. Ein Drehpunkt au\u00dferhalb der Mitte ergibt ein Sekundenfeld: '
@@ -76,7 +83,7 @@
       sTFmt: 'Zeitformat:', sSec: 'Sekunden:', sec0: 'automatisch (ohne Sekundenzeiger)', sec1: 'ohne Sekunden', sec2: 'mit Sekunden',
       sDFmt: 'Datumsformat:', tf0: '24 Stunden',
       tf1: '12 Stunden mit AM/PM', tf2: '12 Stunden', df0: 'T.MM.JJJJ', df1: 'TT.MM.JJJJ', df2: 'TT.MM.JJ', df3: 'MM/TT/JJJJ',
-      df4: 'JJJJ-MM-TT', df5: 'TT.MM.', df6: 'T.MM.JJ', vlwCur: ' (auf der Uhr)', vlwErr: 'Schrift f\u00fcr den Streifen konnte nicht erzeugt werden.',
+      df4: 'JJJJ-MM-TT', df5: 'TT.MM.', df6: 'T.MM.JJ', df7: 'T (nur der Tag)', vlwCur: ' (auf der Uhr)', vlwErr: 'Schrift f\u00fcr den Streifen konnte nicht erzeugt werden.',
       protName: 'Dieser Name geh\u00f6rt zu einem von der Firmware erzeugten Zifferblatt - bitte einen anderen w\u00e4hlen.',
       protHint: 'Von der Firmware erzeugtes Zifferblatt: Das Bild bleibt, gespeichert werden Nabe, Drehpunkt und Streifen. Ein ge\u00e4ndertes Bild nur unter einem anderen Namen speichern.',
       protDirty: 'Von der Firmware erzeugte Zifferbl\u00e4tter lassen sich nicht \u00fcberschreiben - das ge\u00e4nderte Bild unter einem anderen Namen speichern.',
@@ -119,6 +126,7 @@
       h_circf: 'Filled circle: start at the centre and drag, like circle.',
       h_fill: 'Fill: recolours the connected area of the same colour.',
       h_pick: 'Picker: a click takes over the colour of the pixel.',
+      move: 'Display', h_move: 'Move display: grab time, date or weekday with the mouse and drag it (the line then has a fixed position, "automatic" is switched off). The new position is only sent to the clock when saving.',
       h_poly: 'Polygon: click points, double-click or click the first point to close, Esc cancels.',
       h_text: 'Text: straight - a click places the text centred on that spot; on an arc - a click sets radius and centre of the arc. Settings below.',
       h_stamp: 'Logo: load an image under "Logo" and set its width, then a click places it centred on that spot.',
@@ -132,15 +140,20 @@
       modeAs: 'As on the clock:', mStation: 'second waits at 12', mSecSmooth: 'smooth second', mSecTick: 'ticking second',
       mMinSmooth: 'smooth minute', mMinJump: 'minute jumps',
       strip: 'Time/date strip', sPos: 'Placement:', sBelow: 'below the clock (landscape: right)', sAbove: 'above the clock (landscape: left)', sBg: 'Background:', sFg: 'Text colour:', sFont: 'Font:',
-      sTime: 'Time', sDate: 'Date', sWday: 'Weekday (written out)', sShow: 'show', sSize: 'Size:', sXY: 'Position:', sAuto: 'automatic', sBlink: 'Colon blinks (without seconds)', sDef: 'Default', sSave: 'Save strip',
+      sTime: 'Time', sDate: 'Date', sWday: 'Weekday', sWFmt: 'Weekday format:', wf0: 'written out (Monday)', wf1: 'short (Mon)', sShow: 'show', sSize: 'Size:', sXY: 'Position:', sAuto: 'automatic', sBlink: 'Colon blinks (without seconds)', sDef: 'Default', sSave: 'Save strip',
       stripHint: 'The strip belongs to the clock face: graphic (strip_name.bmp) and these settings (stripcfg_name.txt). '
       + 'The clock shows changes here right away, they are stored with "Save strip" or with the clock face. '
       + 'A clock face without its own settings gets the default. ' + 'X/Y = centre of the line in the strip (portrait); in landscape the lines are arranged below each other automatically.',
       stripSaved: 'Strip saved.', stripErr: 'Could not send the strip to the clock.',
+      stripOv: 'Time, date, weekday on the clock face', stripOvSave: 'Save display',
+      pickFgTip: 'Pick the text colour from the clock face or the preview: then click into the drawing area or the preview',
+      stripOvHint: 'The display belongs to the clock face (settings in stripcfg_name.txt) and lies behind the hands. '
+      + 'The clock shows changes here right away, they are stored with "Save display" or with the clock face. '
+      + 'Everything is off by default. X/Y = centre of the line on the clock face; no seconds and no blinking colon, the display changes only once a minute. Not available without PSRAM.',
       sTFmt: 'Time format:', sSec: 'Seconds:', sec0: 'automatic (without second hand)', sec1: 'without seconds', sec2: 'with seconds',
       sDFmt: 'Date format:', tf0: '24 hours',
       tf1: '12 hours with AM/PM', tf2: '12 hours', df0: 'D.MM.YYYY', df1: 'DD.MM.YYYY', df2: 'DD.MM.YY', df3: 'MM/DD/YYYY',
-      df4: 'YYYY-MM-DD', df5: 'DD.MM.', df6: 'D.MM.YY', vlwCur: ' (on the clock)', vlwErr: 'Could not create the font for the strip.',
+      df4: 'YYYY-MM-DD', df5: 'DD.MM.', df6: 'D.MM.YY', df7: 'D (day only)', vlwCur: ' (on the clock)', vlwErr: 'Could not create the font for the strip.',
       hub: 'Hub and second hand', hubSize: 'Hub:', hubColor: 'Colour:', hubTake: 'Current colour', hubTakeTip: 'Use the toolbox colour (picker, palette, colour field) for the hub', hubSave: 'Save',
       secPiv: 'Second hand pivot:', secCtr: 'centre', hmPiv: 'Hour and minute hand pivot:', secOver: 'Second hand over the other hands',
       hubHint: 'Hub = centre over the hands, 0 = no hub. A pivot outside the centre gives a seconds subdial: the second hand '
@@ -253,6 +266,16 @@
     octx.putImageData(bufToImageData(buf || pix, oimg), 0, 0);
     ectx.imageSmoothingEnabled = false;
     ectx.drawImage(off, 0, 0, W * Z, H * Z);
+    if (OV && stripImg) {
+
+      // Uhrzeit, Datum, Wochentag auf dem Zifferblatt: nur zur Ansicht, sie gehoeren nicht zum Bild
+      // Time, date, weekday on the clock face: for viewing only, they are not part of the image
+
+      ectx.imageSmoothingEnabled = true;
+      ectx.drawImage(stripImg, 0, 0, W * Z, H * Z);
+      ectx.imageSmoothingEnabled = false;
+      if (tool === 'move' && mvHooks) mvHooks.draw();
+    }
     if (Z >= 6) {
       ectx.strokeStyle = 'rgba(128,128,128,0.18)'; ectx.lineWidth = 1; ectx.beginPath();
       for (var gx = 1; gx < W; gx++) { ectx.moveTo(gx * Z + 0.5, 0); ectx.lineTo(gx * Z + 0.5, H * Z); }
@@ -502,6 +525,11 @@
   // Pointer input
 
   var drag = null, polyPts = [];
+
+  // Anzeige verschieben (Werkzeug "Anzeige"): mvDrag = gerade gezogene Zeile, mvHooks kommt aus dem Bereich Uhrzeit/Datum
+  // Move display (tool "Display"): mvDrag = the line being dragged, mvHooks comes from the time/date section
+
+  var mvDrag = null, mvHooks = null;
   function cell(ev) {
     var r = ed.getBoundingClientRect();
     return { x: Math.floor((ev.clientX - r.left) * W / r.width), y: Math.floor((ev.clientY - r.top) * H / r.height) };
@@ -514,6 +542,7 @@
     if (!inGrid(c)) return;
     ed.setPointerCapture(ev.pointerId);
     if (tool === 'pick') { setColor(pix[c.y * W + c.x]); pickDone(); return; }
+    if (tool === 'move') { if (mvHooks) mvHooks.down(c); return; }
     if (tool === 'fill') {
       var fb = pix.slice();
       seeds(c.x, c.y).forEach(function (p) { floodOn(fb, p[0], p[1], color, c.y); });
@@ -551,6 +580,7 @@
   ed.addEventListener('pointermove', function (ev) {
     var c = cell(ev);
     $('posInfo').textContent = inGrid(c) ? t('pos') + ' ' + c.x + ' / ' + c.y + '   (' + t('center') + ' ' + CX + ' / ' + CY + ')' : '';
+    if (mvDrag) { mvHooks.move(c); return; }
     if (!drag) {
       if (tool === 'text' && inGrid(c)) { var pb = pix.slice(); textOn(pb, c.x, c.y); drawEditor(pb); }
       if (tool === 'stamp' && logoImg && inGrid(c)) drawEditor(stampOn(pix, c.x, c.y));
@@ -572,6 +602,7 @@
     drawEditor(shapeBuf(drag.start, c));
   });
   ed.addEventListener('pointerup', function () {
+    if (mvDrag) { mvHooks.up(); return; }
     if (!drag) return;
     if (tool === 'pen') { drag = null; schedulePreview(); return; }
     var b = shapeBuf(drag.start, drag.last);
@@ -610,8 +641,8 @@
     keys.forEach(function (k) { var o = document.createElement('option'); o.value = k[0]; o.textContent = t(k[1]); sel.appendChild(o); });
   }
   var toolBtn = {};
-  ['pen', 'line', 'rect', 'rectf', 'ell', 'ellf', 'circ', 'circf', 'poly', 'fill', 'text', 'stamp', 'pick'].forEach(function (k) {
-    toolBtn[k] = button($('toolBtns'), t(k), function () { pickReturn = null; selectTool(k); });
+  ['pen', 'line', 'rect', 'rectf', 'ell', 'ellf', 'circ', 'circf', 'poly', 'fill', 'text', 'stamp', 'pick'].concat(OV ? ['move'] : []).forEach(function (k) {
+    toolBtn[k] = button($('toolBtns'), t(k), function () { pickReturn = null; fgPick = false; selectTool(k); });
     toolBtn[k].title = t('h_' + k);
   });
   options($('symSel'), ['none', 'mx', 'mxy', 'r4', 'r12', 'r60'].map(function (k) { return [k, k]; }));
@@ -622,6 +653,7 @@
     tool = k; polyPts = [];
     Object.keys(toolBtn).forEach(function (q) { toolBtn[q].className = 'tb' + (q === k ? ' on' : ''); });
     $('pickBtn').className = 'tb' + (k === 'pick' ? ' on' : '');
+    ed.style.cursor = k === 'move' ? 'move' : '';
     $('textOpts').style.display = k === 'text' ? '' : 'none';
     $('toolHint').textContent = t('h_' + k);
     drawEditor();
@@ -1128,15 +1160,52 @@
   // (/api/stripimg?text=2, RGB565 big-endian, on black and on white) - the difference gives the opacity per
   // pixel, so anti-aliased text lies over the drawing without a fringe.
 
-  var stripImg = null;
+  var stripImg = null, stripPix = null, posPending = false; // posPending: mit dem Werkzeug "Anzeige" verschoben, noch nicht gespeichert / moved with the tool "Display", not saved yet
   function loadStripImg() {
     var sp = FD.strip;
     if (!sp) return Promise.resolve();
-    return fetch('/api/stripimg?text=2' + ($('live').checked ? '' : '&h=10&m=8&s=37'), { cache: 'no-store' }).then(function (r) {
+
+    // Auf dem Zifferblatt rechnet die Uhr die Vorschau mit den Positionen aus dem Formular (-1 = automatisch), ohne sie zu uebernehmen:
+    // so zeigt die Vorschau auch Positionen, die noch nicht gespeichert sind (Werkzeug "Anzeige")
+    // On the clock face the clock computes the preview with the positions from the form (-1 = automatic) without adopting them: so the
+    // preview also shows positions that are not saved yet (tool "Display")
+
+    var posQ = '';
+    if (OV && typeof LINES !== 'undefined' && LINES) {
+      LINES.forEach(function (L) {
+        var au = $('s' + L.k + 'Auto').checked;
+        posQ += '&' + L.x + '=' + (au ? -1 : $('s' + L.k + 'X').value) + '&' + L.y + '=' + (au ? -1 : $('s' + L.k + 'Y').value);
+      });
+    }
+    return fetch('/api/stripimg?text=' + (OV ? '3' : '2') + ($('live').checked ? '' : '&h=10&m=8&s=37') + posQ, { cache: 'no-store' }).then(function (r) {
       if (!r.ok) throw new Error(r.status);
       return r.arrayBuffer();
     }).then(function (ab) {
       var b = new Uint8Array(ab), n = sp.w * sp.h;
+      if (OV) {
+
+        // Auf dem Zifferblatt: nur die Zeilen mit Text, weisse Schrift auf Schwarz - Deckkraft = Helligkeit, Farbe aus dem Feld
+        // On the clock face: only the rows with text, white text on black - opacity = brightness, colour from the field
+
+        if (b.length < 4) return;
+        var by0 = (b[0] << 8) | b[1], rows = (b[2] << 8) | b[3];
+        var oc = stripImg || newCanvas(sp.w, sp.h), ox = oc.getContext('2d');
+        ox.clearRect(0, 0, sp.w, sp.h);
+        if (rows > 0 && b.length >= 4 + rows * sp.w * 2) {
+          var oid = ox.createImageData(sp.w, rows), fgc = parseInt($('sFg').value.slice(1), 16), m = sp.w * rows;
+          for (var q = 0; q < m; q++) {
+            var kk = rgbOf((b[4 + 2 * q] << 8) | b[5 + 2 * q]), al = (kk[0] + kk[1] + kk[2]) / 765;
+            if (al < 0.03) continue;
+            oid.data[q * 4] = (fgc >> 16) & 255; oid.data[q * 4 + 1] = (fgc >> 8) & 255; oid.data[q * 4 + 2] = fgc & 255;
+            oid.data[q * 4 + 3] = Math.round(Math.min(1, al) * 255);
+          }
+          ox.putImageData(oid, 0, by0);
+        }
+        stripImg = oc; stripPix = ox.getImageData(0, 0, sp.w, sp.h);
+        drawEditor();
+        schedulePreview();
+        return;
+      }
       if (b.length < n * 4) return;
       var c = stripImg || newCanvas(sp.w, sp.h), x = c.getContext('2d'), id = x.createImageData(sp.w, sp.h);
       for (var i = 0; i < n; i++) {
@@ -1148,7 +1217,8 @@
         id.data[i * 4 + 3] = Math.round(a * 255);
       }
       x.putImageData(id, 0, 0);
-      stripImg = c;
+      stripImg = c; stripPix = id;
+      if (OV) drawEditor();
       schedulePreview();
     }).catch(function () {});
   }
@@ -1161,7 +1231,7 @@
 
   var stripKey = null, stripBusy = false, stripLastAt = 0;
   function syncStrip() {
-    var d = new Date(), sec = +$('sSec').value, withSec = sec === 2 || (sec === 0 && !FD.showSec);
+    var d = new Date(), sec = +$('sSec').value, withSec = !OV && (sec === 2 || (sec === 0 && !FD.showSec));
     var key = $('live').checked ? (withSec ? d.getMinutes() * 60 + d.getSeconds() : d.getMinutes()) : 'fix';
     if (key === stripKey || stripBusy || performance.now() - stripLastAt < 900) return;
     stripKey = key; stripBusy = true; stripLastAt = performance.now();
@@ -1219,7 +1289,7 @@
     if (FD.round) { pctx.beginPath(); pctx.arc(CX, CY, R, 0, Math.PI * 2); pctx.clip(); }
     if (!pvFace) pvFace = bufCanvas(pix);
     pctx.drawImage(pvFace, 0, 0);
-    if (SH && stripImg) pctx.drawImage(stripImg, 0, stripY());
+    if ((SH || OV) && stripImg) pctx.drawImage(stripImg, 0, SH ? stripY() : 0);
     if ($('showHands').checked) {
       var ang = handAngles($('live').checked ? new Date() : new Date(2000, 0, 1, 10, 8, 37), FD.mode);
 
@@ -1271,9 +1341,20 @@
   // Pick colour: the button switches to the picker once and back afterwards,
   // right-click in the drawing area and click in the preview pick directly.
 
-  var pickReturn = null;
-  function pickDone() { if (pickReturn) { var k = pickReturn; pickReturn = null; selectTool(k); } }
+  // fgPick: die aufgenommene Farbe wird die Schriftfarbe von Uhrzeit/Datum/Wochentag (Pipette neben der Farbe)
+  // fgPick: the picked colour becomes the text colour of time/date/weekday (pipette next to the colour)
+
+  var pickReturn = null, fgPick = false;
+  function pickDone() {
+    if (fgPick) {
+      fgPick = false;
+      $('sFg').value = hexOf(color);
+      $('sFg').dispatchEvent(new Event('change'));
+    }
+    if (pickReturn) { var k = pickReturn; pickReturn = null; selectTool(k); }
+  }
   $('pickBtn').onclick = function () {
+    fgPick = false;
     if (tool === 'pick') { var k = pickReturn || 'pen'; pickReturn = null; selectTool(k); return; }
     pickReturn = tool; selectTool('pick');
   };
@@ -1399,7 +1480,8 @@
     if (SP.font === 255) opt('sFont', 'v:cur', (SP.vlw || 'VLW') + t('vlwCur'));
     [0, 1, 2].forEach(function (i) { opt('sTFmt', String(i), t('tf' + i)); });
     [0, 1, 2].forEach(function (i) { opt('sSec', String(i), t('sec' + i)); });
-    [0, 1, 6, 2, 3, 4, 5].forEach(function (i) { opt('sDFmt', String(i), t('df' + i)); });
+    [0, 1, 6, 2, 3, 4, 5, 7].forEach(function (i) { opt('sDFmt', String(i), t('df' + i)); });
+    [0, 1].forEach(function (i) { opt('sWFmt', String(i), t('wf' + i)); });
 
     // Die drei Zeilen des Streifens: Kennbuchstabe der Element-IDs, Groesse in % (SP-Feld), VLW-Groesse in px
     // (SP-Feld, Vorgabe), Anzeige, Position und automatische Hoehe
@@ -1490,7 +1572,7 @@
       $('sBefore').value = SP.before ? '1' : '0'; $('sBlink').checked = !!SP.blink; $('sBg').value = SP.bg; $('sFg').value = SP.fg;
       if (SP.font !== 255) $('sFont').value = String(SP.font);
       else if ($('sFont').value.indexOf('v:') !== 0) $('sFont').value = 'v:cur';
-      $('sTFmt').value = String(SP.tfmt || 0); $('sSec').value = String(SP.sec || 0); $('sDFmt').value = String(SP.dfmt || 0);
+      $('sTFmt').value = String(SP.tfmt || 0); $('sSec').value = String(SP.sec || 0); $('sDFmt').value = String(SP.dfmt || 0); $('sWFmt').value = String(SP.wfmt || 0);
       LINES.forEach(function (L) {
         $('sV' + L.k).value = SP[L.vlw] || L.vlwDef;
         $('s' + L.k + 'S').value = SP[L.scale] || 100;
@@ -1507,13 +1589,13 @@
       if (face) p.set('face', face);
       SP.before = +$('sBefore').value; SP.bg = $('sBg').value;
       p.set('before', $('sBefore').value); p.set('blink', $('sBlink').checked ? '1' : '0'); p.set('bg', $('sBg').value); p.set('fg', $('sFg').value);
-      p.set('tfmt', $('sTFmt').value); p.set('sec', $('sSec').value); p.set('dfmt', $('sDFmt').value);
+      p.set('tfmt', $('sTFmt').value); p.set('sec', $('sSec').value); p.set('dfmt', $('sDFmt').value); p.set('wfmt', $('sWFmt').value);
       LINES.forEach(function (L) {
         var auto = $('s' + L.k + 'Auto').checked;
         SP[L.scale] = +$('s' + L.k + 'S').value;
         SP[L.show] = $('s' + L.k + 'Show').checked ? 1 : 0;
         p.set(L.scale, SP[L.scale]); p.set(L.show, SP[L.show]);
-        p.set(L.x, auto ? -1 : $('s' + L.k + 'X').value); p.set(L.y, auto ? -1 : $('s' + L.k + 'Y').value);
+        if (save || !posPending) { p.set(L.x, auto ? -1 : $('s' + L.k + 'X').value); p.set(L.y, auto ? -1 : $('s' + L.k + 'Y').value); } // verschobene Positionen gehen erst beim Speichern zur Uhr / moved positions only go to the clock when saving
       });
 
       // Designer-Schrift: VLW-Dateien nur neu erzeugen, wenn sich Schrift, Groesse oder Fett geaendert haben
@@ -1539,6 +1621,7 @@
       }, function (e) { showMsg(t('vlwErr'), false); throw e; }).then(function (r) { return r.json(); }).then(function (j) {
         if (!j.ok) throw new Error();
         SP.aty = j.aty; SP.ady = j.ady; SP.awy = j.awy;
+        if (save) posPending = false;
         stripSync();
         loadStripImg();
         if (save && !face) showMsg(t('stripSaved'), true);
@@ -1551,8 +1634,11 @@
       stripTimer = setTimeout(function () { stripSend(false); }, 250);
     };
     $('sFont').addEventListener('change', vlwRows);
-    var liveIds = ['sBefore', 'sBlink', 'sBg', 'sFg', 'sFont', 'sVB', 'sTFmt', 'sSec', 'sDFmt'];
+    var liveIds = ['sBefore', 'sBlink', 'sBg', 'sFg', 'sFont', 'sVB', 'sTFmt', 'sSec', 'sDFmt', 'sWFmt'];
     LINES.forEach(function (L) { ['S', 'Show', 'Auto', 'X', 'Y'].forEach(function (s) { liveIds.push('s' + L.k + s); }); });
+    LINES.forEach(function (L) {
+      ['Auto', 'X', 'Y'].forEach(function (s) { $('s' + L.k + s).addEventListener('input', function () { posPending = false; }); }); // Regler und Haken senden live / sliders and ticks send live
+    });
     liveIds.forEach(function (id) {
       $(id).addEventListener('input', stripLive);
       $(id).addEventListener('change', stripLive);
@@ -1569,20 +1655,102 @@
     $('sBefore').addEventListener('change', function () { setStripBefore(this.value === '1'); });
     $('sDefBtn').onclick = function () {
       setStripBefore(false);
-      SP.before = 0; SP.blink = 1; SP.bg = '#ffffff'; SP.fg = '#000000'; SP.font = Math.max(0, SP.fonts.indexOf('FreeSans Bold'));
-      SP.tfmt = 0; SP.sec = 0; SP.dfmt = 0; SP.vt = 44; SP.vd = SP.vw = 22;
-      LINES.forEach(function (L) { SP[L.scale] = 100; SP[L.show] = L.showDef; SP[L.x] = SP[L.y] = -1; });
+      SP.before = 0; SP.blink = 1; SP.bg = '#ffffff'; SP.fg = SP.ov ? '#ffffff' : '#000000'; SP.font = Math.max(0, SP.fonts.indexOf('FreeSans Bold'));
+      SP.tfmt = 0; SP.sec = 0; SP.dfmt = 0; SP.wfmt = 0; SP.vt = 44; SP.vd = SP.vw = 22;
+      LINES.forEach(function (L) { SP[L.scale] = 100; SP[L.show] = SP.ov ? 0 : L.showDef; SP[L.x] = SP[L.y] = -1; });
       stripFill(); stripLive();
     };
     $('sSaveBtn').onclick = function () { clearTimeout(stripTimer); stripSend(true); };
+    $('sFgPick').textContent = t('pickBtn'); $('sFgPick').title = t('pickFgTip');
+
+    // Zeilen mit der Maus verschieben: Umriss jeder Zeile aus dem Bild der Uhr (stripPix), beim Ziehen werden X/Y der Zeile
+    // gesetzt und wie jede andere Aenderung live an die Uhr gesendet
+
+    // Move lines with the mouse: outline of each line from the clock's image (stripPix), while dragging the X/Y of the
+    // line are set and sent live to the clock like any other change
+
+    var mvBoxes = function () {
+      if (!stripPix) return [];
+      var a = stripPix.data, w = SP.w, h = SP.h, cs = [];
+      LINES.forEach(function (L) {
+        if ($('s' + L.k + 'Show').checked) cs.push({ L: L, cx: +$('s' + L.k + 'X').value, cy: +$('s' + L.k + 'Y').value });
+      });
+      cs.sort(function (p, q) { return p.cy - q.cy; });
+      return cs.map(function (c, i) {
+        var top = i ? Math.round((cs[i - 1].cy + c.cy) / 2) : Math.max(0, Math.round(c.cy - h * 0.15));
+        var bot = i < cs.length - 1 ? Math.round((c.cy + cs[i + 1].cy) / 2) : Math.min(h, Math.round(c.cy + h * 0.15));
+        var x0 = w, y0 = h, x1 = -1, y1 = -1;
+        for (var y = Math.max(0, top); y < bot; y++) for (var x = 0; x < w; x++) {
+          if (a[(y * w + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        }
+        return { L: c.L, cx: c.cx, cy: c.cy, x0: x0, y0: y0, x1: x1, y1: y1 };
+      }).filter(function (b) { return b.x1 >= b.x0; });
+    };
+    mvHooks = {
+      down: function (c) {
+        var best = null, bd = 1e9;
+        mvBoxes().forEach(function (b) {
+          var dx = c.x < b.x0 ? b.x0 - c.x : c.x > b.x1 ? c.x - b.x1 : 0, dy = c.y < b.y0 ? b.y0 - c.y : c.y > b.y1 ? c.y - b.y1 : 0;
+          var d = Math.sqrt(dx * dx + dy * dy);
+          if (d < bd) { bd = d; best = b; }
+        });
+        if (!best || bd > Math.max(12, W * 0.04)) return;
+        mvDrag = { b: best, offX: c.x - best.cx, offY: c.y - best.cy, nx: best.cx, ny: best.cy };
+        drawEditor();
+      },
+      move: function (c) {
+        var k = mvDrag.b.L.k;
+        mvDrag.nx = Math.max(0, Math.min(SP.w, Math.round(c.x - mvDrag.offX)));
+        mvDrag.ny = Math.max(0, Math.min(SP.h, Math.round(c.y - mvDrag.offY)));
+        $('s' + k + 'Auto').checked = false;
+        $('s' + k + 'X').value = mvDrag.nx; $('s' + k + 'Y').value = mvDrag.ny;
+        $('s' + k + 'X').disabled = $('s' + k + 'Y').disabled = false;
+        drawEditor();
+      },
+      up: function () {
+        mvDrag = null;
+        posPending = true;
+        loadStripImg();
+        drawEditor();
+      },
+      draw: function () {
+        if (!mvDrag) {
+          ectx.strokeStyle = 'rgba(245,166,35,0.55)'; ectx.setLineDash([4, 3]);
+          mvBoxes().forEach(function (b) { ectx.strokeRect(b.x0 * Z - 2, b.y0 * Z - 2, (b.x1 - b.x0 + 1) * Z + 4, (b.y1 - b.y0 + 1) * Z + 4); });
+          ectx.setLineDash([]);
+          return;
+        }
+        var b = mvDrag.b, dx = mvDrag.nx - b.cx, dy = mvDrag.ny - b.cy, bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1;
+        ectx.imageSmoothingEnabled = true;
+        ectx.drawImage(stripImg, b.x0, b.y0, bw, bh, (b.x0 + dx) * Z, (b.y0 + dy) * Z, bw * Z, bh * Z);
+        ectx.imageSmoothingEnabled = false;
+        ectx.strokeStyle = '#f5a623'; ectx.setLineDash([]);
+        ectx.strokeRect((b.x0 + dx) * Z - 2, (b.y0 + dy) * Z - 2, bw * Z + 4, bh * Z + 4);
+      }
+    };
+    $('sFgPick').onclick = function () {
+      fgPick = true;
+      pickReturn = (tool === 'pick') ? (pickReturn || 'pen') : tool;
+      selectTool('pick');
+    };
     var stripLabels = { tStrip: 'strip', tSPos: 'sPos', tSBg: 'sBg', tSFg: 'sFg', tSFont: 'sFont', tSTime: 'sTime', tSDate: 'sDate',
-      tSWday: 'sWday', stripHint: 'stripHint', tSTFmt: 'sTFmt', tSSec: 'sSec', tSDFmt: 'sDFmt' };
+      tSWday: 'sWday', stripHint: 'stripHint', tSTFmt: 'sTFmt', tSSec: 'sSec', tSDFmt: 'sDFmt', tSWFmt: 'sWFmt' };
     Object.keys(stripLabels).forEach(function (id) { $(id).textContent = t(stripLabels[id]); });
     [['tSAuto', 'sAuto'], ['tSShow', 'sShow'], ['tSSize', 'sSize'], ['tSXY', 'sXY']].forEach(function (c) {
       document.querySelectorAll('#stripCard .' + c[0]).forEach(function (e) { e.textContent = t(c[1]); });
     });
     $('tSBlink').textContent = t('sBlink');
     $('sDefBtn').textContent = t('sDef'); $('sSaveBtn').textContent = t('sSave');
+    if (OV) {
+
+      // Auf dem Zifferblatt gibt es weder Lage noch Hintergrund noch Sekunden noch blinkenden Doppelpunkt
+      // On the clock face there is no placement, no background, no seconds and no blinking colon
+
+      ['tSPos', 'tSBg', 'tSSec'].forEach(function (id) { $(id).style.display = 'none'; $(id).nextElementSibling.style.display = 'none'; });
+      var blinkRow = $('sBlink').parentNode.parentNode;
+      blinkRow.style.display = 'none'; blinkRow.previousElementSibling.style.display = 'none';
+      $('tStrip').textContent = t('stripOv'); $('stripHint').textContent = t('stripOvHint'); $('sSaveBtn').textContent = t('stripOvSave');
+    }
     stripFill();
   }
 

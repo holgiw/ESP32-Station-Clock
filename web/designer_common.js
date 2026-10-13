@@ -60,7 +60,18 @@ function parseBmp(ab) {
 // Meldung im Designer: ok true = Erfolg, false = Fehler, ohne = neutral
 // Message in the designer: ok true = success, false = error, without = neutral
 
-function showMsg(text, ok) { $('msg').className = ok === undefined ? '' : (ok ? 'msg ok' : 'msg err'); $('msg').textContent = text; }
+var msgTimer = null;
+function showMsg(text, ok) {
+  var m = $('msg');
+  clearTimeout(msgTimer);
+  m.className = ok === undefined ? '' : (ok ? 'msg ok' : 'msg err');
+  m.textContent = text;
+
+  // Erfolgsmeldungen verschwinden nach 4 Sekunden, Fehler bleiben bis zur naechsten Meldung
+  // Success messages disappear after 4 seconds, errors stay until the next message
+
+  if (ok === true) msgTimer = setTimeout(function () { m.className = ''; m.textContent = ''; }, 4000);
+}
 
 // Zeigerwinkel wie renderClockFrame() im Geraet: Bahnhofsuhr (Sekunde eilt
 // und wartet auf der 12), schleichende oder springende Minute und Sekunde.

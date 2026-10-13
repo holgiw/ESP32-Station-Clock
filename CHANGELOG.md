@@ -31,6 +31,21 @@
 - Beim Umbenennen eines Zifferblatts wird „face_“ (und „.bmp“) automatisch ergänzt, wenn es im neuen Namen fehlt; Speichern im Designer und Hochladen taten das schon.
 - Dateimanager: Alle Dateien außer denen des Startpakets lassen sich umbenennen (bisher nur .bmp). Schriften behalten ihr Präfix („font_“, „stripfont_“), fehlt die Endung, bleibt die alte.
 - README: Bezugsquellen (Beispiele, keine Empfehlung) für Boards und Displays; THIRD_PARTY_LICENSES um FreeSerif und die Qualia-Startfolge ergänzt.
+- Uhrzeit, Datum und Wochentag lassen sich jetzt auch bei Displays ohne Streifen anzeigen (rund, 240x240, 480x480): im Zifferblatt-Designer unter
+  „Uhrzeit, Datum, Wochentag auf dem Zifferblatt“ (gleiche Einstellungen wie der Streifen: Schrift, Farbe, Größe, Format, Position; je Zifferblatt in
+  `stripcfg_*.txt`). Ab Werk aus. Der Text liegt hinter den Zeigern und steckt im Zifferblatt-Cache, ohne Sekunden und ohne blinkenden Doppelpunkt; er
+  ändert sich einmal pro Minute (auf dem 480er-Board kostet das ein kurzes Aussetzen des Sekundenzeigers). Ohne PSRAM (ESP32-C6) nicht verfügbar.
+- Neue Adressen zur Kontrolle: `/api/faceimg` (Zifferblatt-Cache, wie er zum Display geht) und `/api/frameimg` (zuletzt gezeichnetes Bild mit Zeigern), beide RGB565.
+- Die Seite „Vorschau“ und die Vorschaubilder der Presets zeigen Uhrzeit, Datum und Wochentag auf dem Zifferblatt (Displays ohne Streifen), wenn das Zifferblatt sie anzeigt; in den Presets mit der Demo-Zeit 10:10:30.
+- Waveshare ESP32-S3-Touch-LCD-4: Beim Start piept der Beeper 500 ms lang (Beeper an Expander-Ausgang EXIO6); Prüfadresse `/api/beeptest`.
+- 480x480: Der Minutenzeiger gleitet 300 ms statt 600 ms.
+- Zifferblatt-Designer: Das Werkzeug „Anzeige“ sendet die neue Position erst beim Speichern; Erfolgsmeldungen verschwinden nach 4 s und sind höchstens 420 px breit.
+- Sicherung von einem anderen Displaytyp: Die Zifferblätter der Sicherung müssen mindestens 240 × 240 groß sein (bisher genau 240 × 240).
+- 480x480: Sekundenzeiger, Stunden-, Minutenzeiger und neuer Text werden als getrennte kleine Rechtecke gezeichnet und gesendet statt als ein großes; Rechtecke, die zusammen nicht teurer sind als einzeln, werden zusammengefasst.
+- Beim Minutenwechsel wird nur das Zeilenband mit dem Text kopiert und neu gezeichnet (24 statt 100 ms), auch bei gedrehtem Zifferblatt als Teilbild.
+- Datumsformat „T“ (nur der Tag); Wochentag wahlweise ausgeschrieben oder kurz (Mo / Mon). Beides je Zifferblatt gespeichert.
+- Zifferblatt-Designer: Pipette neben der Schriftfarbe; Uhrzeit, Datum und Wochentag erscheinen auch in der Zeichenfläche und lassen sich dort mit dem Werkzeug „Anzeige“ mit der Maus verschieben; die Vorschau (240 px breit) steht oben in der rechten Spalte und scrollt nicht weg; beide Designer nutzen die ganze Bildschirmbreite.
+- Beim Minutenwechsel wird nur der Text im Zifferblatt-Cache neu gezeichnet (statt den Cache ganz neu zu rechnen); die Vorschau des Designers überträgt für die Anzeige auf dem Zifferblatt nur die Zeilen mit Text (100 KB statt 920 KB), die Uhr hält dabei kaum noch an. Zuvor blieb der Sekundenzeiger nach jedem Minutenwechsel 2–3 s auf der 0 stehen, solange der Designer offen war.
 - Abfragen des Dateisystems werden zwischengespeichert (`fs_cache.h`: freier Platz, Existenz von Dateien, Dateiliste): Seiten wie „Zeiger“ (vorher 1,7 s) und der Zeigerdesigner (0,5 s) laden in etwa 0,5 s bzw. 0,1 s, der Sekundenzeiger steht beim Seitenaufruf kürzer still. Nach jedem Schreibzugriff werden die Werte neu gelesen.
 - 480x480: Beim Speichern eines Zifferblatts oder Zeigers und beim Hochladen zeigt das Display eine ruhige blaue Fläche statt zu flackern (bis 1,5 s nach dem letzten Schreibzugriff).
 
@@ -481,6 +496,21 @@
 - When a clock face is renamed, "face_" (and ".bmp") is added automatically if it is missing in the new name; saving in the designer and uploading already did that.
 - File manager: all files except those of the starter set can be renamed (before only .bmp). Fonts keep their prefix ("font_", "stripfont_"), if the extension is missing the old one stays.
 - README: sources (examples, not a recommendation) for boards and displays; THIRD_PARTY_LICENSES extended by FreeSerif and the Qualia start-up sequence.
+- Time, date and weekday can now also be shown on displays without a strip (round, 240x240, 480x480): in the clock face designer under
+  "Time, date, weekday on the clock face" (same settings as the strip: font, colour, size, format, position; per clock face in
+  `stripcfg_*.txt`). Off by default. The text lies behind the hands and is part of the clock face cache, without seconds and without a blinking
+  colon; it changes once a minute (on the 480 board that costs a short pause of the second hand). Not available without PSRAM (ESP32-C6).
+- New addresses for checking: `/api/faceimg` (clock face cache as it goes to the display) and `/api/frameimg` (last drawn frame with the hands), both RGB565.
+- The "Preview" page and the preview images of the presets show time, date and weekday on the clock face (displays without a strip) if the clock face displays them; in the presets with the demo time 10:10:30.
+- Waveshare ESP32-S3-Touch-LCD-4: the buzzer beeps for 500 ms at start (buzzer on expander output EXIO6); test address `/api/beeptest`.
+- 480x480: the minute hand glides for 300 ms instead of 600 ms.
+- Clock face designer: the tool "Display" sends the new position only when saving; success messages disappear after 4 s and are at most 420 px wide.
+- Backup from another display type: the backup's clock faces must be at least 240 x 240 (before exactly 240 x 240).
+- 480x480: second hand, hour hand, minute hand and new text are drawn and sent as separate small rectangles instead of one big one; rectangles that are no more expensive together than apart are merged.
+- On a minute change only the band of rows with the text is copied and redrawn (24 instead of 100 ms), also as a partial frame with a rotated clock face.
+- Date format "D" (day only); weekday written out or short (Mo / Mon). Both stored per clock face.
+- Clock face designer: pipette next to the text colour; time, date and weekday also appear in the drawing area and can be moved there with the mouse using the tool "Display"; the preview (240 px wide) sits at the top of the right column and does not scroll away; both designers use the full screen width.
+- On a minute change only the text in the clock face cache is redrawn (instead of recalculating the whole cache); for the display on the clock face the designer's preview transfers only the rows with text (100 KB instead of 920 KB), so the clock hardly stalls. Before, the second hand stayed at 0 for 2-3 s after every minute change while the designer was open.
 - File system queries are cached (`fs_cache.h`: free space, existence of files, file list): pages such as "Hand Set" (before 1.7 s) and the hand designer (0.5 s) load in about 0.5 s and 0.1 s, the second hand stands still for a shorter time when a page is opened. After every write access the values are read again.
 - 480x480: when saving a clock face or hand and when uploading, the display shows a calm blue area instead of flickering (until 1.5 s after the last write access).
 

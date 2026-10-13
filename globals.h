@@ -883,6 +883,7 @@
     uint8_t stripSeconds = 0; // Sekunden in der Uhrzeit: 0 = automatisch, 1 = ohne, 2 = mit
                               // seconds in the time: 0 = automatic, 1 = without, 2 = with
     uint8_t stripDateFmt = 0;
+    uint8_t stripWeekdayFmt = 0; // Wochentag: 0 = ausgeschrieben, 1 = kurz (Mo) / weekday: 0 = written out, 1 = short (Mon)
     uint8_t* stripVlwTime = nullptr;
     uint8_t* stripVlwDate = nullptr;
     bool stripVlwStale = true;
@@ -957,6 +958,27 @@
     uint8_t* stripVlwWeekday = nullptr;
     int8_t stripWeekdayLine = -1; // quer: Zeile des Wochentags (stripContent()), -1 = keine
                                   // landscape: line of the weekday (stripContent()), -1 = none
+
+    // Uhrzeit, Datum und Wochentag direkt auf dem Zifferblatt (Displays ohne Streifen): infoOverlayRevision zaehlt
+    // jede Aenderung der Einstellungen, infoOverlayAppliedKey ist der Stand, der im Zifferblatt-Cache steckt.
+
+    // Time, date and weekday directly on the clock face (displays without a strip): infoOverlayRevision counts
+    // every change of the settings, infoOverlayAppliedKey is the state contained in the clock face cache.
+
+    uint32_t infoOverlayRevision = 0;
+    uint32_t infoOverlayAppliedKey = 0;
+    uint32_t infoOverlayRevApplied = 0;
+
+    // Rechtecke (x0, y0, x1, y1 im Zifferblatt, x1 < x0 = leer): Text im Cache, eben gezeichneter Text, und die
+    // Flaeche, die der naechste Frame neu aufbauen muss (alter plus neuer Text).
+
+    // Rectangles (x0, y0, x1, y1 in the clock face, x1 < x0 = empty): text in the cache, text just drawn, and the
+    // area the next frame has to rebuild (old plus new text).
+
+    int16_t infoOverlayBox[4] = { 0, 0, -1, -1 };
+    int16_t infoOverlayBoxNew[4] = { 0, 0, -1, -1 };
+    int16_t infoOverlayPending[4] = { 0, 0, -1, -1 };
+    int16_t stripPreviewBox[4] = { 0, 0, -1, -1 }; // Grenzen des Textes der letzten Vorschau / bounds of the text of the last preview
 
     // Wird hochgezaehlt, sobald sich Zifferblatt, Zeigersatz oder Zeigerbreiten
     // aendern - macht jedes Zwischenbild ungueltig, ohne dass jede einzelne

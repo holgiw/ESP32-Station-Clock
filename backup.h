@@ -749,18 +749,18 @@
         if (backupBacklight < 0) backupBacklight = DISPLAY_GEOMETRY[backupType].backlightDefault ? 1 : 0;
         backupDisplay = displayChoiceName(backupType, backupBacklight == 1);
 
-        // Anderer Displaytyp: nur aus einer Sicherung mit 240x240-Zifferblaettern (die Uhr skaliert sie auf ihre
-        // Groesse), sonst bleibt alles, wie es ist. Displaytyp-abhaengige Werte behaelt die Uhr dann.
+        // Anderer Displaytyp: nur aus einer Sicherung mit mindestens 240x240 grossen Zifferblaettern (die Uhr skaliert sie auf
+        // ihre Groesse), sonst bleibt alles, wie es ist. Displaytyp-abhaengige Werte behaelt die Uhr dann.
 
-        // Another display type: only from a backup with 240x240 clock faces (the clock scales them to its size),
+        // Another display type: only from a backup with clock faces of at least 240x240 (the clock scales them to its size),
         // otherwise everything stays as it is. The clock then keeps values depending on the display type.
 
         const DisplayGeometry& from = DISPLAY_GEOMETRY[backupType];
         backupTypeOut = backupType;
         otherType = backupType != displayType;
-        if (otherType && from.clock != 240) {
+        if (otherType && from.clock < 240) {
             error = "the backup is from a " + String(from.name) + " clock - its clock faces are " + String(from.clock) + "x" +
-                    String(from.clock) + ", not 240x240, so nothing is taken over onto a clock with another display type (" +
+                    String(from.clock) + ", less than 240x240, so nothing is taken over onto a clock with another display type (" +
                     String(displayGeom->name) + ")";
             return false;
         }

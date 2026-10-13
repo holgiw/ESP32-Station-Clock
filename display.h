@@ -2197,11 +2197,26 @@
         // a backlight, brightness changes no pixels - then only on a new clock face or when switching
         // (forceRecompute).
 
-        if (forceRecompute || (!useBacklight && currentBrightness != lastAppliedBrightness)) {
+        // Uhrzeit/Datum/Wochentag auf dem Zifferblatt (Displays ohne Streifen): steckt im Cache, aendert sich der
+        // Text, wird der Cache neu berechnet (infoOverlayKeyNow()).
+
+        // Time/date/weekday on the clock face (displays without a strip): contained in the cache, if the text
+        // changes the cache is recalculated (infoOverlayKeyNow()).
+
+        const uint32_t overlayKey = infoOverlayKeyNow();
+        const bool overlayChanged = overlayKey != infoOverlayAppliedKey || infoOverlayRevApplied != infoOverlayRevision;
+        infoOverlayAppliedKey = overlayKey;
+        infoOverlayRevApplied = infoOverlayRevision;
+        if (forceRecompute || overlayChanged || (!useBacklight && currentBrightness != lastAppliedBrightness)) {
             for (int i = 0; i < CLOCK_WIDTH * CLOCK_HEIGHT; i++) {
                 clockFaceBrightBuffer[i] = setPixelBrightness(clockFaceBuffer[i]);
             }
             lastAppliedBrightness = currentBrightness;
+            infoOverlayBox[0] = infoOverlayBox[1] = 0;
+            infoOverlayBox[2] = infoOverlayBox[3] = -1;
+            infoOverlayPending[0] = infoOverlayPending[1] = 0;
+            infoOverlayPending[2] = infoOverlayPending[3] = -1;
+            if (overlayKey > 1) applyInfoOverlay(clockFaceBrightBuffer);
         }
 
         // GC9D01 mit PSRAM hat keine Hardware-Rotation: Zeiger (rotatedAngle()) und hier auch das Zifferblatt
@@ -2843,7 +2858,7 @@
     // minute hand, 1 = hour hand; idx = display. Returns the angle for this frame.
 
     float easeHandTimed(uint8_t idx, uint8_t slot, float current, float target) {
-        const uint32_t LCD4_HAND_EASE_MS = 600;
+        const uint32_t LCD4_HAND_EASE_MS = 300;
         static float from[2][2], to[2][2];
         static uint32_t startMs[2][2];
         static bool active[2][2];
@@ -3028,6 +3043,26 @@
     bool renderClockFrame(uint8_t displayNum, uint8_t rotation, float& lastHourAngleRef, float& lastMinuteAngleRef, float& lastSecondAngleRef, bool& firstRunRef) {
 
         ensureFaceSettings();
+
+        // Hat sich der Text auf dem Zifferblatt geaendert (Minute, Datum), nur dort den Cache neu aufbauen; sonst
+        // ist das Zwischenbild veraltet und das Bild wird voll gesendet
+        // If the text on the clock face changed (minute, date), rebuild the cache only there; otherwise the
+        // composite is outdated and the frame is sent in full
+
+        {
+            const uint32_t overlayKey = infoOverlayKeyNow();
+            if (overlayKey != infoOverlayAppliedKey) {
+                const uint32_t t0 = micros();
+                infoOverlayRefresh(overlayKey);
+#if BOARD_RGB_PANEL
+                lcd4Why[13] = (micros() - t0) / 1000;   // ms des letzten Neuaufbaus / ms of the last rebuild
+                lcd4Why[14]++;
+#else
+                (void)t0;
+#endif
+            }
+        }
+        const bool overlayPending = infoOverlayPending[2] >= infoOverlayPending[0] && infoOverlayPending[3] >= infoOverlayPending[1];
         int orientation = rotation;
         bool forceRender = firstRunRef;
 
@@ -3593,7 +3628,7 @@
         bool drawSecond = showSecondHand && !hideSecondHand;
         bool drawHub = hubSize > 0 && !hideDetailsForRocrail;
         ClockFrameKey& lastFrame = lastClockFrame[displayNum - 1];
-        if (!forceRender && !clockFrameDirty[displayNum - 1] && lastFrame.valid
+        if (!forceRender && !clockFrameDirty[displayNum - 1] && lastFrame.valid && !overlayPending
             && lastFrame.hourAngle == hourAngle
             && lastFrame.minuteAngle == minAngle
             && (!drawSecond || lastFrame.secondAngle == secAngle)
@@ -3625,6 +3660,23 @@
         // Hour/minute angles deliberately NOT compared - with the smooth minute hand they change minimally
         // every frame; a rebuilt composite is caught by the compositeBuildCount check.
 
+#if BOARD_RGB_PANEL
+        {
+            uint8_t why = 0;
+            if (!partialUpdateEnabled) why = 1;
+            else if (forceRender) why = 2;
+            else if (clockFrameDirty[displayNum - 1]) why = 3;
+            else if (!lastFrame.valid) why = 4;
+            else if (!drawSecond || !lastFrame.drawSecond) why = 5;
+            else if (lastFrame.drawHub != drawHub || lastFrame.hubSize != hubSize || lastFrame.hubColor != hubColor) why = 6;
+            else if (lastFrame.brightness != currentBrightness) why = 7;
+            else if (lastFrame.rotation != rotation) why = 8;
+            else if (lastFrame.smoothSecond != smoothSecond) why = 9;
+            else if (lastFrame.assetGeneration != clockAssetGeneration) why = 10;
+            else if (overlayPending) why = 11;
+            lcd4Why[why]++;
+        }
+#endif
         bool partial = partialUpdateEnabled
             && !forceRender && !clockFrameDirty[displayNum - 1] && lastFrame.valid
             && drawSecond && lastFrame.drawSecond
@@ -3663,10 +3715,33 @@
             partial = fabsf(shortestAngleDiff(lastFrame.hourAngle, hourAngle)) < 0.12f &&
                       fabsf(shortestAngleDiff(lastFrame.minuteAngle, minAngle)) < 0.12f;
         }
+
+        // Neuer Text auf dem Zifferblatt: ist nur ein Teilbild moeglich (480x480, Zeiger in der Mitte, Zwischenbild gueltig),
+        // kommt die Flaeche des Textes (bei gedrehtem Zifferblatt umgerechnet) ins Rechteck, sonst wird alles neu aufgebaut
+        // New text on the clock face: if only a partial frame is possible (480x480, hands in the centre, composite valid),
+        // the area of the text (converted for a rotated clock face) joins the rectangle, otherwise everything is rebuilt
+
+        bool overlayInRect = false;
+        const int32_t ovR[4] = { infoOverlayPending[0], infoOverlayPending[1], infoOverlayPending[2], infoOverlayPending[3] };
+        if (overlayPending) {
+            infoOverlayPending[0] = infoOverlayPending[1] = 0;
+            infoOverlayPending[2] = infoOverlayPending[3] = -1;
+#if BOARD_RGB_PANEL
+            HandComposite& ocomp = handComposite[(displayNum == 1) ? 0 : 1];
+            overlayInRect = partial && !subdial && ocomp.valid && ocomp.sprite && ocomp.hands && ocomp.rotation == rotation &&
+                            ocomp.assetGeneration == clockAssetGeneration;
+#endif
+            if (!overlayInRect) {
+                clockAssetGeneration++;
+                partial = false;
+            }
+        }
         const float drawHourAngle = (subdial && partial) ? lastFrame.hourAngle : hourAngle;
         const float drawMinAngle = (subdial && partial) ? lastFrame.minuteAngle : minAngle;
 
         int32_t px0 = INT32_MAX, py0 = INT32_MAX, px1 = INT32_MIN, py1 = INT32_MIN;
+        int32_t rects[40][4];  // Teilrechtecke (x0, y0, x1, y1), einzeln statt als ein grosses / partial rectangles (x0, y0, x1, y1), one by one instead of one big one
+        int nRects = 0;
 #if BOARD_RGB_PANEL
         bool handsMoved = false;
 #endif
@@ -3677,48 +3752,192 @@
 #else
             const float secScale = 1.0f;
 #endif
-            addRotatedSpriteBounds(secondHandSprite, lastFrame.secondAngle, px0, py0, px1, py1, secScale);
-            addRotatedSpriteBounds(secondHandSprite, secAngle, px0, py0, px1, py1, secScale);
-            backgroundSprite.setPivot(centreX, centreY);
-            if (drawHub) {
-                px0 = min(px0, (int32_t)(hubX - hubSize - 2));
-                py0 = min(py0, (int32_t)(hubY - hubSize - 2));
-                px1 = max(px1, (int32_t)(hubX + hubSize + 2));
-                py1 = max(py1, (int32_t)(hubY + hubSize + 2));
+            auto addRect = [&](int32_t a, int32_t b, int32_t c, int32_t d) {
+                a = max(a, (int32_t)0);
+                b = max(b, (int32_t)0);
+                c = min(c, (int32_t)(CLOCK_WIDTH - 1));
+                d = min(d, (int32_t)(CLOCK_HEIGHT - 1));
+                if (c < a || d < b || nRects >= 40) return;
+                rects[nRects][0] = a; rects[nRects][1] = b; rects[nRects][2] = c; rects[nRects][3] = d;
+                nRects++;
+            };
+
+#if BOARD_RGB_PANEL
+            // Ein Zeiger (alter und neuer Stand) als Streifen von je 16 Zeilen: in jedem Streifen nur die Breite, die die beiden
+            // gedrehten Zeigerflaechen dort belegen. Das Umschliessende beider waere fuer einen schraegen Zeiger ein grosses
+            // Quadrat, fast alles davon leer.
+
+            // A hand (old and new position) as strips of 16 rows each: in every strip only the width the two rotated hand areas
+            // occupy there. The enclosing rectangle of both would be a big square for a slanted hand, almost all of it empty.
+
+            auto quadOf = [&](LGFX_Sprite& sprite, float angleDeg, float scale, float q[4][2]) {
+                const float rad = fmodf(angleDeg, 360.0f) * (float)DEG_TO_RAD;
+                const float c = cosf(rad), s = sinf(rad);
+                const float dstX = backgroundSprite.getPivotX() + 0.5f, dstY = backgroundSprite.getPivotY() + 0.5f;
+                const float srcX = sprite.getPivotX() + 0.5f, srcY = sprite.getPivotY() + 0.5f;
+                const float w = (float)sprite.width(), h = (float)sprite.height();
+                const float cxs[4] = { 0.0f, w, w, 0.0f }, cys[4] = { 0.0f, 0.0f, h, h };
+                for (int i = 0; i < 4; i++) {
+                    const float u = cxs[i] - srcX, v = cys[i] - srcY;
+                    q[i][0] = dstX + (u * c - v * s) * scale;
+                    q[i][1] = dstY + (u * s + v * c) * scale;
+                }
+            };
+            auto addBands = [&](const float qa[4][2], const float qb[4][2]) {
+                float ymin = 1e9f, ymax = -1e9f;
+                for (int i = 0; i < 4; i++) {
+                    ymin = min(ymin, min(qa[i][1], qb[i][1]));
+                    ymax = max(ymax, max(qa[i][1], qb[i][1]));
+                }
+                const int32_t top = max((int32_t)floorf(ymin) - 2, (int32_t)0);
+                const int32_t bottom = min((int32_t)ceilf(ymax) + 2, (int32_t)(CLOCK_HEIGHT - 1));
+                for (int32_t by = top; by <= bottom; by += 32) {
+                    const int32_t bh = min(by + 31, bottom);
+                    float xmin = 1e9f, xmax = -1e9f;
+                    for (int pass = 0; pass < 2; pass++) {
+                        const float (*q)[2] = pass ? qb : qa;
+                        for (int i = 0; i < 4; i++) {
+                            const float xa = q[i][0], ya = q[i][1], xb = q[(i + 1) % 4][0], yb = q[(i + 1) % 4][1];
+                            if (ya >= (float)by && ya <= (float)(bh + 1)) { xmin = min(xmin, xa); xmax = max(xmax, xa); }
+                            for (int k = 0; k < 2; k++) {
+                                const float yl = k ? (float)(bh + 1) : (float)by;
+                                if (ya != yb && ((ya <= yl && yl <= yb) || (yb <= yl && yl <= ya))) {
+                                    const float xi = xa + (yl - ya) * (xb - xa) / (yb - ya);
+                                    xmin = min(xmin, xi); xmax = max(xmax, xi);
+                                }
+                            }
+                        }
+                    }
+                    if (xmax >= xmin) addRect((int32_t)floorf(xmin) - 2, by, (int32_t)ceilf(xmax) + 2, bh);
+                }
+            };
+
+            // Sekundenzeiger (alter und neuer Stand) und Nabe
+            // Second hand (old and new position) and the hub
+
+            {
+                // Der Sekundenzeiger bewegt sich in jedem Bild: ein Rechteck (je Rechteck kostet das Zeichnen des Zeigers einmal Aufwand)
+                // The second hand moves in every frame: one rectangle (each rectangle costs the hand drawing a setup once)
+
+                int32_t sx0 = INT32_MAX, sy0 = INT32_MAX, sx1 = INT32_MIN, sy1 = INT32_MIN;
+                addRotatedSpriteBounds(secondHandSprite, lastFrame.secondAngle, sx0, sy0, sx1, sy1, secScale);
+                addRotatedSpriteBounds(secondHandSprite, secAngle, sx0, sy0, sx1, sy1, secScale);
+                backgroundSprite.setPivot(centreX, centreY);
+                if (drawHub) {
+                    sx0 = min(sx0, (int32_t)(hubX - hubSize - 2));
+                    sy0 = min(sy0, (int32_t)(hubY - hubSize - 2));
+                    sx1 = max(sx1, (int32_t)(hubX + hubSize + 2));
+                    sy1 = max(sy1, (int32_t)(hubY + hubSize + 2));
+                }
+                addRect(sx0, sy0, sx1, sy1);
             }
+#else
+            {
+                int32_t sx0 = INT32_MAX, sy0 = INT32_MAX, sx1 = INT32_MIN, sy1 = INT32_MIN;
+                addRotatedSpriteBounds(secondHandSprite, lastFrame.secondAngle, sx0, sy0, sx1, sy1, secScale);
+                addRotatedSpriteBounds(secondHandSprite, secAngle, sx0, sy0, sx1, sy1, secScale);
+                backgroundSprite.setPivot(centreX, centreY);
+                if (drawHub) {
+                    sx0 = min(sx0, (int32_t)(hubX - hubSize - 2));
+                    sy0 = min(sy0, (int32_t)(hubY - hubSize - 2));
+                    sx1 = max(sx1, (int32_t)(hubX + hubSize + 2));
+                    sy1 = max(sy1, (int32_t)(hubY + hubSize + 2));
+                }
+                addRect(sx0, sy0, sx1, sy1);
+            }
+#endif
 #if BOARD_RGB_PANEL
 
-            // Haben sich Stunden-/Minutenzeiger bewegt (nur im Minutentakt), kommen ihre alten und neuen Flaechen
-            // ins Rechteck und das Zwischenbild wird nur dort neu aufgebaut (updateCompositeRect()).
+            // Haben sich Stunden-/Minutenzeiger bewegt (nur im Minutentakt), kommen ihre alten und neuen Flaechen je als
+            // eigenes Rechteck dazu und das Zwischenbild wird nur dort neu aufgebaut (updateCompositeRect()).
 
-            // If the hour/minute hand moved (only once a minute), their old and new areas join the rectangle and
-            // the composite is rebuilt only there (updateCompositeRect()).
+            // If the hour/minute hand moved (only once a minute), their old and new areas each join as a rectangle of
+            // their own and the composite is rebuilt only there (updateCompositeRect()).
 
             if (!subdial) {
                 HandComposite& comp = handComposite[(displayNum == 1) ? 0 : 1];
                 if (comp.valid && comp.sprite && comp.hands && comp.rotation == rotation &&
                     (fabsf(shortestAngleDiff(comp.hourAngle, hourAngle)) >= 0.12f ||
                      fabsf(shortestAngleDiff(comp.minuteAngle, minAngle)) >= 0.12f)) {
-                    addRotatedSpriteBounds(hourHandSprite, comp.hourAngle, px0, py0, px1, py1);
-                    addRotatedSpriteBounds(hourHandSprite, hourAngle, px0, py0, px1, py1);
-                    addRotatedSpriteBounds(minuteHandSprite, comp.minuteAngle, px0, py0, px1, py1);
-                    addRotatedSpriteBounds(minuteHandSprite, minAngle, px0, py0, px1, py1);
+                    int32_t hx0 = INT32_MAX, hy0 = INT32_MAX, hx1 = INT32_MIN, hy1 = INT32_MIN;
+                    addRotatedSpriteBounds(hourHandSprite, comp.hourAngle, hx0, hy0, hx1, hy1);
+                    addRotatedSpriteBounds(hourHandSprite, hourAngle, hx0, hy0, hx1, hy1);
+                    addRect(hx0, hy0, hx1, hy1);
+                    int32_t mx0 = INT32_MAX, my0 = INT32_MAX, mx1 = INT32_MIN, my1 = INT32_MIN;
+                    addRotatedSpriteBounds(minuteHandSprite, comp.minuteAngle, mx0, my0, mx1, my1);
+                    addRotatedSpriteBounds(minuteHandSprite, minAngle, mx0, my0, mx1, my1);
+                    addRect(mx0, my0, mx1, my1);
                     handsMoved = true;
                 }
             }
+            if (overlayInRect) {
+
+                // Rechteck vom Zifferblatt-Bild auf das (gedrehte) Display umrechnen - gleiche Abbildung wie blitFaceIntoSprite()
+                // Convert the rectangle from the clock face image to the (rotated) display - same mapping as blitFaceIntoSprite()
+
+                const int32_t last = CLOCK_WIDTH - 1;
+                int32_t rx0 = ovR[0], ry0 = ovR[1], rx1 = ovR[2], ry1 = ovR[3];
+                switch (faceOrientationFor(rotation)) {
+                    case 1:  rx0 = last - ovR[3]; rx1 = last - ovR[1]; ry0 = ovR[0];        ry1 = ovR[2];        break;
+                    case 2:  rx0 = last - ovR[2]; rx1 = last - ovR[0]; ry0 = last - ovR[3]; ry1 = last - ovR[1]; break;
+                    case 3:  rx0 = ovR[1];        rx1 = ovR[3];        ry0 = last - ovR[2]; ry1 = last - ovR[0]; break;
+                    default: break;
+                }
+                addRect(rx0, ry0, rx1, ry1);
+                handsMoved = true;
+            }
 #endif
-            px0 = max(px0, (int32_t)0);
-            py0 = max(py0, (int32_t)0);
-            px1 = min(px1, (int32_t)(CLOCK_WIDTH - 1));
-            py1 = min(py1, (int32_t)(CLOCK_HEIGHT - 1));
-            partial = (px1 >= px0 && py1 >= py0);
+
+            // Zusammenfassen, was gemeinsam nicht teurer ist als einzeln (Flaeche der Vereinigung <= Summe der Flaechen plus
+            // Aufschlag je Rechteck): ueberlappende Rechtecke kosten die Flaeche doppelt, getrennte kleine sparen viel
+            // Merge what is no more expensive together than apart (area of the union <= sum of the areas plus a surcharge per
+            // rectangle): overlapping rectangles cost the area twice, separate small ones save a lot
+
+            bool mergedAny = true;
+            while (mergedAny && nRects > 1) {
+                mergedAny = false;
+                for (int ri = 0; ri < nRects && !mergedAny; ri++) {
+                    for (int rj = ri + 1; rj < nRects && !mergedAny; rj++) {
+                        const int32_t ux0 = min(rects[ri][0], rects[rj][0]), uy0 = min(rects[ri][1], rects[rj][1]);
+                        const int32_t ux1 = max(rects[ri][2], rects[rj][2]), uy1 = max(rects[ri][3], rects[rj][3]);
+                        const int32_t ua = (ux1 - ux0 + 1) * (uy1 - uy0 + 1);
+                        const int32_t ai = (rects[ri][2] - rects[ri][0] + 1) * (rects[ri][3] - rects[ri][1] + 1);
+                        const int32_t aj = (rects[rj][2] - rects[rj][0] + 1) * (rects[rj][3] - rects[rj][1] + 1);
+                        if (ua <= ai + aj + 2000) {
+                            rects[ri][0] = ux0; rects[ri][1] = uy0; rects[ri][2] = ux1; rects[ri][3] = uy1;
+                            for (int k = 0; k < 4; k++) rects[rj][k] = rects[nRects - 1][k];
+                            nRects--;
+                            mergedAny = true;
+                        }
+                    }
+                }
+            }
+            for (int ri = 0; ri < nRects; ri++) {
+                px0 = min(px0, rects[ri][0]); py0 = min(py0, rects[ri][1]);
+                px1 = max(px1, rects[ri][2]); py1 = max(py1, rects[ri][3]);
+            }
+            partial = nRects > 0;
         }
-        if (partial) backgroundSprite.setClipRect(px0, py0, px1 - px0 + 1, py1 - py0 + 1);
+        uint32_t pixSum = 0;
+#if BOARD_RGB_PANEL
+        uint32_t profA = 0, profB = 0, profC = 0;
+#endif
+
+        // Je Rechteck: Zwischenbild nachfuehren, ins Bild kopieren, Zeiger und Nabe zeichnen, senden. Ohne Teilbild ein Durchlauf.
+        // Per rectangle: bring the composite up to date, copy into the frame, draw hands and hub, send. One pass without a partial frame.
+
+        for (int ri = 0; ri < (partial ? nRects : 1); ri++) {
+        int32_t qx0 = 0, qy0 = 0, qx1 = 0, qy1 = 0;
+        if (partial) { qx0 = rects[ri][0]; qy0 = rects[ri][1]; qx1 = rects[ri][2]; qy1 = rects[ri][3]; }
+        if (partial) {
+            backgroundSprite.setClipRect(qx0, qy0, qx1 - qx0 + 1, qy1 - qy0 + 1);
+            pixSum += (uint32_t)(qx1 - qx0 + 1) * (uint32_t)(qy1 - qy0 + 1);
+        }
 #if BOARD_RGB_PANEL
         if (partial && handsMoved) {
-            updateCompositeRect(handComposite[(displayNum == 1) ? 0 : 1], rotation, hourAngle, minAngle, px0, py0, px1, py1);
+            updateCompositeRect(handComposite[(displayNum == 1) ? 0 : 1], rotation, hourAngle, minAngle, qx0, qy0, qx1, qy1);
         }
-        const uint32_t profA = micros();
+        profA = micros();
 #endif
 
         uint32_t buildsBefore = compositeBuildCount;
@@ -3736,7 +3955,7 @@
             if (compositeOk) compositeOk = drawCompositeInto(displayNum, rotation, hourAngle, minAngle, !subdial);
         }
 #if BOARD_RGB_PANEL
-        const uint32_t profB = micros();
+        profB = micros();
 #endif
         if (!compositeOk) loadClockFace(rotation);
         if (plan.secUnder) {
@@ -3824,7 +4043,7 @@
         }
 
 #if BOARD_RGB_PANEL
-        const uint32_t profC = micros();
+        profC = micros();
 #endif
         if (partial) {
 
@@ -3834,14 +4053,16 @@
             backgroundSprite.clearClipRect();
             int ox, oy;
             clockOrigin(displayNum, ox, oy);
-            pushBackgroundRect(px0, py0, px1 - px0 + 1, py1 - py0 + 1, ox, oy);
-            lastRenderRect[0] = px0; lastRenderRect[1] = py0;
-            lastRenderRect[2] = px1 - px0 + 1; lastRenderRect[3] = py1 - py0 + 1;
+            pushBackgroundRect(qx0, qy0, qx1 - qx0 + 1, qy1 - qy0 + 1, ox, oy);
+            lastRenderRect[0] = qx0; lastRenderRect[1] = qy0;
+            lastRenderRect[2] = qx1 - qx0 + 1; lastRenderRect[3] = qy1 - qy0 + 1;
         }
         else {
             int ox, oy;
             clockOrigin(displayNum, ox, oy);
             backgroundSprite.pushSprite(ox, oy);
+        }
+        if (!partial) break;
         }
         lastRenderPartial = partial;
 #if BOARD_RGB_PANEL
@@ -3857,7 +4078,7 @@
             lcd4Prof[k][2] += profB - profA;
             lcd4Prof[k][3] += profC - profB;
             lcd4Prof[k][4] += profD - profC;
-            if (partial) lcd4ProfPixels += (uint32_t)(px1 - px0 + 1) * (uint32_t)(py1 - py0 + 1);
+            if (partial) lcd4ProfPixels += pixSum;
         }
 #endif
         recordRenderFrame(micros() - renderStartMicros, partial);
@@ -3901,7 +4122,7 @@
     constexpr uint8_t STRIP_FONT_COUNT = sizeof(STRIP_FONTS) / sizeof(STRIP_FONTS[0]);
     constexpr uint8_t STRIP_FONT_VLW = 255; // VLW-Schriften aus dem Designer (kantengeglaettet)
                                             // VLW fonts from the designer (anti-aliased)
-    constexpr uint8_t STRIP_DATE_FMT_COUNT = 7;
+    constexpr uint8_t STRIP_DATE_FMT_COUNT = 8;
     constexpr long STRIP_SCALE_MIN = 50;  // Groesse der eingebauten Schrift in % / size of the built-in font in %
     constexpr long STRIP_SCALE_MAX = 200;
 
@@ -4178,13 +4399,17 @@
         for (uint8_t f = 0; f < STRIP_FONT_COUNT; f++) {
             if (strcmp(STRIP_FONTS[f].name, "FreeSans Bold") == 0) stripFont = f;
         }
-        stripTimeFmt = stripSeconds = stripDateFmt = 0;
+        stripTimeFmt = stripSeconds = stripDateFmt = stripWeekdayFmt = 0;
         stripVlwName = "";
         stripVlwTimeSize = 44;
         stripVlwDateSize = stripVlwWeekdaySize = 22;
         stripTimeScale = stripDateScale = stripWeekdayScale = 100;
         stripShowTime = stripShowDate = true;
         stripShowWeekday = false;
+        if (TFT_HEIGHT <= CLOCK_HEIGHT) {   // auf dem Zifferblatt statt im Streifen: ab Werk aus, Schrift weiss / on the clock face instead of in a strip: off by default, white text
+            stripShowTime = stripShowDate = false;
+            stripFgRgb = 0xFFFFFF;
+        }
         stripBlink = true;
         stripBefore = false;
         stripTimeX = stripTimeY = stripDateX = stripDateY = stripWeekdayX = stripWeekdayY = -1;
@@ -4201,7 +4426,7 @@
                "&stripTs=" + String(stripTimeScale) + "&stripDs=" + String(stripDateScale) + "&stripWs=" + String(stripWeekdayScale) +
                "&stripShowT=" + String(stripShowTime ? 1 : 0) + "&stripShowD=" + String(stripShowDate ? 1 : 0) +
                "&stripShowW=" + String(stripShowWeekday ? 1 : 0) + "&stripTfmt=" + String(stripTimeFmt) +
-               "&stripSec=" + String(stripSeconds) + "&stripDfmt=" + String(stripDateFmt) + "&stripBlink=" + String(stripBlink ? 1 : 0) +
+               "&stripSec=" + String(stripSeconds) + "&stripDfmt=" + String(stripDateFmt) + "&stripWfmt=" + String(stripWeekdayFmt) + "&stripBlink=" + String(stripBlink ? 1 : 0) +
                "&stripTx=" + String(stripTimeX) + "&stripTy=" + String(stripTimeY) + "&stripDx=" + String(stripDateX) +
                "&stripDy=" + String(stripDateY) + "&stripWx=" + String(stripWeekdayX) + "&stripWy=" + String(stripWeekdayY);
     }
@@ -4254,7 +4479,7 @@
     // placement clears the displays once (setStripBefore()).
 
     void ensureStripSettings() {
-        if (TFT_HEIGHT <= CLOCK_HEIGHT || stripSettingsFor == selectedBackground) return;
+        if (stripSettingsFor == selectedBackground) return;
         stripSettingsFor = selectedBackground;
         bool before = stripBefore;
         loadStripSettingsForFace(selectedBackground);
@@ -4262,6 +4487,7 @@
         stripBefore = before;
         setStripBefore(wanted);
         infoStripDirty[0] = infoStripDirty[1] = true;
+        infoOverlayRevision++;
     }
 
     // Naechstliegende vorhandene Groesse der VLW-Schrift stripVlwName (Datei auf der Uhr), sonst target
@@ -4644,6 +4870,9 @@
         else if (key == "stripSec") {
             stripSeconds = (uint8_t)constrain(v, 0L, 2L);
         }
+        else if (key == "stripWfmt") {
+            stripWeekdayFmt = (uint8_t)constrain(v, 0L, 1L);
+        }
         else if (key == "stripDfmt") {
             stripDateFmt = (uint8_t)constrain(v, 0L, (long)STRIP_DATE_FMT_COUNT - 1);
         }
@@ -4660,6 +4889,7 @@
             return false;
         }
         infoStripDirty[0] = infoStripDirty[1] = true;
+        infoOverlayRevision++;
         return true;
     }
 
@@ -4673,8 +4903,8 @@
     // date font. Without a sprite directly, then without VLW and without the graphic.
 
     void renderInfoStrip(int x, int y, int w, int h, bool landscape, const String* lines, uint8_t count, bool colon,
-                         const String& suffix, uint16_t bg, uint16_t fg, bool push, bool useImage) {
-        LGFX_Sprite& s = infoStripSprite;
+                         const String& suffix, uint16_t bg, uint16_t fg, bool push, bool useImage, uint16_t* overlayBuf) {
+        LGFX_Sprite& s = infoStripSprite; // mit overlayBuf auch zum Zeichnen: Zifferblatt hinein, Text darauf, zurueck / with overlayBuf also for drawing: clock face in, text on it, back out
         if (infoStripSpriteCreated && (s.width() != w || s.height() != h)) {
             s.deleteSprite();
             infoStripSpriteCreated = false;
@@ -4683,6 +4913,7 @@
         const bool useSprite = infoStripSpriteCreated;
         if (!push && !useSprite) return; // Vorschau (push = false) geht nur mit Sprite
                                          // preview (push = false) only works with a sprite
+        if (overlayBuf && !useSprite) return;
         lgfx::LovyanGFX& g = useSprite ? (lgfx::LovyanGFX&)s : (lgfx::LovyanGFX&)tft;
         const int ox = useSprite ? 0 : x, oy = useSprite ? 0 : y;
 
@@ -4692,6 +4923,10 @@
         // Fonts: VLW from the designer (sprite only - anti-aliasing needs a readable background) or built-in
 
         const bool vlw = stripFont == STRIP_FONT_VLW && useSprite && ensureStripVlw();
+        int markX0 = INT32_MAX, markY0 = INT32_MAX, markX1 = INT32_MIN, markY1 = INT32_MIN; // Grenzen des Textes (overlayBuf) / bounds of the text (overlayBuf)
+        auto mark = [&](int a, int b, int c, int d) {
+            markX0 = min(markX0, a); markY0 = min(markY0, b); markX1 = max(markX1, c); markY1 = max(markY1, d);
+        };
         StripFace timeFace, dateFace, weekdayFace;
         if (vlw) {
             timeFace = { nullptr, stripVlwTime, 1 };
@@ -4729,7 +4964,13 @@
         rows(timeFace, tTop, tBottom);
         rows(dateFace, dTop, dBottom);
         if (stripShowWeekday) rows(weekdayFace, wTop, wBottom);
-        int portraitH = TFT_HEIGHT - CLOCK_HEIGHT;
+
+        // Auf dem Zifferblatt (kein Streifen) liegen die Zeilen im unteren Teil, unter dem Drehpunkt der Zeiger
+        // On the clock face (no strip) the lines sit in the lower part, below the pivot of the hands
+
+        const bool onFace = TFT_HEIGHT <= CLOCK_HEIGHT;
+        int portraitH = onFace ? h * 30 / 100 : TFT_HEIGHT - CLOCK_HEIGHT;
+        const int bandTop = onFace ? h * 58 / 100 : 0;
         const bool shown[3] = { stripShowTime, stripShowWeekday, stripShowDate };
         const int heights[3] = { tBottom - tTop, wBottom - wTop, dBottom - dTop };
         int16_t* autoY[3] = { &stripAutoTimeY, &stripAutoWeekdayY, &stripAutoDateY };
@@ -4740,9 +4981,9 @@
         int gap = max(0, (portraitH - shownHeight) / (shownCount + 1));
         int cursor = gap;
         for (int i = 0; i < 3; i++) {
-            *autoY[i] = portraitH / 2;
+            *autoY[i] = bandTop + portraitH / 2;
             if (!shown[i]) continue;
-            *autoY[i] = cursor + heights[i] / 2;
+            *autoY[i] = bandTop + cursor + heights[i] / 2;
             cursor += heights[i] + gap;
         }
 
@@ -4771,7 +5012,28 @@
                 imageDrawn = true;
             }
         }
-        if (!imageDrawn) g.fillRect(ox, oy, w, h, bg);
+        int bandY0 = 0, bandRows = 0; // Zeilenband mit Text im Zifferblatt-Bild / band of rows with text in the clock face image
+        if (overlayBuf) {
+
+            // Nur die Zeilen mit Text hin- und zurueckkopieren (statt das ganze Bild): Band um jede angezeigte Zeile
+            // Copy only the rows with text there and back (instead of the whole image): a band around each shown line
+
+            int top = h, bottom = -1;
+            auto band = [&](const StripFace& face, int centreY, int digitTop, int digitBottom, bool shownLine) {
+                if (!shownLine) return;
+                useStripFace(g, face);
+                const int y0 = centreY - (digitTop + digitBottom) / 2;
+                top = min(top, y0 - 4);
+                bottom = max(bottom, (int)(y0 + g.fontHeight() + 4));
+            };
+            band(timeFace, (stripTimeX >= 0 && stripTimeY >= 0) ? stripTimeY : stripAutoTimeY, tTop, tBottom, count > 0 && lines[0].length());
+            band(dateFace, (stripDateX >= 0 && stripDateY >= 0) ? stripDateY : stripAutoDateY, dTop, dBottom, count > 1 && lines[1].length());
+            band(weekdayFace, (stripWeekdayX >= 0 && stripWeekdayY >= 0) ? stripWeekdayY : stripAutoWeekdayY, wTop, wBottom, count > 2 && lines[2].length());
+            bandY0 = max(top, 0);
+            bandRows = bottom >= top ? min(bottom, h - 1) - bandY0 + 1 : 0;
+            if (bandRows > 0) s.pushImage(0, bandY0, w, bandRows, overlayBuf + (size_t)bandY0 * w); // auf dem Zifferblatt bleibt dessen Bild / on the clock face its image stays
+        }
+        else if (!imageDrawn) g.fillRect(ox, oy, w, h, bg);
 
         // Nur Schriftfarbe setzen: ohne Hintergrundfarbe mischt LovyanGFX die Kanten mit dem Sprite-Inhalt
         // Only set the text color: without a background color LovyanGFX blends the edges with the sprite content
@@ -4797,6 +5059,7 @@
             int timeW = g.textWidth(lines[0]);
             int timeCx = ox + tx - (suffixW + suffixGap) / 2;
             drawStripTime(g, lines[0], colon, timeCx, timeTop);
+            if (lines[0].length()) mark(timeCx - timeW / 2 - 2, timeTop - 2, timeCx + timeW / 2 + suffixW + suffixGap + 2, timeTop + g.fontHeight() + 2);
             if (suffix.length()) {
                 useStripFace(g, dateFace);
                 g.setTextDatum(lgfx::top_left);
@@ -4806,6 +5069,8 @@
                 useStripFace(g, dateFace);
                 g.setTextDatum(lgfx::top_center);
                 g.drawString(lines[1], ox + dx, oy + dy - (dTop + dBottom) / 2);
+                mark(ox + dx - g.textWidth(lines[1]) / 2 - 2, oy + dy - (dTop + dBottom) / 2 - 2,
+                     ox + dx + g.textWidth(lines[1]) / 2 + 2, oy + dy - (dTop + dBottom) / 2 + g.fontHeight() + 2);
             }
             if (count > 2 && lines[2].length()) {
                 int wx = (stripWeekdayX >= 0) ? stripWeekdayX : w / 2;
@@ -4813,6 +5078,8 @@
                 useStripFace(g, weekdayFace);
                 g.setTextDatum(lgfx::top_center);
                 g.drawString(lines[2], ox + wx, oy + wy - (wTop + wBottom) / 2);
+                mark(ox + wx - g.textWidth(lines[2]) / 2 - 2, oy + wy - (wTop + wBottom) / 2 - 2,
+                     ox + wx + g.textWidth(lines[2]) / 2 + 2, oy + wy - (wTop + wBottom) / 2 + g.fontHeight() + 2);
             }
         }
         else {
@@ -4841,7 +5108,27 @@
 
         if (useSprite) {
             if (vlw) s.unloadFont();
-            if (push) s.pushSprite(x, y);
+            if (!overlayBuf && !push) {
+                stripPreviewBox[0] = (int16_t)max(markX0, 0);
+                stripPreviewBox[1] = (int16_t)max(markY0, 0);
+                stripPreviewBox[2] = (int16_t)min(markX1, w - 1);
+                stripPreviewBox[3] = (int16_t)min(markY1, h - 1);
+                if (markX1 < markX0) { stripPreviewBox[0] = stripPreviewBox[1] = 0; stripPreviewBox[2] = stripPreviewBox[3] = -1; }
+            }
+            if (overlayBuf) {
+                if (bandRows > 0) s.readRect(0, bandY0, w, bandRows, overlayBuf + (size_t)bandY0 * w);
+                if (markX1 < markX0) {   // nichts gezeichnet / nothing drawn
+                    infoOverlayBoxNew[0] = infoOverlayBoxNew[1] = 0;
+                    infoOverlayBoxNew[2] = infoOverlayBoxNew[3] = -1;
+                }
+                else {
+                    infoOverlayBoxNew[0] = (int16_t)max(markX0, 0);
+                    infoOverlayBoxNew[1] = (int16_t)max(markY0, 0);
+                    infoOverlayBoxNew[2] = (int16_t)min(markX1, w - 1);
+                    infoOverlayBoxNew[3] = (int16_t)min(markY1, h - 1);
+                }
+            }
+            else if (push) s.pushSprite(x, y);
         }
         else {
             setupTextStyle(tft);
@@ -4871,6 +5158,7 @@
             case 4:  a = String(yyyy);                 b = String(mm) + "-" + dd; full = a + "-" + b; break;
             case 5:  a = String(dd) + "." + mm + ".";  b = "";                 full = a; break;
             case 6:  a = String(d) + "." + mm + ".";   b = yy;                 full = a + b; break;
+            case 7:  a = String(d);                    b = "";                 full = a; break;
             default: a = String(d) + "." + mm + ".";   b = yyyy;               full = a + b; break;
         }
     }
@@ -4889,7 +5177,10 @@
     String stripWeekdayText(const struct tm& t) {
         static const char* const DE[7] = { "Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag" };
         static const char* const EN[7] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+        static const char* const DEs[7] = { "So", "Mo", "Di", "Mi", "Do", "Fr", "Sa" };
+        static const char* const ENs[7] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
         if (t.tm_wday < 0 || t.tm_wday > 6) return "";
+        if (stripWeekdayFmt == 1) return currentLanguage == "de" ? DEs[t.tm_wday] : ENs[t.tm_wday];
         return currentLanguage == "de" ? DE[t.tm_wday] : EN[t.tm_wday];
     }
 
@@ -4922,7 +5213,7 @@
         const bool showTime = stripShowTime && (fixedTime || rocrailTimeReady || realTime);
         const bool showDate = stripShowDate && realTime;
         bool withSeconds = stripShowsSeconds();
-        colon = !(stripBlink && showTime && !withSeconds && t.tm_sec % 2);
+        colon = !(stripBlink && showTime && !withSeconds && t.tm_sec % 2 && TFT_HEIGHT > CLOCK_HEIGHT); // auf dem Zifferblatt kein Blinken / no blinking on the clock face
         String dateFull, dateA, dateB;
         String weekday;
         if (realTime) {
@@ -4966,11 +5257,122 @@
     // second or only on a minute change accordingly.
 
     bool stripShowsSeconds() {
+        if (TFT_HEIGHT <= CLOCK_HEIGHT) return false; // auf dem Zifferblatt nie Sekunden / never seconds on the clock face
         return stripSeconds == 2 || (stripSeconds == 0 && !showSecondHand);
     }
 
     uint16_t stripColor565(uint32_t rgb) {
         return tft.color565((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
+    }
+
+
+    // Uhrzeit, Datum und Wochentag direkt auf dem Zifferblatt: bei allen Displays ohne Streifen (rund, 240 x 240, 480 x 480).
+    // Gleiche Einstellungen wie der Streifen (Zifferblatt-Designer, stripcfg_*.txt), ab Werk aus. Sie stecken im Cache des
+    // Zifferblatts und liegen damit hinter den Zeigern; ohne PSRAM (Sparmodus) gibt es sie nicht. infoOverlayKeyNow()
+    // fasst zusammen, was den Text bestimmt (0 = nicht moeglich, 1 = aus, sonst ein Pruefwert): aendert er sich
+    // (Minute, Datum, Einstellungen), wird der Cache neu berechnet.
+
+    // Time, date and weekday directly on the clock face: on all displays without a strip (round, 240 x 240,
+    // 480 x 480). Same settings as the strip (clock face designer, stripcfg_*.txt), off by default. They are part of
+    // the clock face cache and so lie behind the hands; without PSRAM (low-memory mode) they do not exist.
+    // infoOverlayKeyNow() sums up what determines the text (0 = not possible, 1 = off, otherwise a check value): if it
+    // changes (minute, date, settings), the cache is recalculated.
+
+    uint32_t infoOverlayKeyNow() {
+        if (TFT_HEIGHT > CLOCK_HEIGHT || lowMemoryFace()) return 0;
+        ensureStripSettings();
+        if (!stripShowTime && !stripShowDate && !stripShowWeekday) return 1;
+        const bool rocrailTimeReady = rocrailEnabled && rocrailConnected && rocrailLastClockMillis != 0 &&
+                                      (millis() - rocrailLastClockMillis) < ROCRAIL_STALE_TIMEOUT_MS;
+        const struct tm& t = rocrailTimeReady ? rocrailTimeinfo : timeinfo;
+        uint32_t k = 2166136261u;
+        auto mix = [&](uint32_t v) { k = (k ^ v) * 16777619u; };
+        mix(infoOverlayRevision);
+        mix(timeinfo.tm_year >= 100 ? 1 : 0);
+        if (stripShowTime) {
+            mix(rocrailTimeReady ? 1 : 0);
+            mix(t.tm_hour);
+            mix(t.tm_min);
+        }
+        if (stripShowDate || stripShowWeekday) {
+            mix(timeinfo.tm_year);
+            mix(timeinfo.tm_yday);
+            mix(currentLanguage == "de" ? 1 : 2);
+        }
+        return k | 2;
+    }
+
+    // Text ins (helligkeitsangepasste) Zifferblatt-Bild zeichnen: Bild ins Messen-Sprite kopieren, Text darauf (die Schrift
+    // mischt ihre Kanten mit dem Bild darunter), zurueckkopieren.
+    // Draw the text into the (brightness-adjusted) clock face image: copy the image into the measuring sprite, text on
+    // it (the font blends its edges with the image below), copy back.
+
+    void applyInfoOverlay(uint16_t* buf) {
+        if (!buf) return;
+        String lines[6];
+        uint8_t count;
+        bool colon;
+        String suffix;
+        stripContent(false, lines, count, colon, suffix);
+        infoOverlayBoxNew[0] = infoOverlayBoxNew[1] = 0;
+        infoOverlayBoxNew[2] = infoOverlayBoxNew[3] = -1;
+        renderInfoStrip(0, 0, CLOCK_WIDTH, CLOCK_HEIGHT, false, lines, count, colon, suffix, 0,
+                        setPixelBrightness(stripColor565(stripFgRgb)), false, false, buf);
+        for (int i = 0; i < 4; i++) infoOverlayBox[i] = infoOverlayBoxNew[i];
+    }
+
+    // Aendert sich nur der Text (Minute, Datum), den alten Text im Cache aus dem Rohbild wiederherstellen und den neuen
+    // zeichnen - statt den ganzen Cache neu zu rechnen. Das Rechteck aus altem und neuem Text bleibt in
+    // infoOverlayPending, bis renderClockFrame() es verbraucht. Alles andere (Einstellungen, Helligkeit): der
+    // Zifferblatt-Cache wird beim naechsten Zugriff ganz neu aufgebaut.
+
+    // If only the text changes (minute, date), restore the old text in the cache from the raw image and draw the new
+    // one - instead of recalculating the whole cache. The rectangle of old and new text stays in infoOverlayPending
+    // until renderClockFrame() uses it. Everything else (settings, brightness): the clock face cache is rebuilt
+    // completely on the next access.
+
+    void infoOverlayRefresh(uint32_t key) {
+        const bool cheap = clockFaceBuffer && clockFaceBrightBuffer && key > 1 && infoOverlayAppliedKey > 1 &&
+                           infoOverlayRevApplied == infoOverlayRevision &&
+                           (useBacklight || currentBrightness == lastAppliedBrightness);
+        if (!cheap) {
+            clockAssetGeneration++;
+            return;
+        }
+        int16_t old[4];
+        for (int i = 0; i < 4; i++) old[i] = infoOverlayBox[i];
+        if (old[2] >= old[0] && old[3] >= old[1]) {
+            for (int y = old[1]; y <= old[3]; y++) {
+                const size_t row = (size_t)y * CLOCK_WIDTH;
+                for (int x = old[0]; x <= old[2]; x++) clockFaceBrightBuffer[row + x] = setPixelBrightness(clockFaceBuffer[row + x]);
+            }
+        }
+        const uint32_t tA = micros();
+        applyInfoOverlay(clockFaceBrightBuffer);
+#if BOARD_RGB_PANEL
+        lcd4Why[15] = (micros() - tA) / 1000;   // ms fuers Zeichnen des Textes / ms for drawing the text
+#else
+        (void)tA;
+#endif
+        infoOverlayAppliedKey = key;
+        const bool hadOld = old[2] >= old[0] && old[3] >= old[1];
+        const bool hasNew = infoOverlayBox[2] >= infoOverlayBox[0] && infoOverlayBox[3] >= infoOverlayBox[1];
+        int16_t r[4] = { 0, 0, -1, -1 };
+        if (hadOld && hasNew) {
+            r[0] = min(old[0], infoOverlayBox[0]); r[1] = min(old[1], infoOverlayBox[1]);
+            r[2] = max(old[2], infoOverlayBox[2]); r[3] = max(old[3], infoOverlayBox[3]);
+        }
+        else if (hadOld) { for (int i = 0; i < 4; i++) r[i] = old[i]; }
+        else if (hasNew) { for (int i = 0; i < 4; i++) r[i] = infoOverlayBox[i]; }
+        const bool pendingNow = infoOverlayPending[2] >= infoOverlayPending[0] && infoOverlayPending[3] >= infoOverlayPending[1];
+        if (pendingNow && r[2] >= r[0]) {
+            r[0] = min(r[0], infoOverlayPending[0]); r[1] = min(r[1], infoOverlayPending[1]);
+            r[2] = max(r[2], infoOverlayPending[2]); r[3] = max(r[3], infoOverlayPending[3]);
+        }
+        else if (pendingNow) {
+            for (int i = 0; i < 4; i++) r[i] = infoOverlayPending[i];
+        }
+        for (int i = 0; i < 4; i++) infoOverlayPending[i] = r[i];
     }
 
 
@@ -7468,6 +7870,74 @@
     }
 
 
+    // Uhrzeit, Datum und Wochentag des Zifferblatts ins Vorschaubild (Displays ohne Streifen), wenn die Einstellungen des
+    // Zifferblatts (stripcfg_*.txt) etwas davon zeigen. Die Uhr rechnet den Text in voller Groesse (Demo-Zeit 10:10:30 wie die
+    // Zeiger), das Vorschaubild mittelt ihn herunter. Die Einstellungen der laufenden Anzeige bleiben unberuehrt: sie werden
+    // gesichert und danach samt Zaehler wiederhergestellt, damit die Uhr nichts neu zeichnen muss.
+
+    // Time, date and weekday of the clock face into the preview image (displays without a strip) if the clock face's settings
+    // (stripcfg_*.txt) show any of them. The clock computes the text at full size (demo time 10:10:30 like the hands), the
+    // preview image averages it down. The settings of the running display stay untouched: they are saved and restored
+    // afterwards together with the counter, so that the clock does not have to redraw anything.
+
+    void drawFaceOverlayThumb(LGFX_Sprite& canvas, const String& faceFile, int size) {
+        if (TFT_HEIGHT > CLOCK_HEIGHT || lowMemoryFace() || size <= 0) return;
+        const String savedQuery = stripSettingsQuery();
+        const String savedFor = stripSettingsFor;
+        const uint32_t savedRevision = infoOverlayRevision;
+        const bool savedDirty0 = infoStripDirty[0], savedDirty1 = infoStripDirty[1];
+        loadStripSettingsForFace(faceFile);
+        if (stripShowTime || stripShowDate || stripShowWeekday) {
+            const uint32_t fg = stripFgRgb;
+            struct tm demo = timeinfo;
+            demo.tm_hour = 10; demo.tm_min = 10; demo.tm_sec = 30;
+            stripFgRgb = 0xFFFFFF; // weisse Schrift auf Schwarz: die Helligkeit ist die Deckkraft / white text on black: brightness is the opacity
+            const bool rendered = renderStripPreview(CLOCK_WIDTH, CLOCK_HEIGHT, true, &demo, 0x0000);
+            if (rendered && stripPreviewBox[3] >= stripPreviewBox[1] && stripPreviewBox[2] >= stripPreviewBox[0]) {
+                const uint8_t* src = (const uint8_t*)infoStripSprite.getBuffer();
+                const float f = (float)CLOCK_WIDTH / (float)size;
+                const int ty0 = max(0, (int)(stripPreviewBox[1] / f) - 1), ty1 = min(size - 1, (int)(stripPreviewBox[3] / f) + 1);
+                const int tx0 = max(0, (int)(stripPreviewBox[0] / f) - 1), tx1 = min(size - 1, (int)(stripPreviewBox[2] / f) + 1);
+                const int fr = (fg >> 16) & 255, fgn = (fg >> 8) & 255, fb = fg & 255;
+                for (int ty = ty0; ty <= ty1; ty++) {
+                    for (int tx = tx0; tx <= tx1; tx++) {
+                        const int sx0 = (int)(tx * f), sx1 = max(sx0 + 1, (int)((tx + 1) * f));
+                        const int sy0 = (int)(ty * f), sy1 = max(sy0 + 1, (int)((ty + 1) * f));
+                        float sum = 0.0f;
+                        int n = 0;
+                        for (int sy = sy0; sy < sy1 && sy < CLOCK_HEIGHT; sy++) {
+                            for (int sx = sx0; sx < sx1 && sx < CLOCK_WIDTH; sx++) {
+                                const size_t i = ((size_t)sy * CLOCK_WIDTH + sx) * 2;
+                                const uint16_t v = (uint16_t)((src[i] << 8) | src[i + 1]); // RGB565 big-endian
+                                sum += ((v >> 11) / 31.0f + ((v >> 5) & 63) / 63.0f + (v & 31) / 31.0f) / 3.0f;
+                                n++;
+                            }
+                        }
+                        const float a = n ? sum / n : 0.0f;
+                        if (a < 0.02f) continue;
+                        const RGBColor under = canvas.readPixelRGB(tx, ty);
+                        const uint8_t r = (uint8_t)(under.r * (1.0f - a) + fr * a + 0.5f);
+                        const uint8_t g = (uint8_t)(under.g * (1.0f - a) + fgn * a + 0.5f);
+                        const uint8_t b = (uint8_t)(under.b * (1.0f - a) + fb * a + 0.5f);
+                        canvas.drawPixel(tx, ty, (uint16_t)canvas.color565(r, g, b));
+                    }
+                }
+            }
+            stripFgRgb = fg;
+        }
+
+        // Einstellungen der laufenden Anzeige wiederherstellen (ohne dass die Uhr etwas neu zeichnet)
+        // Restore the settings of the running display (without the clock redrawing anything)
+
+        resetStripSettings();
+        applyStripQuery(savedQuery);
+        stripSettingsFor = savedFor;
+        infoOverlayRevision = savedRevision;
+        infoStripDirty[0] = savedDirty0;
+        infoStripDirty[1] = savedDirty1;
+    }
+
+
     // Erzeugt ein Vorschaubild fuer die Preset-Verwaltung: Komposition aus Zifferblatt,
     // Zeigern (Demo-Zeit 10:10:30) und Mittelpunkt in angegebener Farbe/Groesse.
     // Sendet es als Standard-BMP an die laufende Web-Anfrage; false = nichts gesendet (kein Speicher).
@@ -7535,6 +8005,9 @@
             return false;
         }
 
+        // 1b) Uhrzeit, Datum, Wochentag des Zifferblatts, wenn es sie zeigt (hinter den Zeigern)
+        // 1b) Time, date, weekday of the clock face if it shows them (behind the hands)
+        drawFaceOverlayThumb(canvas, faceFile, PREVIEW_SIZE);
         // 2) Zeiger laden (aus Datei, sonst Standardsatz 0)
         // 2) Load hands (from file, otherwise default set 0)
 

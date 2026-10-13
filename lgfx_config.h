@@ -194,10 +194,10 @@ protected:
 #if BOARD_WAVESHARE_S3_LCD4
 
     // Port-Expander der V3: Waveshare-Chip CH32V003 (nicht TCA9554) mit eigenen Registern: Richtung (1 = Ausgang),
-    // Ausgang, PWM-Helligkeit der Beleuchtung (1..247). EXIO5 ist der Beeper (high = an).
+    // Ausgang, PWM-Helligkeit der Beleuchtung (1..247). EXIO6 ist der Beeper (high = an).
 
     // Port expander of the V3: Waveshare chip CH32V003 (not TCA9554) with its own registers: direction (1 = output),
-    // output, PWM brightness of the backlight (1..247). EXIO5 is the buzzer (high = on).
+    // output, PWM brightness of the backlight (1..247). EXIO6 is the buzzer (high = on).
 
 constexpr uint8_t LCD4_EXPANDER_ADDR = 0x24;
 constexpr uint8_t LCD4_EXP_REG_DIR = 0x02, LCD4_EXP_REG_OUT = 0x03, LCD4_EXP_REG_PWM = 0x05;
@@ -213,6 +213,7 @@ constexpr uint8_t LCD4_EXP_REG_DIR = 0x02, LCD4_EXP_REG_OUT = 0x03, LCD4_EXP_REG
 constexpr uint8_t LCD4_BACKLIGHT_PWM = 10;
 constexpr uint8_t LCD4_EXIO_BL_EN = 1, LCD4_EXIO_LCD_RST = 2;     // Beleuchtung an/aus, LCD-Reset
 constexpr uint8_t LCD4_EXIO_TP_RST = 0, LCD4_EXIO_SD_CS = 3;      // Touch-Reset (hier nur HIGH), SD-Chip-Select
+constexpr uint8_t LCD4_EXIO_BUZZER = 6;                           // Beeper (high = an) / buzzer (high = on)
 constexpr int LCD4_PIN_SPI_SCK = 2, LCD4_PIN_SPI_SDA = 1;         // 3-Draht-SPI zum ST7701 (CS = CS_1) / 3-wire SPI to the ST7701
 
 #endif
@@ -221,6 +222,7 @@ constexpr int LCD4_PIN_SPI_SCK = 2, LCD4_PIN_SPI_SDA = 1;         // 3-Draht-SPI
 // Frame time split for /api/lcdstats ([0] partial frame, [1] full frame: count, preparation, composite, hands, send in us)
 inline volatile uint32_t lcd4Prof[2][5] = {};
 inline volatile uint32_t lcd4ProfPixels = 0;
+inline volatile uint32_t lcd4Why[16] = {}; // warum ein Frame voll statt Teilbild war (renderClockFrame()) / why a frame was full instead of partial (renderClockFrame())
 
     // Pixeltakt des RGB-Busses: 12 MHz = 42 Bilder/s. Das Nachfuellen der Bounce-Puffer aus dem PSRAM schafft bei den
     // 16 MHz des Waveshare-Demos (32 MB/s) nur knapp - bei jeder weiteren Speicherlast fehlten Zeilen und das Bild rollte.
@@ -314,10 +316,10 @@ inline void lcd4ExpanderWrite(uint8_t reg, uint8_t value) {
 }
 
     // Ganz am Anfang von setup(): Beeper ausschalten. Der Expander startet mit allen Ausgaengen high, der Beeper
-    // (EXIO5) piept sonst, bis resetPanels() laeuft. Startet auch Wire (I2C 15/7).
+    // (EXIO6) piept sonst, bis resetPanels() laeuft. Startet auch Wire (I2C 15/7).
 
     // Very first thing in setup(): switch the buzzer off. The expander starts with all outputs high, so the buzzer
-    // (EXIO5) would sound until resetPanels() runs. Also starts Wire (I2C 15/7).
+    // (EXIO6) would sound until resetPanels() runs. Also starts Wire (I2C 15/7).
 
 inline bool lcd4ExpanderSafeWrite(uint8_t reg, uint8_t value) {
     Wire.beginTransmission(LCD4_EXPANDER_ADDR);
@@ -347,6 +349,63 @@ inline void lcd4BuzzerOff() {
         delay(5);
         lcd4ExpanderSafeWrite(LCD4_EXP_REG_OUT, outAll);
         lcd4ExpanderSafeWrite(LCD4_EXP_REG_DIR, 0xFF);
+    }
+}
+
+    // Beeper kurz einschalten (beim Start): Ausgangsregister mit gesetztem Beeper-Bit, nach ms wieder aus - mit Abstand zwischen
+    // den Zugriffen, der Expander verwechselt sonst Register (siehe lcd4ExpanderRefresh()). Blockiert ms Millisekunden.
+
+    // Switch the buzzer on briefly (at start): output register with the buzzer bit set, off again after ms - with spacing between
+    // the accesses, otherwise the expander mixes up registers (see lcd4ExpanderRefresh()). Blocks for ms milliseconds.
+
+inline volatile uint8_t lcd4BeepWrites = 0, lcd4BeepAcked = 0; // Zugriffe und davon bestaetigte (fuer /api/lcdstats) / accesses and how many were acknowledged (for /api/lcdstats)
+
+inline void lcd4Beep(uint16_t ms) {
+    const uint8_t outAll = (1 << LCD4_EXIO_BL_EN) | (1 << LCD4_EXIO_LCD_RST) | (1 << LCD4_EXIO_TP_RST) | (1 << LCD4_EXIO_SD_CS);
+    const uint8_t on = outAll | (1 << LCD4_EXIO_BUZZER);
+
+    // Dauer in Schritten zu 50 ms: Beeper-Bit je Schritt erneut setzen, falls ein Zugriff verloren geht oder der Expander das Register zuruecksetzt
+    // Duration in steps of 50 ms: set the buzzer bit again each step in case an access is lost or the expander resets the register
+
+    delay(10);
+    for (uint16_t t = 0; t < ms; t += 50) {
+        lcd4BeepWrites++;
+        if (lcd4ExpanderSafeWrite(LCD4_EXP_REG_OUT, on)) lcd4BeepAcked++;
+        delay(50);
+    }
+    for (int rep = 0; rep < 3; rep++) {
+        lcd4ExpanderSafeWrite(LCD4_EXP_REG_OUT, outAll);
+        delay(5);
+    }
+}
+
+    // Versuch fuer die Fehlersuche (/api/beeptest): beliebigen Expander-Ausgang 4..7 ms lang auf high, wahlweise als Ton (rund 2 kHz
+    // Rechteck, falls der Beeper passiv ist) statt als Dauerpegel.
+
+    // Experiment for troubleshooting (/api/beeptest): any expander output 4..7 high for ms, optionally as a tone (about 2 kHz
+    // square wave, in case the buzzer is passive) instead of a steady level.
+
+inline void lcd4BeepPin(uint8_t pin, uint16_t ms, bool tone) {
+    const uint8_t outAll = (1 << LCD4_EXIO_BL_EN) | (1 << LCD4_EXIO_LCD_RST) | (1 << LCD4_EXIO_TP_RST) | (1 << LCD4_EXIO_SD_CS);
+    const uint8_t on = outAll | (1 << pin);
+    if (!tone) {
+        for (uint16_t t = 0; t < ms; t += 50) {
+            lcd4ExpanderSafeWrite(LCD4_EXP_REG_OUT, on);
+            delay(50);
+        }
+    }
+    else {
+        const uint32_t end = millis() + ms;
+        bool level = false;
+        while ((int32_t)(end - millis()) > 0) {
+            level = !level;
+            lcd4ExpanderSafeWrite(LCD4_EXP_REG_OUT, level ? on : outAll);
+            delayMicroseconds(250);
+        }
+    }
+    for (int rep = 0; rep < 3; rep++) {
+        lcd4ExpanderSafeWrite(LCD4_EXP_REG_OUT, outAll);
+        delay(5);
     }
 }
 
