@@ -119,17 +119,18 @@ Eine Firmware je ESP. Den Displaytyp wählt man im Tab „Uhr Einstellungen“ o
 ## 9. Hardware-Integration
 
 - **ESP32-S2** (Lolin S2 Pico):
-  - GC9A01 (rund, 240 × 240)
-  - GC9D01 (rund, 160 × 160)
+  - GC9A01 (rund, 240 × 240); Bezugsquelle (Beispiel, keine Empfehlung): [Amazon](https://www.amazon.de/dp/B0CFXW8TTH)
+  - GC9D01 (rund, 160 × 160); Bezugsquelle (Beispiel, keine Empfehlung): [Amazon](https://www.amazon.de/dp/B0HJ2SLTK8)
   - ILI9341 (rechteckig, 240 × 320)
   - Verdrahtung siehe `build_uhr4/readme.txt`, Platine im Ordner `PCB`
+  - Auch ein ESP32-S2 Mini läuft mit dieser Firmware (sie ist für das Lolin S2 Pico kompiliert); Bezugsquelle (Beispiel, keine Empfehlung): [Amazon](https://www.amazon.de/dp/B0DDC49WWJ)
 - **ESP32-C6** (Waveshare, Display fest verbaut):
-  - [ESP32-C6-LCD-1.47](https://docs.waveshare.com/ESP32-C6-LCD-1.47/Resources-And-Documents) mit ST7789 (172 × 320)
-  - [ESP32-C6-LCD-1.3](https://docs.waveshare.com/ESP32-C6-LCD-1.3/Resources-And-Documents) mit ST7789 (240 × 240)
+  - [ESP32-C6-LCD-1.47](https://docs.waveshare.com/ESP32-C6-LCD-1.47/Resources-And-Documents) mit ST7789 (172 × 320); Bezugsquelle (Beispiel, keine Empfehlung): [Amazon](https://www.amazon.de/dp/B0DHTMYTCY)
+  - [ESP32-C6-LCD-1.3](https://docs.waveshare.com/ESP32-C6-LCD-1.3/Resources-And-Documents) mit ST7789 (240 × 240); Bezugsquelle (Beispiel, keine Empfehlung): [Amazon](https://www.amazon.de/dp/B0GGXWCQ79)
 - **ESP32-S3** (Waveshare, Display fest verbaut):
-  - [ESP32-S3-LCD-1.28](https://docs.waveshare.com/ESP32-S3-LCD-1.28) mit GC9A01 (240 × 240, rund)
+  - [ESP32-S3-LCD-1.28](https://docs.waveshare.com/ESP32-S3-LCD-1.28) mit GC9A01 (240 × 240, rund); Bezugsquelle (Beispiel, keine Empfehlung): [Amazon](https://www.amazon.de/dp/B0CSFFHNWT)
 - **ESP32-S3-Touch-LCD-4** (Waveshare, Display fest verbaut, **experimentell**):
-  - [ESP32-S3-Touch-LCD-4](https://docs.waveshare.com/ESP32-S3-Touch-LCD-4) mit ST7701 (480 × 480, quadratisch, Touch)
+  - [ESP32-S3-Touch-LCD-4](https://docs.waveshare.com/ESP32-S3-Touch-LCD-4) mit ST7701 (480 × 480, quadratisch, Touch); Bezugsquelle (Beispiel, keine Empfehlung): [Amazon](https://www.amazon.de/dp/B0DCZGB5LH)
 - **Adafruit Qualia ESP32-S3** (Display ohne Controller-Platine, **experimentell, ungetestet**):
   - [Qualia ESP32-S3 for RGB666 Displays](https://learn.adafruit.com/adafruit-qualia-esp32-s3-for-rgb666-displays) mit dem 2,1" runden TL021WVC02 (480 × 480, Touch CST826)
 - Fotowiderstand für die Helligkeit; die Uhr erkennt ihn beim Start.
@@ -301,17 +302,18 @@ One firmware per ESP. The display type is chosen in the "Clock Setup" tab or whe
 ## 9. Hardware Integration
 
 - **ESP32-S2** (Lolin S2 Pico):
-  - GC9A01 (round, 240 × 240)
-  - GC9D01 (round, 160 × 160)
+  - GC9A01 (round, 240 × 240); source (example, not a recommendation): [Amazon](https://www.amazon.de/dp/B0CFXW8TTH)
+  - GC9D01 (round, 160 × 160); source (example, not a recommendation): [Amazon](https://www.amazon.de/dp/B0HJ2SLTK8)
   - ILI9341 (rectangular, 240 × 320)
   - Wiring see `build_uhr4/readme.txt`, PCB in the `PCB` folder
+  - An ESP32-S2 Mini also runs this firmware (it is compiled for the Lolin S2 Pico); source (example, not a recommendation): [Amazon](https://www.amazon.de/dp/B0DDC49WWJ)
 - **ESP32-C6** (Waveshare, display built in):
-  - [ESP32-C6-LCD-1.47](https://docs.waveshare.com/ESP32-C6-LCD-1.47/Resources-And-Documents) with ST7789 (172 × 320)
-  - [ESP32-C6-LCD-1.3](https://docs.waveshare.com/ESP32-C6-LCD-1.3/Resources-And-Documents) with ST7789 (240 × 240)
+  - [ESP32-C6-LCD-1.47](https://docs.waveshare.com/ESP32-C6-LCD-1.47/Resources-And-Documents) with ST7789 (172 × 320); source (example, not a recommendation): [Amazon](https://www.amazon.de/dp/B0DHTMYTCY)
+  - [ESP32-C6-LCD-1.3](https://docs.waveshare.com/ESP32-C6-LCD-1.3/Resources-And-Documents) with ST7789 (240 × 240); source (example, not a recommendation): [Amazon](https://www.amazon.de/dp/B0GGXWCQ79)
 - **ESP32-S3** (Waveshare, display built in):
-  - [ESP32-S3-LCD-1.28](https://docs.waveshare.com/ESP32-S3-LCD-1.28) with GC9A01 (240 × 240, round)
+  - [ESP32-S3-LCD-1.28](https://docs.waveshare.com/ESP32-S3-LCD-1.28) with GC9A01 (240 × 240, round); source (example, not a recommendation): [Amazon](https://www.amazon.de/dp/B0CSFFHNWT)
 - **ESP32-S3-Touch-LCD-4** (Waveshare, display built in, **experimental**):
-  - [ESP32-S3-Touch-LCD-4](https://docs.waveshare.com/ESP32-S3-Touch-LCD-4) with ST7701 (480 × 480, square, touch)
+  - [ESP32-S3-Touch-LCD-4](https://docs.waveshare.com/ESP32-S3-Touch-LCD-4) with ST7701 (480 × 480, square, touch); source (example, not a recommendation): [Amazon](https://www.amazon.de/dp/B0DCZGB5LH)
 - **Adafruit Qualia ESP32-S3** (display without controller board, **experimental, untested**):
   - [Qualia ESP32-S3 for RGB666 Displays](https://learn.adafruit.com/adafruit-qualia-esp32-s3-for-rgb666-displays) with the 2.1" round TL021WVC02 (480 × 480, CST826 touch)
 - Photoresistor for brightness; the clock detects it at startup.

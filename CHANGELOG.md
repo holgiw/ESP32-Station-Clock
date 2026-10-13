@@ -28,6 +28,9 @@
 - Zifferblatt-Designer: Knopf „Schärfen“ (Unschärfemaske) mit einstellbarer Stärke (10 bis 300 %); schärft das ganze Zifferblatt, ist mehrfach anwendbar und mit „Rückgängig“ zurückzunehmen.
 - Zifferblatt-Designer: Pfeilknöpfe „Verschieben“ schieben das ganze Zifferblatt um 1 Pixel (mit Umschalt um 10) nach links, rechts, oben oder unten; frei werdende Ränder erhalten die gewählte Farbe. Rückgängig ist möglich.
 - Zifferblatt- und Zeigersatz-Seite: Das aktive Zifferblatt bzw. der aktive Zeigersatz hat einen roten Rahmen; er wandert mit der Auswahl.
+- Beim Umbenennen eines Zifferblatts wird „face_“ (und „.bmp“) automatisch ergänzt, wenn es im neuen Namen fehlt; Speichern im Designer und Hochladen taten das schon.
+- Dateimanager: Alle Dateien außer denen des Startpakets lassen sich umbenennen (bisher nur .bmp). Schriften behalten ihr Präfix („font_“, „stripfont_“), fehlt die Endung, bleibt die alte.
+- README: Bezugsquellen (Beispiele, keine Empfehlung) für Boards und Displays; THIRD_PARTY_LICENSES um FreeSerif und die Qualia-Startfolge ergänzt.
 - Abfragen des Dateisystems werden zwischengespeichert (`fs_cache.h`: freier Platz, Existenz von Dateien, Dateiliste): Seiten wie „Zeiger“ (vorher 1,7 s) und der Zeigerdesigner (0,5 s) laden in etwa 0,5 s bzw. 0,1 s, der Sekundenzeiger steht beim Seitenaufruf kürzer still. Nach jedem Schreibzugriff werden die Werte neu gelesen.
 - 480x480: Beim Speichern eines Zifferblatts oder Zeigers und beim Hochladen zeigt das Display eine ruhige blaue Fläche statt zu flackern (bis 1,5 s nach dem letzten Schreibzugriff).
 
@@ -475,6 +478,9 @@
 - Clock face designer: "Sharpen" button (unsharp mask) with adjustable strength (10 to 300 %); sharpens the whole clock face, can be applied repeatedly and undone with "Undo".
 - Clock face designer: arrow buttons "Shift" move the whole clock face by 1 pixel (10 with Shift) left, right, up or down; edges that become free get the selected colour. Undo is possible.
 - Clock face and hand set pages: the active clock face or hand set has a red frame; it follows the selection.
+- When a clock face is renamed, "face_" (and ".bmp") is added automatically if it is missing in the new name; saving in the designer and uploading already did that.
+- File manager: all files except those of the starter set can be renamed (before only .bmp). Fonts keep their prefix ("font_", "stripfont_"), if the extension is missing the old one stays.
+- README: sources (examples, not a recommendation) for boards and displays; THIRD_PARTY_LICENSES extended by FreeSerif and the Qualia start-up sequence.
 - File system queries are cached (`fs_cache.h`: free space, existence of files, file list): pages such as "Hand Set" (before 1.7 s) and the hand designer (0.5 s) load in about 0.5 s and 0.1 s, the second hand stands still for a shorter time when a page is opened. After every write access the values are read again.
 - 480x480: when saving a clock face or hand and when uploading, the display shows a calm blue area instead of flickering (until 1.5 s after the last write access).
 

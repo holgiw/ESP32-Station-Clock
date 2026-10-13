@@ -2725,6 +2725,29 @@
                 if (!oldName.startsWith("/")) oldName = "/" + oldName;
                 if (!newName.startsWith("/")) newName = "/" + newName;
 
+                // Ein Zifferblatt behaelt "face_" und ".bmp": fehlt eines im neuen Namen, wird es ergaenzt - sonst taucht die Datei
+                // in der Zifferblatt-Liste nicht mehr auf
+                // A clock face keeps "face_" and ".bmp": if one is missing in the new name it is added - otherwise the file
+                // would no longer show up in the clock face list
+
+                if (oldName.startsWith("/face_") && oldName.endsWith(".bmp")) {
+                    if (!newName.startsWith("/face_")) newName = "/face_" + newName.substring(1);
+                    if (!newName.endsWith(".bmp")) newName += ".bmp";
+                }
+
+                // Andere Dateien: Schriften behalten ihr Praefix ("font_", "stripfont_"), und fehlt die Endung, bleibt die alte
+                // (.ttf, .vlw, .log, .txt ...) - sonst erkennt die Uhr die Datei nicht mehr
+                // Other files: fonts keep their prefix ("font_", "stripfont_"), and if the extension is missing the old one stays
+                // (.ttf, .vlw, .log, .txt ...) - otherwise the clock no longer recognizes the file
+
+                for (const char* prefix : { "/stripfont_", "/font_" }) {
+                    if (oldName.startsWith(prefix) && !newName.startsWith(prefix)) newName = String(prefix) + newName.substring(1);
+                }
+                {
+                    int dotOld = oldName.lastIndexOf('.');
+                    if (dotOld > 0 && newName.lastIndexOf('.') <= 0) newName += oldName.substring(dotOld);
+                }
+
                 // Neuen Dateinamen pruefen: Dateinamen landen ungeescaped in HTML-Attributen (/files,
                 // /listfilesFaces, /handsets) - ein "'" oder "<" ermoeglichte dort gespeichertes XSS.
 
@@ -3461,20 +3484,21 @@
                         chunk += " <td><a href = '/delete?file=" + name + "&from=files' title='" + translate("Delete") + "' onclick = 'return confirm(\"" + translate("Delete") + " " + name + "?\")'>&#128465;&#65039;</a> ";
                     }
 
-                    // Skalieren und Umbenennen nur fuer .bmp-Dateien
-                    // Scale and rename only for .bmp files
+                    // Umbenennen fuer alle Dateien (ausser dem Startpaket), Skalieren nur fuer .bmp-Dateien
+                    // Rename for all files (except the starter set), scale only for .bmp files
 
                     if (builtIn) {
                         chunk += "<span style='opacity:0.25;' title='" + translate("built-in") + "'>&#128208;</span> ";
                         chunk += "<span style='opacity:0.25;' title='" + translate("built-in") + "'>&#9999;&#65039;</span> ";
                     }
-                    else if (name.endsWith(".bmp")) {
-                        chunk += "<a href = '/scalebmp_form?file=" + name + "' title='" + translate("Scale") + "'>&#128208;</a> ";
-                        chunk += "<a href='/rename_form?file=" + name + "&from=files' title='" + translate("Rename") + "'>&#9999;&#65039;</a> ";
-                    }
                     else {
-                        chunk += "<span style='opacity:0.25;' title='" + translate("Not applicable to this file type") + "'>&#128208;</span> ";
-                        chunk += "<span style='opacity:0.25;' title='" + translate("Not applicable to this file type") + "'>&#9999;&#65039;</span> ";
+                        if (name.endsWith(".bmp")) {
+                            chunk += "<a href = '/scalebmp_form?file=" + name + "' title='" + translate("Scale") + "'>&#128208;</a> ";
+                        }
+                        else {
+                            chunk += "<span style='opacity:0.25;' title='" + translate("Not applicable to this file type") + "'>&#128208;</span> ";
+                        }
+                        chunk += "<a href='/rename_form?file=" + name + "&from=files' title='" + translate("Rename") + "'>&#9999;&#65039;</a> ";
                     }
 
                     // Ansehen nur, wo der Browser etwas anzeigen kann: Bilder (/file liefert RLE als normales BMP) und Text
