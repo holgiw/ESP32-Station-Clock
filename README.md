@@ -134,7 +134,7 @@ Eine Firmware je ESP. Den Displaytyp wählt man im Tab „Uhr Einstellungen“ o
 - **Adafruit Qualia ESP32-S3** (Display ohne Controller-Platine, **experimentell, ungetestet**):
   - [Qualia ESP32-S3 for RGB666 Displays](https://learn.adafruit.com/adafruit-qualia-esp32-s3-for-rgb666-displays) mit dem 2,1" runden TL021WVC02 (480 × 480, Touch CST826)
 - Fotowiderstand für die Helligkeit; die Uhr erkennt ihn beim Start.
-- Optional: zweites, baugleiches Display (nur ESP32-S2, eigener Chip-Select), RTC DS3231 (hält die Uhrzeit über Stromausfälle, auch ohne WLAN), DCF77-Empfänger (Funkzeit ohne Internet).
+- Optional: zweites, baugleiches Display (nur ESP32-S2, eigener Chip-Select), RTC DS3231 (hält die Uhrzeit über Stromausfälle, auch ohne WLAN; Bezugsquelle, Beispiel ohne Empfehlung: [Amazon](https://www.amazon.de/dp/B07LH592FM)), DCF77-Empfänger (Funkzeit ohne Internet; Bezugsquelle, Beispiel ohne Empfehlung: [ELV DCF-2](https://de.elv.com/p/elv-dcf-empfangsmodul-dcf-2-P091610/), ein Bausatz).
 - Taster (oder der eingebaute Boot-Taster), je nach Haltedauer:
   - kurz: zeigt das verbundene WLAN,
   - 10–20 Sekunden: gelber Countdown „WiFi Reset“, Loslassen bricht ab,
@@ -317,7 +317,7 @@ One firmware per ESP. The display type is chosen in the "Clock Setup" tab or whe
 - **Adafruit Qualia ESP32-S3** (display without controller board, **experimental, untested**):
   - [Qualia ESP32-S3 for RGB666 Displays](https://learn.adafruit.com/adafruit-qualia-esp32-s3-for-rgb666-displays) with the 2.1" round TL021WVC02 (480 × 480, CST826 touch)
 - Photoresistor for brightness; the clock detects it at startup.
-- Optional: a second, identical display (ESP32-S2 only, own chip select), RTC DS3231 (keeps the time across power loss, also without WiFi), DCF77 receiver (radio time without internet).
+- Optional: a second, identical display (ESP32-S2 only, own chip select), RTC DS3231 (keeps the time across power loss, also without WiFi; source, example without recommendation: [Amazon](https://www.amazon.de/dp/B07LH592FM)), DCF77 receiver (radio time without internet; source, example without recommendation: [ELV DCF-2](https://de.elv.com/p/elv-dcf-empfangsmodul-dcf-2-P091610/), a kit).
 - Button (or the built-in Boot button), depending on how long it is held:
   - short: shows the connected WiFi,
   - 10–20 seconds: yellow "WiFi Reset" countdown, releasing aborts,
