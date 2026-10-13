@@ -113,7 +113,7 @@
         else if (name == "ILI9341") { type = DISPLAY_TYPE_ILI9341; backlight = false; }
         else if (name == "ST7789") { type = DISPLAY_TYPE_ST7789; backlight = true; }
         else if (name == "ST7789_240") { type = DISPLAY_TYPE_ST7789_240; backlight = true; }
-        else if (name == "ST7701_480") { type = DISPLAY_TYPE_ST7701_480; backlight = false; }
+        else if (name == "ST7701_480") { type = DISPLAY_TYPE_ST7701_480; backlight = true; } // PWM ueber den Port-Expander / PWM via the port expander
         else return false;
         return displayTypeSupported(type);
     }

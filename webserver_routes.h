@@ -4769,25 +4769,6 @@
             lcd4MaxGapUs = 0;
             webserver.send(200, "application/json", r);
             });
-        webserver.on("/api/lcdtest", HTTP_GET, []() {
-
-            // Test: feste Farbe mit Textstreifen fuer 6 s zeigen (/api/lcdtest?a=Zeile1&b=Zeile2)
-            // Test: show the fixed colour with the text banner for 6 s (/api/lcdtest?a=line1&b=line2)
-
-            lcd4StaticText(webserver.arg("a").length() ? webserver.arg("a") : String("Test"), webserver.arg("b").length() ? webserver.arg("b") : String("12 %"), tftRotation1 == 2);
-            webserver.send(200, "text/plain", "OK");
-            for (int i = 0; i < 60; i++) { lcd4StaticBegin(); delay(100); }
-            });
-        webserver.on("/api/lcdwifi", HTTP_GET, []() {
-
-            // Test: das animierte WLAN-Symbol 4 Durchlaeufe lang zeigen, danach zeichnet die Uhr neu
-            // Test: show the animated WiFi symbol for 4 runs, then the clock redraws
-
-            webserver.send(200, "text/plain", "OK");
-            clearTFT();
-            for (int i = 0; i < 4; i++) animateCursor(statusWidth() / 2, (int)(CLOCK_HEIGHT * 0.84f), 170);
-            firstRun = true;
-            });
         webserver.on("/api/lcdresync", HTTP_GET, []() {
             lcd4Resync();
             webserver.send(200, "text/plain", "OK");
