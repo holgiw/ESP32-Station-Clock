@@ -2695,6 +2695,7 @@
 
     const float HAND_MOVE_THRESHOLD_DEG = 10.0f;
     const unsigned long HAND_MOVE_MS = 3000;
+    const unsigned long HAND_START_MOVE_MS = 5000; // die allererste Bewegung nach dem Start / the very first movement after the start
 
     struct HandMove {
         bool active = false;
@@ -2702,6 +2703,7 @@
         float lastTarget = 0.0f;
         float lastRemain = 1.0f;  // Restanteil (1 - Smoothstep) im letzten Bild / remaining share in the last frame
         unsigned long startMillis = 0;
+        unsigned long durationMs = HAND_MOVE_MS;
     };
 
     float wrapAngle(float a) {
@@ -2718,6 +2720,16 @@
             m.lastTarget = target;
             m.lastRemain = 1.0f;
             m.startMillis = now;
+
+            // Die ersten Bewegungen nach dem Start (alle Zeiger, auch beider Displays, beginnen innerhalb einer
+            // Sekunde) dauern HAND_START_MOVE_MS, spaetere Spruenge HAND_MOVE_MS.
+
+            // The first movements after the start (all hands, also of both displays, begin within one second)
+            // take HAND_START_MOVE_MS, later jumps take HAND_MOVE_MS.
+
+            static unsigned long firstMoveMillis = 0;
+            if (firstMoveMillis == 0) firstMoveMillis = now ? now : 1;
+            m.durationMs = (now - firstMoveMillis < 1000) ? HAND_START_MOVE_MS : HAND_MOVE_MS;
             return shown;
         }
 
@@ -2732,7 +2744,7 @@
             m.lastRemain = 1.0f;
         }
 
-        float p = (float)(now - m.startMillis) / (float)HAND_MOVE_MS;
+        float p = (float)(now - m.startMillis) / (float)m.durationMs;
         if (p >= 1.0f) {
             m.active = false;
             return target;
@@ -5776,7 +5788,23 @@
         // Setup (never a valid time, WPS or access point): with PWM 50 % (BACKLIGHT_SETUP_LEVEL), otherwise
         // full brightness - messages and the AP password stay readable, also without a bright light sensor.
 
-        bool setupBrightness = !timeEverValid || softAPIP || wpsPending;
+        bool setupBrightness = softAPIP || wpsPending;
+
+        // Noch keine Uhrzeit (normaler Start): mit reduzierter Helligkeit (minBrightness) beginnen. Sobald die Zeit
+        // gueltig ist, steigt die Helligkeit mit Beleuchtungsregelung langsam auf den Wert der normalen Regelung
+        // (z.B. Zeitfenster), siehe startRampActive.
+
+        // No time yet (normal start): begin with reduced brightness (minBrightness). As soon as the time is
+        // valid, the brightness with a backlight control rises slowly to the value of the normal control (e.g.
+        // time window), see startRampActive.
+
+        const bool waitingForTime = !timeEverValid && !setupBrightness;
+        static bool wasWaitingForTime = true;
+        static bool startRampActive = false;
+        static unsigned long startRampStepMillis = 0;
+        if (wasWaitingForTime && !waitingForTime && !setupBrightness) startRampActive = true;
+        wasWaitingForTime = waitingForTime;
+        const uint8_t brightnessBefore = currentBrightness;
 
         // Helligkeitstest (Weboberflaeche): der eingetragene Wert gilt sofort, ohne Anlauf, bis BRIGHTNESS_TEST_MS
         // vorbei sind - dann greift wieder die normale Regelung.
@@ -5793,6 +5821,10 @@
         }
         else if (setupBrightness) {
             targetBrightness = useBacklight ? BACKLIGHT_SETUP_LEVEL : maxBrightness;
+            currentBrightness = targetBrightness;
+        }
+        else if (waitingForTime) {
+            targetBrightness = minBrightness;
             currentBrightness = targetBrightness;
         }
         else if (rocrailBrightnessActive) {
@@ -5898,6 +5930,24 @@
 
                 currentBrightness = minBrightness;
                 targetBrightness = currentBrightness;
+            }
+        }
+
+        // Langsames Hochdimmen nach dem Start: hoechstens ein Schritt je START_RAMP_STEP_MS (0 bis 255 in etwa 8 s).
+        // Endet beim Ziel oder sobald die Einrichtung oder ein Helligkeitstest eingreift.
+
+        // Slow dimming up after the start: at most one step per START_RAMP_STEP_MS (0 to 255 in about 8 s). Ends
+        // at the target or as soon as the setup or a brightness test intervenes.
+
+        const unsigned long START_RAMP_STEP_MS = 30;
+        if (startRampActive) {
+            if (!useBacklight || setupBrightness || waitingForTime || brightnessTestActive) {
+                startRampActive = false;
+            }
+            else {
+                if (millis() - startRampStepMillis < START_RAMP_STEP_MS) currentBrightness = brightnessBefore;
+                else startRampStepMillis = millis();
+                if (currentBrightness == targetBrightness) startRampActive = false;
             }
         }
 

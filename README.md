@@ -74,7 +74,7 @@ Eine Firmware je ESP. Den Displaytyp wählt man im Tab „Uhr Einstellungen“ o
   - ESP32-S3: Pin 40, auf dem Waveshare-Board fest verdrahtet, ab Werk an.
   - ESP32-S3-Touch-LCD-4: kein Pin, die PWM sitzt im Port-Expander CH32V003 des Boards; ab Werk an.
 - Fotowiderstand als Spannungsteiler mit 10 kΩ: ESP32-S2 an GPIO 1 (3 V), 2 (Messung), 4 (GND); ESP32-C6 an GPIO 1 (3 V), 2 (Messung), 3 (GND) der Stiftleiste; ESP32-S3 an GPIO 2 (3 V), 4 (Messung), 5 (GND) der Stiftleiste; ESP32-S3-Touch-LCD-4 laut `config.h` an GPIO 43 (3 V), 4 (Messung), 44 (GND), nicht erprobt. Ohne Fotowiderstand gilt die manuelle Helligkeit.
-- Während der Einrichtung (noch keine gültige Uhrzeit, Access Point oder WPS aktiv) leuchtet das Display mit PWM-Beleuchtung mit 50 %, sonst mit voller Helligkeit.
+- Während der Einrichtung (Access Point oder WPS aktiv) leuchtet das Display mit PWM-Beleuchtung mit 50 %, sonst mit voller Helligkeit. Beim normalen Start, solange noch keine Uhrzeit da ist, läuft es mit der minimalen Helligkeit und wird mit PWM-Beleuchtung danach langsam (etwa 5–8 s) auf den Wert der Regelung (z. B. Zeitfenster) hochgedimmt.
 - Die Gamma-Korrektur gibt es nur mit Lichtsensor und PWM-Beleuchtung. ESP32-C6: Über 128 warnt die Helligkeitsseite vor Überhitzung der Beleuchtung (Hinweis von Waveshare).
 - Mit Rocrail kann der Server die Helligkeit vorgeben (Abschnitt 11).
 
@@ -260,7 +260,7 @@ One firmware per ESP. The display type is chosen in the "Clock Setup" tab or whe
   - ESP32-S3: pin 40, hard-wired on the Waveshare board, on by default.
   - ESP32-S3-Touch-LCD-4: no pin, the PWM sits in the board's CH32V003 port expander; on by default.
 - Photoresistor as a voltage divider with 10 kΩ: ESP32-S2 on GPIO 1 (3 V), 2 (measurement), 4 (GND); ESP32-C6 on GPIO 1 (3 V), 2 (measurement), 3 (GND) of the pin header; ESP32-S3 on GPIO 2 (3 V), 4 (measurement), 5 (GND) of the pin header; ESP32-S3-Touch-LCD-4 according to `config.h` on GPIO 43 (3 V), 4 (measurement), 44 (GND), not tested. Without a photoresistor the manual brightness applies.
-- During setup (no valid time yet, access point or WPS active) the display runs at 50 % with PWM backlight, otherwise at full brightness.
+- During setup (access point or WPS active) the display runs at 50 % with PWM backlight, otherwise at full brightness. At a normal start, as long as there is no time yet, it runs at the minimum brightness and, with PWM backlight, is then dimmed up slowly (about 5–8 s) to the value of the control (e.g. time window).
 - Gamma correction only exists with a light sensor and PWM backlight. ESP32-C6: above 128 the brightness page warns of the backlight overheating (note from Waveshare).
 - With Rocrail, the server can set the brightness (section 11).
 

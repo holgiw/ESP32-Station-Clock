@@ -1034,6 +1034,16 @@ void setup() {
 
         updateBrightness();
 
+#if BOARD_RGB_PANEL
+        // Die Beleuchtung am Port-Expander startet mit dem Wert aus dem Panel-Start (tft.init()) - schon der soll der
+        // errechnete Startwert sein (ohne Uhrzeit minBrightness), nicht volle Helligkeit.
+
+        // The backlight on the port expander starts with the value from the panel start (tft.init()) - this already
+        // should be the calculated start value (without a time minBrightness), not full brightness.
+
+        if (useBacklight) lcd4SetBacklight(currentBrightness);
+#endif
+
         if (loggingEnabled)  Serial.println("debug is " + String(loggingEnabled ? "enabled" : "disabled"));
 
         // Beide Chips fuer tft.init() gleichzeitig selektieren - auch ein als

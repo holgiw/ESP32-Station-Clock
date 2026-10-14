@@ -718,9 +718,6 @@
             return NOT_CONNECTED;
         }
 
-        if (verboseMode && useBacklight && backlightAttached) {
-            backlightWrite(BACKLIGHT_SETUP_LEVEL);
-        }
         if (wifiSsid[number] == "") {
            // DEBUG_PRINTLN("[WiFi] SSID " + String(number + 1) + " is empty, skipping");
             return NOT_CONNECTED;
