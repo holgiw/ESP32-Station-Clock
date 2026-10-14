@@ -508,15 +508,43 @@ inline void lcd4PanelInit() {
     // unusually long. Pins, clock and timings come from the Bus_RGB configuration.
 
 #include <esp_timer.h>
+#include <atomic>
 
 inline esp_lcd_panel_handle_t lcd4PanelHandle = nullptr;
-inline uint8_t* lcd4Fb = nullptr;                       // Bildspeicher im PSRAM / frame buffer in PSRAM
+inline uint8_t* lcd4Fb = nullptr;                       // angezeigter Bildspeicher im PSRAM (liest die Bounce-Unterbrechung) / displayed frame buffer in PSRAM (read by the bounce interrupt)
+
+    // Doppelpuffer: Das Panel liest immer einen ganzen Bildspeicher (lcd4Fb), LovyanGFX schreibt in den anderen (lcd4DrawFb). Zu Beginn
+    // eines Bildes tauscht die Unterbrechung beide, wenn die Uhr ein fertiges Bild gemeldet hat (display()) und nicht gerade schreibt.
+    // Dann sieht das Panel nie ein halb altes, halb neues Bild (geteilte Zeiger). Danach holt sich der Hauptlauf vor dem naechsten
+    // Schreiben die geaenderten Rechtecke aus dem angezeigten Speicher, damit beide wieder gleich sind (lcd4ResyncDraw()).
+
+    // Double buffer: the panel always reads a whole frame buffer (lcd4Fb), LovyanGFX writes into the other one (lcd4DrawFb). At the
+    // start of a frame the interrupt swaps both if the clock has reported a finished frame (display()) and is not writing right now.
+    // The panel then never sees a half old, half new picture (split hands). Afterwards the main loop fetches the changed rectangles
+    // from the displayed buffer before the next write, so that both are equal again (lcd4ResyncDraw()).
+
+inline uint8_t* lcd4FbBuf[2] = { nullptr, nullptr };
+inline uint8_t* lcd4DrawFb = nullptr;                    // Bildspeicher, in den geschrieben wird / frame buffer being written into
+inline uint8_t* lcd4FrameFb = nullptr;                   // Bildspeicher des gerade ausgegebenen Bildes / frame buffer of the frame being output
+inline std::atomic<bool> lcd4Open{ false };              // seit dem letzten display() wurde geschrieben / written since the last display()
+inline std::atomic<bool> lcd4PresentPending{ false };    // fertiges Bild wartet auf den Tausch / finished frame waits for the swap
+inline std::atomic<bool> lcd4Swapped{ false };           // getauscht, der Hauptlauf muss noch angleichen / swapped, the main loop still has to equalise
+inline volatile int64_t lcd4OpenSinceUs = 0;
+inline volatile uint32_t lcd4Swaps = 0;
+struct Lcd4Rect { int16_t l = INT16_MAX, t = INT16_MAX, r = -1, b = -1; };
+inline Lcd4Rect lcd4Dirty, lcd4SwapDirty;                // geaendert seit dem letzten Tausch / changed since the last swap; Rechteck des letzten Tauschs / rectangle of the last swap
+inline portMUX_TYPE lcd4Mux = portMUX_INITIALIZER_UNLOCKED;
 inline esp_lcd_rgb_panel_config_t lcd4PanelCfg = {};    // einmal aufgebaut, fuer jeden Neustart wiederverwendet / built once, reused for every restart
 inline int lcd4BounceLines = LCD4_BOUNCE_LINES;
 inline uint32_t lcd4FramePeriodUs = 0;
 inline volatile int64_t lcd4VsyncLastUs = 0;
 inline volatile int64_t lcd4BounceLastUs = 0;
 inline int64_t lcd4LineNs = 0;                         // Dauer einer Zeile / duration of one line
+inline int64_t lcd4BlankUs = 0;                        // Austastung am Bildende (Vsync-Pulse + Back-/Front-Porch) / blanking at the frame end (vsync pulse + back/front porch)
+inline int lcd4LastEndPx = 0;                          // Ende (Pixel) des zuletzt gefuellten Bounce-Puffers / end (pixels) of the bounce buffer filled last
+inline volatile int64_t lcd4IgnoreUntilUs = 0;         // nach dem Treiberstart: Auffaelligkeiten nicht werten / after the driver start: do not count irregularities
+inline volatile uint32_t lcd4PosErrors = 0;            // Bounce-Puffer nicht lueckenlos aufeinander folgend / bounce buffers not following each other without a gap
+inline volatile uint32_t lcd4Anom[4] = {};             // letzte Auffaelligkeit: Art (1 Luecke, 2 Position, 3 Bildlaenge), Wert, Position, Zeit ms / last irregularity: kind (1 gap, 2 position, 3 frame length), value, position, time ms
 inline int64_t lcd4BounceGapUs = 0;                    // Abstand der Bounce-Unterbrechungen, ab dem eine verpasst wurde / interval of the bounce interrupts above which one was missed
 inline volatile bool lcd4StallSeen = false;
 inline volatile bool lcd4StaticOn = false;             // Update/Sicherung laeuft: feste Farbe statt Bild / update or backup running: fixed colour instead of the image
@@ -602,15 +630,57 @@ inline bool lcd4BounceEmpty(esp_lcd_panel_handle_t, void* buf, int posPx, int le
         return false;
     }
     int64_t now = esp_timer_get_time();
-    int64_t phase = lcd4FramePeriodUs ? (now - lcd4VsyncLastUs) % (int64_t)lcd4FramePeriodUs : 0; // Lage im Bild / position in the frame
-    bool nearFrameEnd = phase < 3500 || phase > (int64_t)lcd4FramePeriodUs - 600;
-    if (lcd4BounceLastUs && !nearFrameEnd) {
-        uint32_t gap = (uint32_t)(now - lcd4BounceLastUs);
-        if (gap > lcd4MaxGapUs) lcd4MaxGapUs = gap;
-        if (gap > lcd4BounceGapUs) { lcd4StallSeen = true; lcd4StallCount++; }
+
+    // Die Puffer muessen lueckenlos aufeinander folgen und gleichmaessig kommen. Am Bildende (letzter Puffer, Position 480 x 480)
+    // darf die Pause um die Austastung laenger sein, sonst nicht - so gibt es keinen blinden Bereich mehr. Ein verpasster Pufferwechsel
+    // zeigt sich als Luecke oder als Sprung der Position und verschiebt das Bild dauerhaft - Neustart vormerken (lcd4Reinit()).
+
+    // The buffers must follow each other without a gap and evenly. At the frame end (last buffer, position 480 x 480) the pause around
+    // the blanking may be longer, otherwise not - so there is no blind area any more. A missed buffer switch shows as a gap or as a
+    // jump of the position and shifts the picture permanently - note a restart (lcd4Reinit()).
+
+    if (now < lcd4IgnoreUntilUs) {
+        lcd4BounceLastUs = 0;
+    }
+    else if (lcd4BounceLastUs) {
+        const bool boundary = lcd4LastEndPx >= 480 * 480 || lcd4LastEndPx == 2 * lcd4BounceLines * 480; // Bildende, und der zweite Puffer eines Bildes (die Austastung liegt zwischen seiner Fuellung und der des dritten) / frame end, and the second buffer of a frame (the blanking lies between its filling and that of the third)
+        const uint32_t gap = (uint32_t)(now - lcd4BounceLastUs);
+        const int64_t limit = lcd4BounceGapUs + (boundary ? lcd4BlankUs : 0);
+        if (!boundary && gap > lcd4MaxGapUs) lcd4MaxGapUs = gap;
+        if (gap > limit) {
+            lcd4StallSeen = true; lcd4StallCount++;
+            lcd4Anom[0] = 1; lcd4Anom[1] = gap; lcd4Anom[2] = (uint32_t)posPx; lcd4Anom[3] = (uint32_t)(now / 1000);
+        }
+        if (posPx != (lcd4LastEndPx >= 480 * 480 ? 0 : lcd4LastEndPx)) {
+            lcd4StallSeen = true; lcd4PosErrors++;
+            lcd4Anom[0] = 2; lcd4Anom[1] = (uint32_t)lcd4LastEndPx; lcd4Anom[2] = (uint32_t)posPx; lcd4Anom[3] = (uint32_t)(now / 1000);
+        }
     }
     lcd4BounceLastUs = now;
-    memcpy(buf, lcd4Fb + (size_t)posPx * 2, lenBytes);
+    lcd4LastEndPx = posPx + lenBytes / 2;
+    if (posPx == 0) {
+
+        // Bildanfang: ein fertiges Bild jetzt anzeigen (Zeiger der beiden Bildspeicher tauschen), sofern die Uhr nicht mitten im Schreiben
+        // ist; haengt das Schreiben laenger als 200 ms, gilt es als beendet. Das ganze Bild kommt dann aus einem Speicher.
+        // Start of a frame: show a finished frame now (swap the pointers of the two frame buffers) if the clock is not in the middle of
+        // writing; if the writing hangs for more than 200 ms it counts as finished. The whole frame then comes from one buffer.
+
+        if (lcd4Open.load() && now - lcd4OpenSinceUs > 200000) lcd4Open.store(false);
+        if (lcd4PresentPending.load() && !lcd4Open.load() && !lcd4Swapped.load()) {
+            uint8_t* shown = lcd4DrawFb;
+            lcd4DrawFb = lcd4Fb;
+            lcd4Fb = shown;
+            portENTER_CRITICAL_ISR(&lcd4Mux);
+            lcd4SwapDirty = lcd4Dirty;
+            lcd4Dirty = Lcd4Rect();
+            portEXIT_CRITICAL_ISR(&lcd4Mux);
+            lcd4PresentPending.store(false);
+            lcd4Swapped.store(true);
+            lcd4Swaps++;
+        }
+        lcd4FrameFb = lcd4Fb;
+    }
+    memcpy(buf, (lcd4FrameFb ? lcd4FrameFb : lcd4Fb) + (size_t)posPx * 2, lenBytes);
     return false;
 }
 
@@ -619,9 +689,13 @@ inline bool lcd4BounceEmpty(esp_lcd_panel_handle_t, void* buf, int posPx, int le
 
 inline bool lcd4VsyncEvent(esp_lcd_panel_handle_t, const esp_lcd_rgb_panel_event_data_t*, void*) {
     int64_t now = esp_timer_get_time();
+    if (now < lcd4IgnoreUntilUs) lcd4VsyncLastUs = 0;
     if (lcd4VsyncLastUs) {
         int64_t dt = now - lcd4VsyncLastUs;
-        if (dt > (int64_t)lcd4FramePeriodUs * 5 / 4 || dt < (int64_t)lcd4FramePeriodUs * 3 / 4) { lcd4StallSeen = true; lcd4VsyncStalls++; }
+        if (dt > (int64_t)lcd4FramePeriodUs * 5 / 4 || dt < (int64_t)lcd4FramePeriodUs * 3 / 4) {
+            lcd4StallSeen = true; lcd4VsyncStalls++;
+            lcd4Anom[0] = 3; lcd4Anom[1] = (uint32_t)dt; lcd4Anom[2] = 0; lcd4Anom[3] = (uint32_t)(now / 1000);
+        }
     }
     lcd4VsyncLastUs = now;
     return false;
@@ -652,6 +726,8 @@ inline bool lcd4CreatePanel() {
     cb.on_vsync = lcd4VsyncEvent;
     lcd4VsyncLastUs = 0;
     lcd4BounceLastUs = 0;
+    lcd4LastEndPx = 0;
+    lcd4IgnoreUntilUs = esp_timer_get_time() + 500000; // der Treiberstart selbst ist unruhig: eine halbe Sekunde nicht werten / the driver start itself is uneven: do not count for half a second
     lcd4StallSeen = false;
     if (esp_lcd_rgb_panel_register_event_callbacks(lcd4PanelHandle, &cb, nullptr) != ESP_OK) return false;
     if (esp_lcd_panel_reset(lcd4PanelHandle) != ESP_OK) return false;
@@ -744,22 +820,87 @@ public:
                            (c.vsync_pulse_width + c.vsync_back_porch + 480 + c.vsync_front_porch);
         lcd4FramePeriodUs = (uint32_t)(totalPx * 1000000ULL / c.freq_write);
         lcd4LineNs = (int64_t)(c.hsync_pulse_width + c.hsync_back_porch + 480 + c.hsync_front_porch) * 1000000000LL / c.freq_write;
+        lcd4BlankUs = (int64_t)(c.vsync_pulse_width + c.vsync_back_porch + c.vsync_front_porch) * lcd4LineNs / 1000;
 
-        lcd4Fb = (uint8_t*)heap_caps_aligned_calloc(64, 1, 480 * 480 * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (!lcd4Fb) return false;
+        for (int i = 0; i < 2; i++) {
+            if (!lcd4FbBuf[i]) lcd4FbBuf[i] = (uint8_t*)heap_caps_aligned_calloc(64, 1, 480 * 480 * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        }
+        if (!lcd4FbBuf[0] || !lcd4FbBuf[1]) return false;
+        lcd4Fb = lcd4FbBuf[0];
+        lcd4DrawFb = lcd4FbBuf[1];
+        lcd4FrameFb = lcd4Fb;
+        lcd4Open.store(false); lcd4PresentPending.store(false); lcd4Swapped.store(false);
+        lcd4Dirty = Lcd4Rect(); lcd4SwapDirty = Lcd4Rect();
         return lcd4CreatePanel();
     }
 
-    uint8_t* getDMABuffer(uint32_t) override { return lcd4Fb; }
+    uint8_t* getDMABuffer(uint32_t) override { return lcd4DrawFb; }
 
     void release(void) override {
         if (lcd4PanelHandle) { esp_lcd_panel_del(lcd4PanelHandle); lcd4PanelHandle = nullptr; }
-        if (lcd4Fb) { heap_caps_free(lcd4Fb); lcd4Fb = nullptr; }
+        for (int i = 0; i < 2; i++) { if (lcd4FbBuf[i]) { heap_caps_free(lcd4FbBuf[i]); lcd4FbBuf[i] = nullptr; } }
+        lcd4Fb = nullptr; lcd4DrawFb = nullptr; lcd4FrameFb = nullptr;
     }
 };
 
+    // Nach einem Tausch (lcd4Swapped) vor dem naechsten Schreiben: die Zeilenzeiger auf den neuen Schreibspeicher setzen und die
+    // geaenderten Zeilen aus dem angezeigten Speicher dorthin kopieren. Nur im Hauptlauf.
+    // After a swap (lcd4Swapped) before the next write: point the line pointers at the new write buffer and copy the changed lines from
+    // the displayed buffer there. Main loop only.
+
+struct Panel_UhrRGB : public lgfx::Panel_RGB {
+    void lcd4SetLines(uint8_t* fb) {
+        if (!_lines_buffer) return;
+        const size_t stride = (size_t)(((_cfg.panel_width + 3) & ~3) * _write_bits >> 3);
+        for (int y = 0; y < (int)_cfg.panel_height; ++y) _lines_buffer[y] = fb + (size_t)y * stride;
+    }
+    void lcd4WriteBegin() {
+        lcd4OpenSinceUs = esp_timer_get_time();
+        lcd4Open.store(true);
+        if (lcd4Swapped.load()) {
+            Lcd4Rect d;
+            portENTER_CRITICAL(&lcd4Mux);
+            d = lcd4SwapDirty;
+            portEXIT_CRITICAL(&lcd4Mux);
+            lcd4SetLines(lcd4DrawFb);
+            if (d.r >= d.l && d.b >= d.t) {
+                const int l = max((int)d.l, 0), r = min((int)d.r, 479);
+                for (int y = max((int)d.t, 0); y <= min((int)d.b, 479); y++) {
+                    memcpy(lcd4DrawFb + (size_t)y * 960 + (size_t)l * 2, lcd4Fb + (size_t)y * 960 + (size_t)l * 2, (size_t)(r - l + 1) * 2);
+                }
+            }
+            lcd4Swapped.store(false);
+        }
+    }
+    void display(uint_fast16_t x, uint_fast16_t y, uint_fast16_t w, uint_fast16_t h) override {
+        Lcd4Rect m;
+        if (_internal_rotation != 0) { m.l = 0; m.t = 0; m.r = 479; m.b = 479; }
+        else {
+            int_fast16_t l = _range_mod.left, rr = _range_mod.right, t = _range_mod.top, b = _range_mod.bottom;
+            if (0 < w && 0 < h) { l = std::min<int_fast16_t>(l, (int_fast16_t)x); rr = std::max<int_fast16_t>(rr, (int_fast16_t)(x + w - 1)); t = std::min<int_fast16_t>(t, (int_fast16_t)y); b = std::max<int_fast16_t>(b, (int_fast16_t)(y + h - 1)); }
+            if (rr >= l && b >= t) { m.l = (int16_t)l; m.r = (int16_t)rr; m.t = (int16_t)t; m.b = (int16_t)b; }
+        }
+        if (m.r >= m.l && m.b >= m.t) {
+            portENTER_CRITICAL(&lcd4Mux);
+            lcd4Dirty.l = min(lcd4Dirty.l, m.l); lcd4Dirty.t = min(lcd4Dirty.t, m.t);
+            lcd4Dirty.r = max(lcd4Dirty.r, m.r); lcd4Dirty.b = max(lcd4Dirty.b, m.b);
+            portEXIT_CRITICAL(&lcd4Mux);
+        }
+        lgfx::Panel_RGB::display(x, y, w, h);
+        lcd4PresentPending.store(true);
+        lcd4Open.store(false);
+    }
+    void drawPixelPreclipped(uint_fast16_t x, uint_fast16_t y, uint32_t rawcolor) override { lcd4WriteBegin(); lgfx::Panel_RGB::drawPixelPreclipped(x, y, rawcolor); }
+    void writeFillRectPreclipped(uint_fast16_t x, uint_fast16_t y, uint_fast16_t w, uint_fast16_t h, uint32_t rawcolor) override { lcd4WriteBegin(); lgfx::Panel_RGB::writeFillRectPreclipped(x, y, w, h, rawcolor); }
+    void writeBlock(uint32_t rawcolor, uint32_t length) override { lcd4WriteBegin(); lgfx::Panel_RGB::writeBlock(rawcolor, length); }
+    void writeImage(uint_fast16_t x, uint_fast16_t y, uint_fast16_t w, uint_fast16_t h, lgfx::pixelcopy_t* param, bool use_dma) override { lcd4WriteBegin(); lgfx::Panel_RGB::writeImage(x, y, w, h, param, use_dma); }
+    void writeImageARGB(uint_fast16_t x, uint_fast16_t y, uint_fast16_t w, uint_fast16_t h, lgfx::pixelcopy_t* param) override { lcd4WriteBegin(); lgfx::Panel_RGB::writeImageARGB(x, y, w, h, param); }
+    void writePixels(lgfx::pixelcopy_t* param, uint32_t len, bool use_dma) override { lcd4WriteBegin(); lgfx::Panel_RGB::writePixels(param, len, use_dma); }
+    void copyRect(uint_fast16_t dst_x, uint_fast16_t dst_y, uint_fast16_t w, uint_fast16_t h, uint_fast16_t src_x, uint_fast16_t src_y) override { lcd4WriteBegin(); lgfx::Panel_RGB::copyRect(dst_x, dst_y, w, h, src_x, src_y); }
+};
+
 class UhrLGFX : public lgfx::LGFX_Device {
-    lgfx::Panel_RGB _panel_rgb;
+    Panel_UhrRGB _panel_rgb;
     Bus_EspLcdRGB _bus_rgb;
 
 public:

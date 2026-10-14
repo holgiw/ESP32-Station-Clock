@@ -3636,7 +3636,7 @@
             && lastFrame.drawHub == drawHub
             && lastFrame.hubSize == hubSize
             && lastFrame.hubColor == hubColor
-            && lastFrame.brightness == currentBrightness
+            && (useBacklight || lastFrame.brightness == currentBrightness) // mit Beleuchtungsregelung aendert die Helligkeit keine Pixel / with a backlight control brightness changes no pixels
             && lastFrame.rotation == rotation
             && lastFrame.smoothSecond == smoothSecond
             && lastFrame.assetGeneration == clockAssetGeneration) {
@@ -3683,7 +3683,7 @@
             && lastFrame.drawHub == drawHub
             && lastFrame.hubSize == hubSize
             && lastFrame.hubColor == hubColor
-            && lastFrame.brightness == currentBrightness
+            && (useBacklight || lastFrame.brightness == currentBrightness) // mit Beleuchtungsregelung aendert die Helligkeit keine Pixel / with a backlight control brightness changes no pixels
             && lastFrame.rotation == rotation
             && lastFrame.smoothSecond == smoothSecond
             && lastFrame.assetGeneration == clockAssetGeneration;

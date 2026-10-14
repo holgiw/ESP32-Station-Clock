@@ -64,7 +64,7 @@
     // change) and obsolete keys (isObsoletePrefKey()) - "ssid"/"pass" held the WiFi in plain text.
 
     bool isBackupExcludedKey(const String& key) {
-        return key == PK_VERSION || key == PK_FIRST_START || key == PK_MIGRATIONS_DONE || key == PK_SUBDIAL_SET || key == PK_SUBDIAL_HAND_VER || key == PK_RENUM_PLAN ||
+        return key == PK_VERSION || key == PK_FIRST_START || key == PK_MIGRATIONS_DONE || key == PK_HANDS_CHECKED || key == PK_SUBDIAL_SET || key == PK_SUBDIAL_HAND_VER || key == PK_RENUM_PLAN ||
                key == PK_LOG_FILE_NUMBER || key == PK_LOGGING_START || isBackupBrightnessKey(key) || key == PK_LAST_RESET_WEEK || key == PK_MQTT_PASS || key.startsWith("wtx") || isObsoletePrefKey(key);
     }
 
@@ -979,6 +979,7 @@
         // old format. Already converted files are skipped.
 
         preferences.remove(PK_MIGRATIONS_DONE);
+        preferences.remove(PK_HANDS_CHECKED); // auch die Zeigerdateien beim naechsten Start pruefen / also check the hand files at the next start
 
         DEBUG_PRINTLN("[Backup] Restored " + String(restored) + " settings" + (applyWifi ? " (incl. WiFi)" : " (WiFi kept)") +
                       (otherType ? ", other display type: display dependent values kept" : keepBrightness ? ", brightness kept (other backlight mode)" : ""));

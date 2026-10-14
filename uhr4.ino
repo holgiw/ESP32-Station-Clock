@@ -1131,10 +1131,22 @@ void setup() {
                                // move pivots from facecfg_*.txt into the clock faces (display.h)
         refreshGeneratedAssets(); // erzeugte Dateien im Mass eines anderen Displaytyps neu erzeugen
                                   // regenerate generated files in the size of another display type
-        completeHandSets();       // jeder Zeigersatz mit allen drei Zeigern (fehlende aus Satz 0)
-                                  // every hand set with all three hands (missing ones from set 0)
-        upgradeHandFiles();       // alle Zeiger im neuen Format speichern (alte Formate auffuellen)
-                                  // store all hands in the new format (pad the old formats)
+
+        // Die Zeigerdateien (jeder Satz mit allen drei Zeigern, alle im neuen Format) nur nach einem Firmware-Update oder bei anderem
+        // Displaytyp pruefen - sie zu lesen kostete bei jedem Start rund drei Sekunden. Hochladen und Wiederherstellen einer
+        // Sicherung pruefen selbst (die Sicherung loescht zusaetzlich den Merker).
+        // Check the hand files (every set with all three hands, all in the new format) only after a firmware update or with another
+        // display type - reading them cost about three seconds at every start. Uploading and restoring a backup check on their own
+        // (the backup also deletes the marker).
+
+        const String handsStamp = String(version) + "|" + String(displayType);
+        if (preferences.getString(PK_HANDS_CHECKED, "") != handsStamp) {
+            completeHandSets();       // jeder Zeigersatz mit allen drei Zeigern (fehlende aus Satz 0)
+                                      // every hand set with all three hands (missing ones from set 0)
+            upgradeHandFiles();       // alle Zeiger im neuen Format speichern (alte Formate auffuellen)
+                                      // store all hands in the new format (pad the old formats)
+            preferences.putString(PK_HANDS_CHECKED, handsStamp);
+        }
         loadClockFace();
         loadHandSprites();
 

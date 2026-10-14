@@ -36,6 +36,10 @@
   `stripcfg_*.txt`). Ab Werk aus. Der Text liegt hinter den Zeigern und steckt im Zifferblatt-Cache, ohne Sekunden und ohne blinkenden Doppelpunkt; er
   ändert sich einmal pro Minute (auf dem 480er-Board kostet das ein kurzes Aussetzen des Sekundenzeigers). Ohne PSRAM (ESP32-C6) nicht verfügbar.
 - Neue Adressen zur Kontrolle: `/api/faceimg` (Zifferblatt-Cache, wie er zum Display geht) und `/api/frameimg` (zuletzt gezeichnetes Bild mit Zeigern), beide RGB565.
+- 480x480: Die Erkennung eines verschobenen oder gestörten Bildes ist verbessert: Nach einem Neustart des Panel-Treibers zählt die Uhr die Unruhe des Starts eine halbe Sekunde lang nicht mehr (vorher löste ein Neustart weitere Neustarts aus, auch 3–4 beim Einschalten), und die Pausen um das Bildende haben keinen blinden Bereich mehr. Neu: Prüfung, dass die Bounce-Puffer lückenlos aufeinander folgen; `/api/lcdstats` meldet `posErrors` und die letzte Auffälligkeit (`anom`).
+- 480x480: Doppelpuffer für das Panel. Das Panel liest einen ganzen Bildspeicher, die Uhr schreibt in den anderen; zu Beginn eines Bildes werden beide getauscht, sobald ein fertiges Bild gemeldet ist. Dadurch gibt es keine geteilten Zeiger (Tearing) mehr. Kostet 460 KB PSRAM. Neue Adresse `/api/fbimg` (angezeigter Bildspeicher), `/api/lcdstats` meldet `swaps`.
+- Startanimation (alle Displays mit Beleuchtungsregelung): Beim Einblenden der Helligkeit wurde jedes Bild voll neu gezeichnet und gesendet (auf dem 480er rund 0,2 s je Bild, etwa 5 Bilder pro Sekunde); jetzt wie sonst als Teilbild, die Helligkeit ändert dort keine Pixel.
+- Start: Die Zeigerdateien werden nur nach einem Firmware-Update, bei anderem Displaytyp und nach dem Wiederherstellen einer Sicherung geprüft statt bei jedem Start (spart rund 2 s bis die Uhr im WLAN antwortet).
 - Die Seite „Vorschau“ und die Vorschaubilder der Presets zeigen Uhrzeit, Datum und Wochentag auf dem Zifferblatt (Displays ohne Streifen), wenn das Zifferblatt sie anzeigt; in den Presets mit der Demo-Zeit 10:10:30.
 - Waveshare ESP32-S3-Touch-LCD-4: Beim Start piept der Beeper 500 ms lang (Beeper an Expander-Ausgang EXIO6); Prüfadresse `/api/beeptest`.
 - 480x480: Der Minutenzeiger gleitet 300 ms statt 600 ms.
@@ -501,6 +505,10 @@
   `stripcfg_*.txt`). Off by default. The text lies behind the hands and is part of the clock face cache, without seconds and without a blinking
   colon; it changes once a minute (on the 480 board that costs a short pause of the second hand). Not available without PSRAM (ESP32-C6).
 - New addresses for checking: `/api/faceimg` (clock face cache as it goes to the display) and `/api/frameimg` (last drawn frame with the hands), both RGB565.
+- 480x480: detection of a shifted or disturbed picture is improved: after a restart of the panel driver the clock no longer counts the unrest of the start for half a second (before, a restart triggered further restarts, also 3-4 at power-up), and the pauses around the frame end no longer have a blind area. New: check that the bounce buffers follow each other without a gap; `/api/lcdstats` reports `posErrors` and the last irregularity (`anom`).
+- 480x480: double buffer for the panel. The panel reads one whole frame buffer, the clock writes into the other; at the start of a frame both are swapped as soon as a finished frame is reported. That removes split hands (tearing). Costs 460 KB of PSRAM. New address `/api/fbimg` (displayed frame buffer), `/api/lcdstats` reports `swaps`.
+- Start animation (all displays with backlight control): while the brightness faded in every frame was redrawn and sent in full (on the 480 about 0.2 s per frame, about 5 frames per second); now partial frames as usual, the brightness changes no pixels there.
+- Start: the hand files are checked only after a firmware update, with another display type and after restoring a backup instead of at every start (saves about 2 s until the clock answers on WiFi).
 - The "Preview" page and the preview images of the presets show time, date and weekday on the clock face (displays without a strip) if the clock face displays them; in the presets with the demo time 10:10:30.
 - Waveshare ESP32-S3-Touch-LCD-4: the buzzer beeps for 500 ms at start (buzzer on expander output EXIO6); test address `/api/beeptest`.
 - 480x480: the minute hand glides for 300 ms instead of 600 ms.

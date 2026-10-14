@@ -9,6 +9,7 @@
     // General / System
     constexpr const char* PK_VERSION           = "version";
     constexpr const char* PK_FIRST_START       = "firstStart";
+    constexpr const char* PK_HANDS_CHECKED     = "handsChk";  // Firmware-Version + Displaytyp, fuer die die Zeigerdateien zuletzt geprueft wurden (siehe setup())
     constexpr const char* PK_MIGRATIONS_DONE   = "migrDone"; // Flag: RLE-Migration + Eckenmaskierung bereits abgeschlossen (siehe setup())
                                                              // Flag: RLE migration + corner masking already done (see setup())
     constexpr const char* PK_LANGUAGE          = "language";

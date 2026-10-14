@@ -4814,7 +4814,7 @@
         webserver.on("/api/lcdstats", HTTP_GET, []() {
             String r = "{\"bounceLines\":" + String(lcd4BounceLines) + ",\"gapLimitUs\":" + String((uint32_t)lcd4BounceGapUs) +
                        ",\"maxGapUs\":" + String(lcd4MaxGapUs) + ",\"stallsBounce\":" + String(lcd4StallCount) +
-                       ",\"stallsVsync\":" + String(lcd4VsyncStalls) + ",\"reinits\":" + String(lcd4ReinitCount) +
+                       ",\"stallsVsync\":" + String(lcd4VsyncStalls) + ",\"posErrors\":" + String(lcd4PosErrors) + ",\"anom\":[" + String(lcd4Anom[0]) + "," + String(lcd4Anom[1]) + "," + String(lcd4Anom[2]) + "," + String(lcd4Anom[3]) + "],\"reinits\":" + String(lcd4ReinitCount) +
                        ",\"uptimeS\":" + String(millis() / 1000) + ",\"frames\":{";
 
             // Je Bildart: Anzahl und Mittelwert in us (Vorbereitung, Zwischenbild, Zeiger/Nabe, Senden), danach zuruecksetzen
@@ -4829,7 +4829,13 @@
             }
             r += String(",\"sumPixelsPartial\":") + String(lcd4ProfPixels) + ",\"why\":[";
             for (int j = 0; j < 16; j++) { r += String(j ? "," : "") + String(lcd4Why[j]); if (j < 13) lcd4Why[j] = 0; }
-            r += "],\"beep\":[" + String(lcd4BeepWrites) + "," + String(lcd4BeepAcked) + "]}}";
+            r += "],\"swaps\":" + String(lcd4Swaps) + ",\"beep\":[";
+#if BOARD_WAVESHARE_S3_LCD4
+            r += String(lcd4BeepWrites) + "," + String(lcd4BeepAcked);
+#else
+            r += "0,0"; // nur das Waveshare-Board hat einen Beeper / only the Waveshare board has a buzzer
+#endif
+            r += "]}}";
             lcd4ProfPixels = 0;
             lcd4MaxGapUs = 0;
             webserver.send(200, "application/json", r);
@@ -7491,6 +7497,26 @@
                 webserver.sendContent((const char*)buf + off, min((size_t)4096, total - off));
             }
             });
+
+#if BOARD_RGB_PANEL
+
+        // Der gerade angezeigte Bildspeicher des Panels (Doppelpuffer, lcd4Fb), 480 x 480 RGB565 big-endian - zur Kontrolle gegen /api/frameimg.
+        // The frame buffer the panel currently displays (double buffer, lcd4Fb), 480 x 480 RGB565 big-endian - to check against /api/frameimg.
+
+        webserver.on("/api/fbimg", HTTP_GET, []() {
+            const uint8_t* shown = lcd4Fb;
+            if (!shown) {
+                webserver.send(404, "text/plain", "no frame buffer");
+                return;
+            }
+            const size_t total = (size_t)480 * 480 * 2;
+            webserver.setContentLength(total);
+            webserver.send(200, "application/octet-stream", "");
+            for (size_t off = 0; off < total; off += 4096) {
+                webserver.sendContent((const char*)shown + off, min((size_t)4096, total - off));
+            }
+            });
+#endif
 
         webserver.on("/api/faceimg", HTTP_GET, []() {
             if (prepareClockFaceCache() != 2 || !clockFaceBrightBuffer) {

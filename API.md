@@ -77,6 +77,7 @@ Wahrheitswerte sind `1` oder `true` (Groß-/Kleinschreibung egal), alles andere 
 |---|---|---|---|
 | `/api/lcdstats` | GET | – | JSON: Panel-Neustarts, Bilder je Fenster (`partial`, `full`) mit Zeit je Bild in µs (`prep`, `comp`, `hands`, `send`), `why` (Gründe für Vollbilder), `beep`. Das Lesen setzt die Zähler zurück. |
 | `/api/frameimg` | GET | – | Zuletzt gezeichnetes Bild, 480 × 480, RGB565 big-endian (460 800 Byte). Das Senden hält die Uhr etwa 1 s an. |
+| `/api/fbimg` | GET | – | Der vom Panel gerade angezeigte Bildspeicher (Doppelpuffer), 480 × 480, RGB565 big-endian; sollte bis auf den Sekundenzeiger gleich `/api/frameimg` sein |
 | `/api/faceimg` | GET | – | Zifferblatt-Cache mit Uhrzeit und Datum, RGB565 |
 | `/api/lcdresync` | GET | – | Erzwingt eine neue Panel-Synchronisation |
 | `/api/beeptest` | GET | `pin=4..7`, `ms=50..1500`, `tone=0\|1` | Setzt einen Expander-Ausgang für `ms` Millisekunden auf high (`tone=1`: Rechtecksignal); der Beeper hängt an Pin 6; privates Netz |
@@ -173,6 +174,7 @@ Truth values are `1` or `true` (case does not matter), anything else counts as o
 |---|---|---|---|
 | `/api/lcdstats` | GET | – | JSON: panel restarts, frames per window (`partial`, `full`) with time per frame in µs (`prep`, `comp`, `hands`, `send`), `why` (reasons for full frames), `beep`. Reading resets the counters. |
 | `/api/frameimg` | GET | – | Last drawn frame, 480 × 480, RGB565 big-endian (460,800 bytes). Sending stalls the clock for about 1 s. |
+| `/api/fbimg` | GET | – | The frame buffer the panel currently displays (double buffer), 480 × 480, RGB565 big-endian; should equal `/api/frameimg` except for the second hand |
 | `/api/faceimg` | GET | – | Clock face cache with time and date, RGB565 |
 | `/api/lcdresync` | GET | – | Forces a new panel synchronisation |
 | `/api/beeptest` | GET | `pin=4..7`, `ms=50..1500`, `tone=0\|1` | Sets an expander output high for `ms` milliseconds (`tone=1`: square wave); the buzzer is on pin 6; private network |
