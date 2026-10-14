@@ -507,8 +507,8 @@
 
 
     void startAP() {
-        if (useBacklight && backlightAttached) backlightWrite(BACKLIGHT_SETUP_LEVEL); // Einrichtung: 50 %
-                                                                                                // setup: 50 %
+        if (useBacklight && backlightAttached) backlightWrite(SETUP_BRIGHTNESS_LEVEL()); // Einrichtung: maxBrightness, mind. 100
+                                                                                                   // setup: maxBrightness, at least 100
 
 
         // Station-Modus starten, aber NICHT verbinden - ein gleichzeitiger

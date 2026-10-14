@@ -5782,11 +5782,11 @@
         bool rocrailBrightnessActive = rocrailEnabled && rocrailConnected && rocrailBrightnessKnown &&
                                         (millis() - rocrailLastClockMillis) < ROCRAIL_STALE_TIMEOUT_MS;
 
-        // Einrichtung (noch nie gueltige Zeit, WPS oder Access Point): mit PWM 50 % (BACKLIGHT_SETUP_LEVEL),
-        // sonst volle Helligkeit - Meldungen und AP-Passwort bleiben lesbar, auch ohne hellen Lichtsensor.
+        // Einrichtung (WPS oder Access Point): maxBrightness, mindestens BACKLIGHT_SETUP_MIN - Meldungen und
+        // AP-Passwort bleiben lesbar, auch ohne hellen Lichtsensor.
 
-        // Setup (never a valid time, WPS or access point): with PWM 50 % (BACKLIGHT_SETUP_LEVEL), otherwise
-        // full brightness - messages and the AP password stay readable, also without a bright light sensor.
+        // Setup (WPS or access point): maxBrightness, at least BACKLIGHT_SETUP_MIN - messages and the AP
+        // password stay readable, also without a bright light sensor.
 
         bool setupBrightness = softAPIP || wpsPending;
 
@@ -5820,7 +5820,7 @@
             currentBrightness = targetBrightness;
         }
         else if (setupBrightness) {
-            targetBrightness = useBacklight ? BACKLIGHT_SETUP_LEVEL : maxBrightness;
+            targetBrightness = SETUP_BRIGHTNESS_LEVEL();
             currentBrightness = targetBrightness;
         }
         else if (waitingForTime) {

@@ -5,6 +5,7 @@
 ## 2026-10-14
 
 ### Geändert
+- Wartet die Uhr auf WPS oder läuft sie im Access-Point-Modus, leuchtet das Display mit der maximalen Helligkeit, mindestens mit 100 (bisher 50 % mit PWM-Beleuchtung bzw. maximale Helligkeit ohne).
 - Start ohne Uhrzeit (normaler Start, kein Access Point, kein WPS): Das Display beginnt mit der minimalen Helligkeit statt mit voller bzw. 50 % - auch schon beim Start des Displays und während der WLAN-Suche. Sobald die Uhrzeit gültig ist, dimmt die PWM-Beleuchtung langsam (ein Schritt je 30 ms) auf den Wert der Regelung hoch, z. B. im Zeitfenster auf die volle Helligkeit; ohne PWM-Beleuchtung springt die Helligkeit wie bisher.
 - Die Zeiger-Startanimation nach dem Start dauert 5 s statt 3 s; spätere Sprünge (Korrektur, Rocrail) bleiben bei 3 s.
 
@@ -478,6 +479,7 @@
 ## 2026-10-14
 
 ### Changed
+- While the clock waits for WPS or runs in access point mode, the display runs at the maximum brightness, at least 100 (before: 50 % with PWM backlight, or maximum brightness without).
 - Start without a time (normal start, no access point, no WPS): the display begins at the minimum brightness instead of full or 50 % - already when the display starts and during the WiFi search. As soon as the time is valid, the PWM backlight dims up slowly (one step per 30 ms) to the value of the control, e.g. to full brightness inside the time window; without a PWM backlight the brightness jumps as before.
 - The hand start animation after the start takes 5 s instead of 3 s; later jumps (correction, Rocrail) stay at 3 s.
 

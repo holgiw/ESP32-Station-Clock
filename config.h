@@ -584,15 +584,16 @@
 #define BACKLIGHT_FREQ 5000
 #define BACKLIGHT_RESOLUTION 8
 
-    // PWM-Helligkeit, solange die Uhr beim Start auf Daten wartet (noch keine Zeit, WPS, Access Point): 50 %.
-    // Auf dem ESP32-C6 warnt die Helligkeitsseite ab einem Maximum ueber BACKLIGHT_C6_MAX_SAFE - Waveshare
-    // weist auf moegliche Ueberhitzung der Beleuchtung hin.
+    // Helligkeit bei WPS und Access Point: maxBrightness, mindestens BACKLIGHT_SETUP_MIN - Meldungen und AP-Passwort
+    // bleiben lesbar. Auf dem ESP32-C6 warnt die Helligkeitsseite ab einem Maximum ueber BACKLIGHT_C6_MAX_SAFE -
+    // Waveshare weist auf moegliche Ueberhitzung der Beleuchtung hin.
 
-    // PWM brightness while the clock waits for data at boot (no time yet, WPS, access point): 50 %. On the
-    // ESP32-C6 the brightness page warns from a maximum above BACKLIGHT_C6_MAX_SAFE - Waveshare points out
-    // possible overheating of the backlight.
+    // Brightness during WPS and access point: maxBrightness, at least BACKLIGHT_SETUP_MIN - messages and the AP
+    // password stay readable. On the ESP32-C6 the brightness page warns from a maximum above BACKLIGHT_C6_MAX_SAFE -
+    // Waveshare points out possible overheating of the backlight.
 
-#define BACKLIGHT_SETUP_LEVEL 128
+#define BACKLIGHT_SETUP_MIN 100
+#define SETUP_BRIGHTNESS_LEVEL() ((uint8_t)(maxBrightness > BACKLIGHT_SETUP_MIN ? maxBrightness : BACKLIGHT_SETUP_MIN))
 #define BACKLIGHT_C6_MAX_SAFE 128
 
 
