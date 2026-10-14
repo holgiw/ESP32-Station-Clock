@@ -34,7 +34,7 @@ flashen (siehe Linux-Abschnitt, Port /dev/cu.usbmodem...).
 	            3 = GC9D01 (160x160), 4 = ILI9341 (240x320, Uhr mit Streifen für Uhrzeit und Datum)
 	  ESP32-C6: 1 = ST7789 (172x320, ESP32-C6-LCD-1.47), 2 = ST7789_240 (240x240, ESP32-C6-LCD-1.3)
 	  ESP32-S3 (ESP32-S3-LCD-1.28): keine Abfrage, das GC9A01 ist fest verbaut
-	  ESP32-S3-Touch-LCD-4 (EXPERIMENTELL): keine Abfrage, das ST7701 (480x480) ist fest verbaut
+	  ESP32-S3-Touch-LCD-4: keine Abfrage, das ST7701 (480x480) ist fest verbaut
 	  Adafruit Qualia ESP32-S3 (EXPERIMENTELL, UNGETESTET): keine Abfrage, das runde TL021WVC02 (480x480) ist der einzige Typ.
 	  Beide 480x480-Boards melden sich am USB gleich: eine laufende uhr4 verrät es per Displaytyp (ST7701_480 bzw. TL021_480);
 	  sonst fragt flashESP.bat nach (Enter = Waveshare; nicht interaktiv: Umgebungsvariable UHR4_BOARD=s3qualia, sonst Waveshare).

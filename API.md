@@ -28,6 +28,7 @@ Wahrheitswerte sind `1` oder `true` (Groß-/Kleinschreibung egal), alles andere 
 | `/api/createPreset` | POST | `name` (optional) | Legt aus den aktuellen Einstellungen ein Preset an, solange ein Platz frei ist |
 | `/api/partialUpdate` | GET | `enabled=0\|1` (optional) | Teilbilder ein oder aus; ohne Parameter nur Abfrage |
 | `/api/testBrightness` | POST | `value=0..255` | Zeigt den Helligkeitswert eine Weile auf der Uhr |
+| `/api/setbrightness` | GET, POST | `value=0..255` oder `value=auto` | Setzt die Helligkeit fest (bis zum Neustart); die PWM-Beleuchtung gleitet langsam hin (etwa 10 ms je Stufe), ohne PWM gilt der Wert sofort; `auto` (oder `-1`) kehrt langsam zur normalen Regelung zurück. Antwort `{"ok":true,"brightness":N}`; bei Einrichtung (Access Point, WPS) gilt deren Helligkeit weiter |
 | `/api/setPreviewSize` | GET | `size` | Größe der Vorschau auf der Hauptseite |
 | `/api/reboot` | GET | – | Startet die Uhr neu (privates Netz) |
 | `/setbackground` | GET | `file`, `ajax=1` (Antwort `ok` statt Weiterleitung) | Zifferblatt wählen, z. B. `file=face_db.bmp` |
@@ -75,6 +76,7 @@ Wahrheitswerte sind `1` oder `true` (Groß-/Kleinschreibung egal), alles andere 
 
 | Adresse | Methode | Parameter | Antwort |
 |---|---|---|---|
+| `/api/touchlog` | GET | – | JSON: die letzten 8 Berührungen als `[x, y, sx, sy]` (Touch-Chip, Zifferblatt), `rotation`, `max` = Auflösung des Touch-Chips (nur Waveshare ESP32-S3-Touch-LCD-4) |
 | `/api/lcdstats` | GET | – | JSON: Panel-Neustarts, Bilder je Fenster (`partial`, `full`) mit Zeit je Bild in µs (`prep`, `comp`, `hands`, `send`), `why` (Gründe für Vollbilder), `beep`. Das Lesen setzt die Zähler zurück. |
 | `/api/frameimg` | GET | – | Zuletzt gezeichnetes Bild, 480 × 480, RGB565 big-endian (460 800 Byte). Das Senden hält die Uhr etwa 1 s an. |
 | `/api/fbimg` | GET | – | Der vom Panel gerade angezeigte Bildspeicher (Doppelpuffer), 480 × 480, RGB565 big-endian; sollte bis auf den Sekundenzeiger gleich `/api/frameimg` sein |
@@ -125,6 +127,7 @@ Truth values are `1` or `true` (case does not matter), anything else counts as o
 | `/api/createPreset` | POST | `name` (optional) | Creates a preset from the current settings while a slot is free |
 | `/api/partialUpdate` | GET | `enabled=0\|1` (optional) | Partial frames on or off; without a parameter only a query |
 | `/api/testBrightness` | POST | `value=0..255` | Shows the brightness value on the clock for a while |
+| `/api/setbrightness` | GET, POST | `value=0..255` or `value=auto` | Sets the brightness fixed (until restart); the PWM backlight glides slowly (about 10 ms per step), without PWM the value applies at once; `auto` (or `-1`) returns slowly to the normal control. Answer `{"ok":true,"brightness":N}`; during setup (access point, WPS) its brightness stays |
 | `/api/setPreviewSize` | GET | `size` | Size of the preview on the main page |
 | `/api/reboot` | GET | – | Restarts the clock (private network) |
 | `/setbackground` | GET | `file`, `ajax=1` (answer `ok` instead of a redirect) | Choose the clock face, e.g. `file=face_db.bmp` |
@@ -172,6 +175,7 @@ Truth values are `1` or `true` (case does not matter), anything else counts as o
 
 | Address | Method | Parameters | Response |
 |---|---|---|---|
+| `/api/touchlog` | GET | – | JSON: the last 8 touches as `[x, y, sx, sy]` (touch chip, clock face), `rotation`, `max` = resolution of the touch chip (Waveshare ESP32-S3-Touch-LCD-4 only) |
 | `/api/lcdstats` | GET | – | JSON: panel restarts, frames per window (`partial`, `full`) with time per frame in µs (`prep`, `comp`, `hands`, `send`), `why` (reasons for full frames), `beep`. Reading resets the counters. |
 | `/api/frameimg` | GET | – | Last drawn frame, 480 × 480, RGB565 big-endian (460,800 bytes). Sending stalls the clock for about 1 s. |
 | `/api/fbimg` | GET | – | The frame buffer the panel currently displays (double buffer), 480 × 480, RGB565 big-endian; should equal `/api/frameimg` except for the second hand |

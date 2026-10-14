@@ -29,3 +29,4 @@
 .hd.stickon .stick{position:sticky;top:var(--hdTop,70px);max-height:calc(100vh - var(--hdTop,70px) - 8px);overflow-y:auto}
 .hd .msg{margin:8px 0;max-width:420px}
 .hd small{display:block;margin:4px 0}
+.hd.busy>.row{pointer-events:none;opacity:.45}

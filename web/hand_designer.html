@@ -1,12 +1,15 @@
 
-<div class="hd" id="hdRoot">
+<div class="hd busy" id="hdRoot">
   <div class="card" style="margin-bottom:14px">
     <div class="row" style="justify-content:flex-start;align-items:center">
       <span id="baseInfo"></span>
-      <button type="button" class="tb" id="resetBtn"></button>
+      <button type="button" class="tb" id="resetBtn" disabled></button>
       <span style="flex:1"></span>
-      <button type="button" id="saveCurBtn"></button>
-      <button type="button" id="saveBtn"></button>
+      <button type="button" id="saveCurBtn" disabled></button>
+      <span style="display:inline-flex;align-items:center;gap:8px;white-space:nowrap">
+        <button type="button" id="saveBtn" disabled></button>
+        <span id="nextSetInfo" style="opacity:.8"></span>
+      </span>
     </div>
     <div id="msg"></div>
   </div>
@@ -41,6 +44,9 @@
       <span id="tCopy"></span>
       <select id="copySel"></select>
       <button type="button" class="tb" id="copyBtn">OK</button>
+      <h3 id="tImg"></h3>
+      <input type="file" id="imgFile" accept="image/*,.bmp" style="max-width:220px">
+      <small id="imgHint"></small>
     </div>
 
     <div class="card edcard">

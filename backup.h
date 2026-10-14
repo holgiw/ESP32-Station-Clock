@@ -64,7 +64,7 @@
     // change) and obsolete keys (isObsoletePrefKey()) - "ssid"/"pass" held the WiFi in plain text.
 
     bool isBackupExcludedKey(const String& key) {
-        return key == PK_VERSION || key == PK_FIRST_START || key == PK_MIGRATIONS_DONE || key == PK_HANDS_CHECKED || key == PK_SUBDIAL_SET || key == PK_SUBDIAL_HAND_VER || key == PK_RENUM_PLAN ||
+        return key == PK_VERSION || key == PK_FIRST_START || key == PK_MIGRATIONS_DONE || key == PK_HANDS_CHECKED || key == PK_SUBDIAL_SET || key == PK_SUBDIAL_HAND_VER || key == PK_GENERATED_HAND_VER || key == PK_RENUM_PLAN ||
                key == PK_LOG_FILE_NUMBER || key == PK_LOGGING_START || isBackupBrightnessKey(key) || key == PK_LAST_RESET_WEEK || key == PK_MQTT_PASS || key.startsWith("wtx") || isObsoletePrefKey(key);
     }
 
@@ -1272,9 +1272,12 @@
             }
             int outW = CLOCK_WIDTH, outH = CLOCK_HEIGHT;
             if (target.startsWith("/hand_set")) {
-                bool legacy = readImageSize(BACKUP_TMP_PATH, w, h) && h == DISPLAY_GEOMETRY[s.backupType].handLegacyHeight;
-                outW = legacy ? HAND_LEGACY_WIDTH : HAND_WIDTH;
-                outH = legacy ? HAND_LEGACY_HEIGHT : HAND_HEIGHT;
+                const DisplayGeometry& bg = DISPLAY_GEOMETRY[s.backupType];
+                const bool known = readImageSize(BACKUP_TMP_PATH, w, h);
+                const bool legacy = known && h == bg.handLegacyHeight;
+                const bool prior = known && h == handPriorHeightOf(bg);
+                outW = legacy ? HAND_LEGACY_WIDTH : (prior ? HAND_PRIOR_WIDTH : HAND_WIDTH);
+                outH = legacy ? HAND_LEGACY_HEIGHT : (prior ? HAND_PRIOR_HEIGHT : HAND_HEIGHT);
             }
 
             // Drehpunkt des Sekundenzeigers aus dem Anhang des Zifferblatts mitnehmen (das neue Bild hat keinen)

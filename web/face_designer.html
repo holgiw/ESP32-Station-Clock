@@ -1,14 +1,14 @@
 
-<div class="hd" id="hdRoot">
+<div class="hd busy" id="hdRoot">
   <div class="card" style="margin-bottom:14px">
     <div class="row" style="justify-content:flex-start;align-items:center">
       <span id="baseInfo"></span>
-      <button type="button" class="tb" id="resetBtn"></button>
+      <button type="button" class="tb" id="resetBtn" disabled></button>
       <span style="flex:1"></span>
-      <button type="button" id="saveCurBtn"></button>
+      <button type="button" id="saveCurBtn" disabled></button>
       <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap">
-        <label><span id="tName"></span><input type="text" id="faceName" maxlength="20" spellcheck="false" style="width:130px"></label>
-        <button type="button" id="saveBtn"></button>
+        <button type="button" id="saveBtn" disabled></button>
+        <label><span id="tName"></span><input type="text" id="faceName" maxlength="20" spellcheck="false" style="width:130px" disabled></label>
       </span>
     </div>
     <small id="spaceHint"></small>
@@ -56,6 +56,11 @@
       <input type="file" id="logoFile" accept="image/*,.bmp" style="max-width:220px"><br>
       <span id="tLogoW"></span> <input type="number" class="num2" id="logoW" min="2"> px
       <small id="logoHint"></small>
+      <label><input type="checkbox" id="keyOn"><span id="tKey"></span></label>
+      <input type="color" id="keyColor" value="#ffffff" style="padding:0;height:26px;width:40px;vertical-align:middle">
+      <span id="tKeyTol"></span> <input type="number" class="num2" id="keyTol" min="0" max="100" value="12"> %
+      <canvas id="logoPrev" style="display:none;cursor:crosshair;max-width:100%;background:repeating-conic-gradient(#2b3138 0% 25%,#1f252b 0% 50%) 50%/12px 12px"></canvas>
+      <small id="keyHint"></small>
       <h3 id="tFonts"></h3>
       <input type="text" id="fontName" spellcheck="false" style="width:140px"><button type="button" class="tb" id="fontAddBtn"></button>
       <small id="fontFileHint"></small>

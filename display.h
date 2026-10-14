@@ -428,7 +428,7 @@
                 // Diagnose: Pegel von Taster (gedrueckt = HIGH) und Boot-Taste (gedrueckt = LOW), liest nur
                 // Diagnostics: level of the button (pressed = HIGH) and the boot button (pressed = LOW), read-only
 
-                serialReply("UHR4 OK PINS BUTTON" + String(BUTTON1) + "=" + String(digitalRead(BUTTON1)) +
+                serialReply("UHR4 OK PINS BUTTON" + String(BUTTON1) + "=" + String(pinIsHigh(BUTTON1) ? 1 : 0) +
                             " BOOT" + String(BOOT_BUTTON) + "=" + String(digitalRead(BOOT_BUTTON)));
             }
             else if (cmd.startsWith("UHR4 TIME ")) {
@@ -839,14 +839,14 @@
     void setAutoBrightness(bool enabled) {
         enabled = enabled && photoresistorFound;
         if (enabled) {
-            pinMode(ADC_GND, OUTPUT);
-            pinMode(ADC_3V, OUTPUT);
-            digitalWrite(ADC_GND, LOW);
-            digitalWrite(ADC_3V, HIGH);
+            pinModeSafe(ADC_GND, OUTPUT);
+            pinModeSafe(ADC_3V, OUTPUT);
+            pinWriteSafe(ADC_GND, LOW);
+            pinWriteSafe(ADC_3V, HIGH);
         }
         else {
-            pinMode(ADC_GND, INPUT);
-            pinMode(ADC_3V, INPUT);
+            pinModeSafe(ADC_GND, INPUT);
+            pinModeSafe(ADC_3V, INPUT);
         }
         useAdc = enabled;
         preferences.putBool(PK_USE_ADC, useAdc);
@@ -1469,6 +1469,17 @@
     // length): hour and minute hand as a leaf with a drawn-in tip on a thin stem, round boss; second hand
     // tapering with a round counterweight.
 
+    // Breite der erzeugten Stunden- und Minutenzeiger (alle Saetze) im Verhaeltnis zur urspruenglichen Breite. Bei einer
+    // neuen GENERATED_HAND_VERSION legt die Uhr diese Zeiger einmal neu an (siehe refreshGeneratedAssets()). 2 = um ein
+    // Drittel schmaler, 4 = ungerade Breite mit Symmetrieachse auf der mittleren Pixelspalte (auch der Sekundenzeiger).
+
+    // Width of the generated hour and minute hands (all sets) relative to the original width. With a new
+    // GENERATED_HAND_VERSION the clock creates these hands anew once (see refreshGeneratedAssets()). 2 = one third
+    // narrower, 4 = odd width with the symmetry axis on the middle pixel column (the second hand too).
+
+    constexpr float GENERATED_HAND_WIDTH = 2.0f / 3.0f;
+    constexpr uint8_t GENERATED_HAND_VERSION = 4;
+
     float curvedHandHalfWidth(const char* part, float L, float d) {
         float c = CLOCK_WIDTH, w = 0;
         if (strcmp(part, "second") == 0) {
@@ -1480,13 +1491,13 @@
             return w;
         }
         bool hour = strcmp(part, "hour") == 0;
-        float u0 = hour ? 0.3f : 0.45f, leaf = (hour ? 0.036f : 0.026f) * c, k = hour ? 0.6f : 0.55f;
+        float u0 = hour ? 0.3f : 0.45f, leaf = (hour ? 0.036f : 0.026f) * c * GENERATED_HAND_WIDTH, k = hour ? 0.6f : 0.55f;
         if (d >= 0 && d <= L) {
             float u = d / L;
-            if (u <= u0 + 0.05f) w = max(0.6f, 0.007f * c);
+            if (u <= u0 + 0.05f) w = max(0.6f, 0.007f * c * GENERATED_HAND_WIDTH);
             if (u >= u0) w = max(w, leaf * powf(sinf(PI * powf((u - u0) / (1 - u0), k)), 1.4f));
         }
-        float rb = 0.028f * c;
+        float rb = 0.028f * c * GENERATED_HAND_WIDTH;
         if (fabsf(d) <= rb) w = max(w, sqrtf(rb * rb - d * d));
         return w;
     }
@@ -1535,17 +1546,17 @@
             for (int x = 0; x < HAND_WIDTH; x++) {
                 int n = 0;
                 for (int sx = 0; sx < 4; sx++) {
-                    float dx = fabsf(x + (sx + 0.5f) / 4 - (HAND_WIDTH / 2 + 0.5f));
+                    float dx = fabsf(x + (sx + 0.5f) / 4 - HAND_WIDTH / 2.0f);
                     for (int sy = 0; sy < 4; sy++) if (dx <= half[sy]) n++;
                 }
                 row[x] = n < 8 ? 0xFFFF : set == 3 ? 0xF800 : 0x0000;
             }
             return;
         }
-        int half = lroundf(CLOCK_WIDTH * (second ? 0.0083f : 0.027f));
+        int half = lroundf(CLOCK_WIDTH * (second ? 0.0083f : 0.027f * GENERATED_HAND_WIDTH));
         uint16_t color = (second && set == 0) ? 0xF800 : 0x0000;
         for (int x = 0; x < HAND_WIDTH; x++) {
-            row[x] = (y >= top && abs(x - HAND_WIDTH / 2) <= half) ? color : 0xFFFF;
+            row[x] = (y >= top && y < HAND_PRIOR_HEIGHT && fabsf(x + 0.5f - HAND_WIDTH / 2.0f) <= half) ? color : 0xFFFF; // wie bisher bis zum bisherigen unteren Rand / as before down to the previous bottom edge
         }
     }
 
@@ -1830,41 +1841,36 @@
         }
     }
 
-    // Zeigerbild (w x h, je altes oder neues Mass) waagerecht mittig und unten
-    // buendig in 'dest' (HAND_WIDTH x HAND_HEIGHT) setzen, der Rest transparent -
-    // Drehpunkt und Stueck unter dem Drehpunkt liegen dann wie im neuen Format.
+    // Zeigerbild (w x h, je altes, bisheriges oder neues Mass) in 'dest' (HAND_WIDTH x HAND_HEIGHT) setzen, der Rest
+    // transparent. Der Drehpunkt bleibt an derselben Stelle: waagerecht liegen schmalere Zeiger mittig in der
+    // bisherigen Breite (HAND_PRIOR_WIDTH), die neue Breite fuellt die Datei; senkrecht beginnt das alte Format
+    // (HAND_LEGACY_HEIGHT) HAND_TOP_PAD Zeilen tiefer, das bisherige und das neue Format oben.
 
-    // Put a hand image (w x h, old or new size each) horizontally centred and
-    // flush at the bottom into 'dest' (HAND_WIDTH x HAND_HEIGHT), the rest
-    // transparent - pivot and the part below it then sit like in the new format.
+    // Put a hand image (w x h, old, previous or new size each) into 'dest' (HAND_WIDTH x HAND_HEIGHT), the rest
+    // transparent. The pivot stays at the same place: horizontally narrower hands sit centred in the previous width
+    // (HAND_PRIOR_WIDTH), the new width fills the file; vertically the old format (HAND_LEGACY_HEIGHT) starts
+    // HAND_TOP_PAD rows lower, the previous and the new format at the top.
 
     void placeHand(const uint16_t* src, int w, int h, uint16_t* dest) {
-        int ox = (HAND_WIDTH - w) / 2, oy = HAND_HEIGHT - h;
+        int ox = (w == HAND_WIDTH) ? 0 : (HAND_PRIOR_WIDTH - w) / 2, oy = (h == HAND_LEGACY_HEIGHT) ? HAND_TOP_PAD : 0;
         for (int i = 0; i < HAND_WIDTH * HAND_HEIGHT; i++) dest[i] = TRANSPARENT_COLOR;
         for (int y = 0; y < h; y++) memcpy(dest + (y + oy) * HAND_WIDTH + ox, src + y * w, (size_t)w * sizeof(uint16_t));
     }
 
-    // Laedt eine Zeigerdatei (BMP/RLEB) in einem der vier gueltigen Formate (Breite
-    // und Hoehe je alt oder neu) nach 'dest'. False, wenn keines passt.
+    // Laedt eine Zeigerdatei (BMP/RLEB) in einem der gueltigen Formate (Breite alt oder neu, Hoehe alt, bisherig
+    // oder neu) nach 'dest'. False, wenn keines passt.
 
-    // Loads a hand file (BMP/RLEB) in one of the four valid formats (width and
-    // height old or new each) into 'dest'. False if none matches.
+    // Loads a hand file (BMP/RLEB) in one of the valid formats (width old or new, height old, previous or new)
+    // into 'dest'. False if none matches.
 
     bool loadHandPixels(const String& path, uint16_t* dest) {
         if (loadFaceBmpInto(path, dest, HAND_WIDTH, HAND_HEIGHT)) return true;
-        const int formats[3][2] = {
-            { HAND_WIDTH, HAND_LEGACY_HEIGHT }, { HAND_LEGACY_WIDTH, HAND_HEIGHT }, { HAND_LEGACY_WIDTH, HAND_LEGACY_HEIGHT }
-        };
+        int32_t w, h;
+        if (!readImageSize(path.c_str(), w, h) || !isValidHandSize(w, h)) return false;
         uint16_t* tmp = (uint16_t*)preferPsramMalloc((size_t)HAND_WIDTH * HAND_HEIGHT * sizeof(uint16_t));
         if (!tmp) return false;
-        bool ok = false;
-        for (const auto& fm : formats) {
-            if (loadFaceBmpInto(path, tmp, fm[0], fm[1])) {
-                placeHand(tmp, fm[0], fm[1], dest);
-                ok = true;
-                break;
-            }
-        }
+        bool ok = loadFaceBmpInto(path, tmp, w, h);
+        if (ok) placeHand(tmp, w, h, dest);
         free(tmp);
         return ok;
     }
@@ -1923,7 +1929,7 @@
     }
 
     bool isValidHandSize(int32_t w, int32_t h) {
-        return (w == HAND_WIDTH || w == HAND_LEGACY_WIDTH) && (h == HAND_HEIGHT || h == HAND_LEGACY_HEIGHT);
+        return (w == HAND_WIDTH || w == HAND_PRIOR_WIDTH || w == HAND_LEGACY_WIDTH) && (h == HAND_HEIGHT || h == HAND_PRIOR_HEIGHT || h == HAND_LEGACY_HEIGHT);
     }
 
     // Kurzbezeichnung des Zeigerformats fuer den Dateimanager
@@ -1935,6 +1941,7 @@
         if (!isValidHandSize(w, h)) return translate("unsupported size - default hand is used");
         if (w == HAND_LEGACY_WIDTH && h == HAND_LEGACY_HEIGHT) return translate("old format");
         if (w == HAND_WIDTH && h == HAND_HEIGHT) return translate("new format");
+        if (w == HAND_PRIOR_WIDTH && h == HAND_PRIOR_HEIGHT) return translate("previous format");
         return (w == HAND_WIDTH) ? translate("new width") : translate("new length");
     }
 
@@ -2490,6 +2497,21 @@
     }
 
 
+    // Waagerechter Drehpunkt eines Zeiger-Sprites der Breite spriteWidth (Pixelmitten bei ganzen Zahlen, wie bei
+    // setPivot()): die Symmetrieachse der Zeigerdatei, also (HAND_WIDTH - 1) / 2 - bei ungerader Breite die mittlere
+    // Pixelspalte, bei gerader Breite die Kante zwischen den beiden mittleren. Abzueglich des Zuschnitts links
+    // (pushHandRowCentered()), wenn das Sprite schmaler ist.
+
+    // Horizontal pivot of a hand sprite of width spriteWidth (pixel centres at whole numbers, as with setPivot()):
+    // the symmetry axis of the hand file, i.e. (HAND_WIDTH - 1) / 2 - with an odd width the middle pixel column,
+    // with an even width the edge between the two middle ones. Minus the crop on the left (pushHandRowCentered())
+    // if the sprite is narrower.
+
+    float handPivotX(int spriteWidth) {
+        int crop = (spriteWidth > 0 && spriteWidth < HAND_WIDTH) ? (HAND_WIDTH - spriteWidth) / 2 : 0;
+        return (HAND_WIDTH - 1) / 2.0f - crop;
+    }
+
     // Schreibt eine Zeiger-Bitmapzeile ins Sprite, mittig zugeschnitten, falls
     // das Sprite (siehe updateHandWidths()) schmaler als das Bitmap ist - haelt
     // den Zeiger so zentriert auf dem Drehpunkt statt rechtsseitig verschoben.
@@ -2554,7 +2576,7 @@
         // to the cropped, enlarged sprite (pixel centre at +0.5)
 
         const int sw = min(secondHandWidth, W);
-        const int pivotCol = (sw < W ? (W - sw) / 2 : 0) + sw / 2;
+        const float pivotCol = (sw < W ? (W - sw) / 2 : 0) + handPivotX(sw);
         secondHandSprite.setPivot(((pivotCol - c0) + 0.5f) * SS - 0.5f, ((HAND_PIVOT_Y - r0) + 0.5f) * SS - 0.5f);
 
         for (int Y = 0; Y < dh; Y++) {
@@ -2651,7 +2673,7 @@
                 secondHandSS = false;
                 secondHandSprite.deleteSprite();
                 createSprite16(secondHandSprite, secondHandWidth, HAND_HEIGHT);
-                secondHandSprite.setPivot(secondHandWidth / 2, HAND_PIVOT_Y);
+                secondHandSprite.setPivot(handPivotX(secondHandWidth), HAND_PIVOT_Y);
             }
 #endif
 
@@ -5804,6 +5826,13 @@
         static unsigned long startRampStepMillis = 0;
         if (wasWaitingForTime && !waitingForTime && !setupBrightness) startRampActive = true;
         wasWaitingForTime = waitingForTime;
+
+        // Nach "auto" (Ende des festen Werts) ebenfalls langsam zur normalen Helligkeit gleiten
+        // After "auto" (end of the fixed value) also glide slowly to the normal brightness
+
+        static bool wasOverride = false;
+        if (wasOverride && brightnessOverride < 0) startRampActive = true;
+        wasOverride = brightnessOverride >= 0;
         const uint8_t brightnessBefore = currentBrightness;
 
         // Helligkeitstest (Weboberflaeche): der eingetragene Wert gilt sofort, ohne Anlauf, bis BRIGHTNESS_TEST_MS
@@ -5822,6 +5851,25 @@
         else if (setupBrightness) {
             targetBrightness = SETUP_BRIGHTNESS_LEVEL();
             currentBrightness = targetBrightness;
+        }
+        else if (brightnessOverride >= 0) {
+
+            // Fester Wert ueber /api/setbrightness: gilt vor Rocrail, Zeitfenster und Lichtsensor. Die PWM-Beleuchtung gleitet
+            // langsam hin (eine Stufe je OVERRIDE_RAMP_STEP_MS), ohne PWM gilt der Wert sofort.
+
+            // Fixed value via /api/setbrightness: applies before Rocrail, time window and light sensor. The PWM backlight
+            // glides slowly (one step per OVERRIDE_RAMP_STEP_MS), without PWM the value applies at once.
+
+            static unsigned long overrideStepMillis = 0;
+            const unsigned long OVERRIDE_RAMP_STEP_MS = 10;
+            targetBrightness = (uint8_t)brightnessOverride;
+            if (!useBacklight) {
+                currentBrightness = targetBrightness;
+            }
+            else if (currentBrightness != targetBrightness && millis() - overrideStepMillis >= OVERRIDE_RAMP_STEP_MS) {
+                overrideStepMillis = millis();
+                currentBrightness += (currentBrightness < targetBrightness) ? 1 : -1;
+            }
         }
         else if (waitingForTime) {
             targetBrightness = minBrightness;
@@ -5941,7 +5989,7 @@
 
         const unsigned long START_RAMP_STEP_MS = 30;
         if (startRampActive) {
-            if (!useBacklight || setupBrightness || waitingForTime || brightnessTestActive) {
+            if (!useBacklight || setupBrightness || waitingForTime || brightnessTestActive || brightnessOverride >= 0) {
                 startRampActive = false;
             }
             else {
@@ -8088,7 +8136,7 @@
 
         LGFX_Sprite handSprite(&tft);
         bool handSpriteOk = createSprite16(handSprite, HAND_WIDTH, HAND_HEIGHT);
-        if (handSpriteOk) handSprite.setPivot(HAND_WIDTH / 2, HAND_PIVOT_Y);
+        if (handSpriteOk) handSprite.setPivot(handPivotX(HAND_WIDTH), HAND_PIVOT_Y);
 
         // Sekundenfeld des Zifferblatts: Sekundenzeiger zuerst und an seinem Drehpunkt (wie renderClockFrame())
         // Seconds subdial of the clock face: second hand first and at its pivot (as in renderClockFrame())
@@ -8312,13 +8360,13 @@
         bool allCreated = true;
 
         allCreated &= createSprite16(hourHandSprite, hourHandWidth, HAND_HEIGHT);
-        hourHandSprite.setPivot(hourHandWidth / 2, HAND_PIVOT_Y);
+        hourHandSprite.setPivot(handPivotX(hourHandWidth), HAND_PIVOT_Y);
 
         allCreated &= createSprite16(minuteHandSprite, minuteHandWidth, HAND_HEIGHT);
-        minuteHandSprite.setPivot(minuteHandWidth / 2, HAND_PIVOT_Y);
+        minuteHandSprite.setPivot(handPivotX(minuteHandWidth), HAND_PIVOT_Y);
 
         allCreated &= createSprite16(secondHandSprite, secondHandWidth, HAND_HEIGHT);
-        secondHandSprite.setPivot(secondHandWidth / 2, HAND_PIVOT_Y);
+        secondHandSprite.setPivot(handPivotX(secondHandWidth), HAND_PIVOT_Y);
 
         handSpritesCreated = allCreated;
         if (!allCreated) {

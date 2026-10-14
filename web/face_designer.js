@@ -55,6 +55,7 @@
       h_text: 'Text: gerade - Klick setzt den Text mittig an die Stelle; im Bogen - Klick legt Radius und Mitte des Bogens fest. Einstellungen darunter.',
       h_stamp: 'Logo: unter "Logo" ein Bild laden und die Breite einstellen, dann per Klick mittig an die Stelle setzen.',
       stamp: 'Logo', txtMode: 'Anordnung:', straight: 'gerade', arcTop: 'Bogen oben', arcBottom: 'Bogen unten', txtRot: 'Drehung:',
+      key: 'Transparente Farbe', keyTol: 'Toleranz:', keyHint: 'Die gew\u00e4hlte Farbe des Logos (z. B. der wei\u00dfe Hintergrund eines BMP) wird durchsichtig: im Vorschaubild anklicken oder oben w\u00e4hlen. Mit der Toleranz fallen auch \u00e4hnliche Farben weg.',
       logo: 'Logo', logoW: 'Breite:', logoHint: 'Ideal ist ein PNG mit transparentem Hintergrund. Das Bild bleibt f\u00fcr weitere Klicks geladen.',
       noLogo: 'Zuerst unter "Logo" ein Bild laden.', fonts: 'Eigene Schrift', fontAdd: 'Hinzuf\u00fcgen', fontPh: 'installierte Schrift',
       fontFileHint: 'oder Schriftdatei (.ttf, .otf, .woff) laden - sie wird auf der Uhr gespeichert und steht f\u00fcr Text, die Ziffern im Generator und den Streifen (Uhrzeit/Datum) zur Verf\u00fcgung.',
@@ -131,6 +132,7 @@
       h_text: 'Text: straight - a click places the text centred on that spot; on an arc - a click sets radius and centre of the arc. Settings below.',
       h_stamp: 'Logo: load an image under "Logo" and set its width, then a click places it centred on that spot.',
       stamp: 'Logo', txtMode: 'Layout:', straight: 'straight', arcTop: 'arc at the top', arcBottom: 'arc at the bottom', txtRot: 'Rotation:',
+      key: 'Transparent colour', keyTol: 'Tolerance:', keyHint: 'The chosen colour of the logo (e.g. the white background of a BMP) becomes see-through: click it in the preview or choose it above. With the tolerance similar colours drop out too.',
       logo: 'Logo', logoW: 'Width:', logoHint: 'A PNG with a transparent background works best. The image stays loaded for further clicks.',
       noLogo: 'Load an image under "Logo" first.', fonts: 'Own font', fontAdd: 'Add', fontPh: 'installed font',
       fontFileHint: 'or load a font file (.ttf, .otf, .woff) - it is stored on the clock and available for text, the generator numerals and the strip (time/date).',
@@ -191,8 +193,28 @@
   // Beide Knoepfe sind immer bedienbar, auch ohne Aenderung
   // Both buttons are always usable, even without a change
 
+  // Die Seite erst freigeben, wenn alles geladen ist (Zifferblatt, Streifen, Zeiger und Schriften der Uhr): bis dahin sind
+  // Zeichenflaeche, Werkzeuge und die Knoepfe zum Speichern und Verwerfen gesperrt (sonst liesse sich ein halb geladenes
+  // Zifferblatt bearbeiten oder speichern).
+
+  // Release the page only when everything is loaded (clock face, strip, hands and fonts of the clock): until then the
+  // canvas, the tools and the buttons for saving and discarding are locked (otherwise a half-loaded clock face could be
+  // edited or saved).
+
+  var loads = 0, busyNow = true;
+  function setBusy(b) {
+    busyNow = b;
+    $('hdRoot').classList.toggle('busy', b);
+    ['saveBtn', 'saveCurBtn', 'resetBtn', 'faceName', 'imgFile', 'logoFile', 'fontFile'].forEach(function (id) { if ($(id)) $(id).disabled = b; });
+    if (!b) setDirty(dirty); // Knopfzustaende neu setzen (auch die gesperrte Speichern-Taste der Firmware-Zifferblaetter) / set the button states again (also the locked save button of firmware clock faces)
+  }
+  function loadStart() { loads++; setBusy(true); }
+  function loadDone() { if (--loads <= 0) { loads = 0; setBusy(false); } }
+
   function setDirty(v) {
-    dirty = v; $('saveBtn').disabled = false;
+    dirty = v;
+    if (busyNow) return;
+    $('saveBtn').disabled = false;
     $('saveCurBtn').disabled = !canSaveCur();
     $('saveCurBtn').title = isProt(base) ? t('protHint') : '';
   }
@@ -491,15 +513,81 @@
   // Logo-Stempel: Bild in der eingestellten Breite mittig auf den Klickpunkt, Seitenverhaeltnis bleibt
   // Logo stamp: image at the set width centred on the click point, aspect ratio is kept
 
-  var logoImg = null;
+  var logoImg = null, keyCache = null;
+
+  // Transparente Farbe des Logos: Pixel in der gewaehlten Farbe (innerhalb der Toleranz) werden durchsichtig, bis zur
+  // doppelten Toleranz weich ueberblendet. Das Ergebnis wird je Groesse und Einstellung zwischengespeichert.
+
+  // Transparent colour of the logo: pixels in the chosen colour (within the tolerance) become see-through, softly
+  // faded up to twice the tolerance. The result is cached per size and setting.
+
+  function keyedLogo(lw, lh) {
+    var w = Math.max(1, Math.round(lw)), h = Math.max(1, Math.round(lh));
+    var key = [w, h, $('keyColor').value, $('keyTol').value].join('|');
+    if (keyCache && keyCache.key === key && keyCache.img === logoImg) return keyCache.c;
+    var c = newCanvas(w, h), cx = c.getContext('2d');
+    cx.imageSmoothingQuality = 'high';
+    cx.drawImage(logoImg, 0, 0, w, h);
+    var id = cx.getImageData(0, 0, w, h), d = id.data, hex = $('keyColor').value;
+    var kr = parseInt(hex.substr(1, 2), 16), kg = parseInt(hex.substr(3, 2), 16), kb = parseInt(hex.substr(5, 2), 16);
+    var tol = (+$('keyTol').value || 0) * 2.55;
+    for (var i = 0; i < w * h; i++) {
+      var dist = Math.max(Math.abs(d[i * 4] - kr), Math.abs(d[i * 4 + 1] - kg), Math.abs(d[i * 4 + 2] - kb));
+      if (dist <= tol) d[i * 4 + 3] = 0;
+      else if (dist < 2 * tol + 8) d[i * 4 + 3] = d[i * 4 + 3] * (dist - tol) / (tol + 8);
+    }
+    cx.putImageData(id, 0, 0);
+    keyCache = { key: key, img: logoImg, c: c };
+    return c;
+  }
   function stampOn(buf, x, y) {
     var iw = logoImg.naturalWidth || logoImg.width, ih = logoImg.naturalHeight || logoImg.height;
     var lw = Math.max(2, +$('logoW').value || 2), lh = lw * ih / iw;
     var c = bufCanvas(buf), cx = c.getContext('2d');
     cx.imageSmoothingQuality = 'high';
-    cx.drawImage(logoImg, x + 0.5 - lw / 2, y + 0.5 - lh / 2, lw, lh);
+    if ($('keyOn').checked) {
+      var kc = keyedLogo(lw, lh);
+      cx.drawImage(kc, Math.round(x + 0.5 - kc.width / 2), Math.round(y + 0.5 - kc.height / 2));
+    }
+    else {
+      cx.drawImage(logoImg, x + 0.5 - lw / 2, y + 0.5 - lh / 2, lw, lh);
+    }
     return canvasBuf(c);
   }
+
+  // Vorschau des Logos (mit der transparenten Farbe): ein Klick darauf nimmt die Farbe des Pixels als transparente Farbe
+  // Preview of the logo (with the transparent colour): a click on it takes the pixel's colour as the transparent colour
+
+  var logoRaw = null;
+  function updateLogoPrev() {
+    var pv = $('logoPrev');
+    if (!logoImg) { pv.style.display = 'none'; return; }
+    var iw = logoImg.naturalWidth || logoImg.width, ih = logoImg.naturalHeight || logoImg.height;
+    var pw = Math.min(200, iw), ph = Math.max(1, Math.round(ih * pw / iw));
+    logoRaw = newCanvas(pw, ph);
+    logoRaw.getContext('2d').drawImage(logoImg, 0, 0, pw, ph);
+    pv.width = pw; pv.height = ph; pv.style.display = 'block';
+    var x = pv.getContext('2d');
+    x.clearRect(0, 0, pw, ph);
+    if ($('keyOn').checked) {
+      var kc;
+      kc = keyedLogo(pw, ph);
+      x.drawImage(kc, 0, 0);
+    }
+    else x.drawImage(logoRaw, 0, 0);
+  }
+  $('logoPrev').onclick = function (ev) {
+    if (!logoRaw) return;
+    var r = this.getBoundingClientRect();
+    var px = Math.min(logoRaw.width - 1, Math.max(0, Math.floor((ev.clientX - r.left) * logoRaw.width / r.width)));
+    var py = Math.min(logoRaw.height - 1, Math.max(0, Math.floor((ev.clientY - r.top) * logoRaw.height / r.height)));
+    var p = logoRaw.getContext('2d').getImageData(px, py, 1, 1).data;
+    if (p[3] < 128) return;
+    $('keyColor').value = '#' + [p[0], p[1], p[2]].map(function (v) { return ('0' + v.toString(16)).slice(-2); }).join('');
+    $('keyOn').checked = true;
+    updateLogoPrev();
+  };
+  ['keyOn', 'keyColor', 'keyTol'].forEach(function (id) { $(id).addEventListener('input', updateLogoPrev); $(id).addEventListener('change', updateLogoPrev); });
   function blendAlpha(buf, d, v) {
     var col = rgbOf(v);
     for (var i = 0; i < N; i++) {
@@ -804,6 +892,7 @@
     if (!f) return;
     imageSource(f).then(function (img) {
       logoImg = img;
+      updateLogoPrev();
       selectTool('stamp');
     }).catch(function () { showMsg(t('imgErr'), false); }).then(function () { input.value = ''; });
   };
@@ -867,13 +956,14 @@
 
   (FD.fonts || []).forEach(function (fn) {
     var label = fn.replace(/^font_/, '').replace(/\.[^.]+$/, '');
+    loadStart();
     fetch('/file?name=' + encodeURIComponent('/' + fn), { cache: 'no-store' }).then(function (r) {
       if (!r.ok) throw new Error(r.status);
       return r.arrayBuffer();
     }).then(function (ab) { return new FontFace('UF_' + label, ab).load(); }).then(function (face) {
       document.fonts.add(face);
       addFont('"UF_' + label + '"', label, true);
-    }).catch(function () {});
+    }).catch(function () {}).then(loadDone);
   });
 
   // VLW-Schrift (kantengeglaettet, wie LovyanGFX sie laedt) fuer die Streifen-Zeichen aus einer Browser-Schrift:
@@ -1069,6 +1159,7 @@
   }
   function loadActive() {
     var note = '';
+    loadStart();
     showMsg(t('loading'));
     base = FD.active || DEF;
     fetchFace('/file?name=' + encodeURIComponent(base)).then(null, function () {
@@ -1078,10 +1169,11 @@
       return fetchStrip(base).then(function (st) { pix = compose(b, st); });
     }, function () { pix = compose(new Uint16Array(W * FH).fill(0xFFFF), null); base = DEF; }).then(function () {
       undoSt = []; redoSt = [];
-      setDirty(false);
+      dirty = false;
       showBase(); drawEditor(); schedulePreview();
       showMsg(note || t('loaded'), !note);
-    });
+      loadDone();
+    }).catch(function () { loadDone(); });
   }
   $('resetBtn').onclick = function () {
     if (dirty && !confirm(t('confirmReset'))) return;
@@ -1249,8 +1341,8 @@
 
   function decodeHand(ab) {
     var img = parseBmp(ab), out = new Int32Array(HW * HH).fill(-1);
-    var known = (img.w === HW || img.w === FD.hand.lw) && (img.h === HH || img.h === FD.hand.lh);
-    var sw = known ? img.w : HW, sh = known ? img.h : HH, ox = (HW - sw) >> 1, oy = HH - sh;
+    var known = (img.w === HW || img.w === FD.hand.pw || img.w === FD.hand.lw) && (img.h === HH || img.h === FD.hand.ph || img.h === FD.hand.lh);
+    var sw = known ? img.w : HW, sh = known ? img.h : HH, ox = (!known || sw === HW) ? 0 : (FD.hand.pw - sw) >> 1, oy = (known && sh === FD.hand.lh) ? HPY - FD.hand.lpy : 0;
     for (var y = 0; y < sh; y++) for (var x = 0; x < sw; x++) {
       var v = img.px(Math.floor(x * img.w / sw), Math.floor(y * img.h / sh));
       out[(y + oy) * HW + x + ox] = (v === 0xFFFF || v === 0x0120) ? -1 : v;
@@ -1261,10 +1353,11 @@
     var def = '/file?name=' + encodeURIComponent('/hand_set0_' + p + '.bmp');
     var url = '/file?name=' + encodeURIComponent('/hand_set' + (FD.hand.set || '0') + '_' + p + '.bmp');
     function get(u) { return fetch(u, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); }); }
+    loadStart();
     get(url).catch(function () { return get(def); }).then(function (ab) {
       hands[p] = handCanvas(decodeHand(ab), p);
       schedulePreview();
-    }).catch(function () {});
+    }).catch(function () {}).then(loadDone);
   });
 
   // Sprite in Zeigerbreite des Zifferblatts, Bitmap mittig zugeschnitten
@@ -1302,7 +1395,7 @@
         pctx.save();
         if (p === 'second') pctx.translate(plan.sx, plan.sy); else pctx.translate(plan.hx, plan.hy);
         pctx.rotate(ang[p] * Math.PI / 180);
-        pctx.drawImage(hands[p], -((spriteWidth(p) >> 1) + 0.5), -(HPY + 0.5));
+        pctx.drawImage(hands[p], -((HW - 1) / 2 - (spriteWidth(p) < HW ? (HW - spriteWidth(p)) >> 1 : 0) + 0.5), -(HPY + 0.5)); // Drehpunkt wie handPivotX() im Geraet / pivot like handPivotX() on the device
         pctx.restore();
       });
       if (FD.hub > 0) {
@@ -1378,7 +1471,7 @@
     tColor: 'color', tStd: 'std', tPal: 'pal', tEdit: 'edit', tImport: 'import', tGen: 'gen', tBg: 'bg', tRing: 'ring',
     tHourM: 'hourM', tMinM: 'minM', tNum: 'num', tNSize: 'nSize', tNDist: 'nDist', tNFont: 'nFont', genHint: 'genHint',
     tPreview: 'preview', tLive: 'live', tShowHands: 'showHands', tTxtMode: 'txtMode', tTxtRot: 'txtRot',
-    tLogo: 'logo', tLogoW: 'logoW', logoHint: 'logoHint', tFonts: 'fonts', fontFileHint: 'fontFileHint' };
+    tLogo: 'logo', tLogoW: 'logoW', logoHint: 'logoHint', tKey: 'key', tKeyTol: 'keyTol', keyHint: 'keyHint', tFonts: 'fonts', fontFileHint: 'fontFileHint' };
   Object.keys(labels).forEach(function (id) { $(id).textContent = t(labels[id]); });
   $('resetBtn').textContent = t('reset'); $('saveBtn').textContent = t('saveBtn'); $('saveCurBtn').textContent = t('saveCurBtn');
   $('pickBtn').textContent = t('pickBtn'); $('pickBtn').title = t('pickTip');

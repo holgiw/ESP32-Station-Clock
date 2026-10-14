@@ -611,9 +611,6 @@ elseif ($Flash) {
     # Recognize the board on the port and download the build of that chip (Get-BuildDir)
     Set-Board (Get-PortBoard $selPort $true)
     Write-Host "$(if ($board -eq 's3lcd4') { 'ESP32-S3 (480x480)' } elseif ($board -eq 's3qualia') { 'ESP32-S3 Qualia (480x480 rund / round)' } else { 'ESP32-' + $board.ToUpper() }) an / on COM$selPort"
-    if ($board -eq 's3lcd4') {
-        Write-Host 'ESP32-S3-Touch-LCD-4 (480x480): EXPERIMENTELL / EXPERIMENTAL'
-    }
     if ($board -eq 's3qualia') {
         Write-Host 'Adafruit Qualia ESP32-S3 (2,1" rund): EXPERIMENTELL, NICHT AM GERAET GETESTET / EXPERIMENTAL, NOT TESTED ON THE DEVICE'
     }

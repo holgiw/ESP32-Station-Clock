@@ -882,6 +882,14 @@ void setup() {
         if (!HAS_DISPLAY2) tftRotation2 = TFT_ROTATION_NA; // Board ohne zweites Display (config.h)
                                                            // board without a second display (config.h)
 
+        // Mit nur einem Display ist "n.a." fuer Display 1 sinnlos (die Uhr bliebe dunkel): auf die Vorgabe zurueck
+        // With only one display "n.a." for display 1 makes no sense (the clock would stay dark): back to the default
+
+        if (tftRotation1 > ROTATION1_LAST) {
+            tftRotation1 = TFT_ROTATION1_DEFAULT;
+            preferences.putUChar(PK_TFT_ROTATION1, tftRotation1);
+        }
+
 
         loadLanguage(); // liest currentLanguage aus den Preferences (siehe translation.h)
                         // reads currentLanguage from preferences (see translation.h)
@@ -969,7 +977,7 @@ void setup() {
 
         useBacklight = preferences.getBool(PK_USE_BACKLIGHT, BACKLIGHT_DEFAULT);
 
-        pinMode(BUTTON1, INPUT_PULLDOWN);
+        pinModeSafe(BUTTON1, INPUT_PULLDOWN);
 
         // Boot-Taste (GPIO 0 bzw. 9 beim C6) hat dieselbe Funktion wie der Taster - Pull-up ausdruecklich setzen,
         // nicht nur auf den Zustand nach dem Reset verlassen
@@ -991,6 +999,7 @@ void setup() {
         // ADC +3,3V / GND über GPIO
         // ADC +3.3V / GND via GPIO
 
+        if (ADC_PIN >= 0) { // ohne Pins (ESP32-S3-Touch-LCD-4) gibt es keinen Lichtsensor / without pins (ESP32-S3-Touch-LCD-4) there is no light sensor
         pinMode(ADC_GND, OUTPUT);
         pinMode(ADC_3V, OUTPUT);
 
@@ -1008,6 +1017,7 @@ void setup() {
         digitalWrite(ADC_3V, HIGH);
         delay(10);
         adcActual = analogRead(ADC_PIN);
+        }
 
         DEBUG_PRINTF("[ADC] min: %d max: %d act: %d", adcMin, adcMax, adcActual);
         if (loggingEnabled) Serial.println("");
@@ -1023,8 +1033,8 @@ void setup() {
             useAdc = preferences.getBool(PK_USE_ADC, true);
         }
         if (!useAdc) {
-            pinMode(ADC_GND, INPUT);
-            pinMode(ADC_3V, INPUT);
+            pinModeSafe(ADC_GND, INPUT);
+            pinModeSafe(ADC_3V, INPUT);
             useAdc = false;
         }
 
@@ -1123,13 +1133,13 @@ void setup() {
         }
 
         createSprite16(hourHandSprite, HAND_WIDTH, HAND_HEIGHT);
-        hourHandSprite.setPivot(HAND_WIDTH / 2, HAND_PIVOT_Y);
+        hourHandSprite.setPivot(handPivotX(HAND_WIDTH), HAND_PIVOT_Y);
 
         createSprite16(minuteHandSprite, HAND_WIDTH, HAND_HEIGHT);
-        minuteHandSprite.setPivot(HAND_WIDTH / 2, HAND_PIVOT_Y);
+        minuteHandSprite.setPivot(handPivotX(HAND_WIDTH), HAND_PIVOT_Y);
 
         createSprite16(secondHandSprite, HAND_WIDTH, HAND_HEIGHT);
-        secondHandSprite.setPivot(HAND_WIDTH / 2, HAND_PIVOT_Y);
+        secondHandSprite.setPivot(handPivotX(HAND_WIDTH), HAND_PIVOT_Y);
 
         recoverHandSetRenumber(); // unterbrochene Neunummerierung der Zeigersaetze beenden (presets_manager.h)
                                   // finish an interrupted renumbering of the hand sets (presets_manager.h)
@@ -1176,8 +1186,10 @@ void setup() {
         // DCF77-Interrupt einrichten - dekodiert wird in isr() (time_sync.h), ohne DCF77-Bibliothek.
         // Set up the DCF77 interrupt - decoding happens in isr() (time_sync.h), without a DCF77 library.
 
-        pinMode(DCF77_DATAPIN, INPUT_PULLUP);
-        attachInterrupt(DCF77_DATAPIN, isr, CHANGE);
+        if (DCF77_DATAPIN >= 0) {
+            pinMode(DCF77_DATAPIN, INPUT_PULLUP);
+            attachInterrupt(DCF77_DATAPIN, isr, CHANGE);
+        }
 
         // Bit-Puffer fuer /dcf77 auf "unbekannt" (-1) initialisieren -
         // int8_t-Arrays lassen sich nicht per Deklaration vorbelegen.
@@ -1190,7 +1202,7 @@ void setup() {
         // Wenn Button1 oder BOOT_BUTTON gedrückt ist, alle Zugangsdaten löschen
         // If Button1 or BOOT_BUTTON is pressed, clear all credentials
 
-        if (digitalRead(BUTTON1) == HIGH || digitalRead(BOOT_BUTTON) == LOW || extraButtonDown()) {
+        if (pinIsHigh(BUTTON1) || pinIsLow(BOOT_BUTTON) || extraButtonDown()) {
             DEBUG_PRINTLN("[SETUP] Reset button pressed, clearing WiFi credentials and starting AP..");
             showButtonMessage(TFT_YELLOW, "WiFi Reset", "...", "", TFT_DARKGREY);
             delay(1000);

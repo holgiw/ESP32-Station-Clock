@@ -92,6 +92,7 @@
     constexpr const char* PK_MQTT_PREFIX      = "mqttPrefix";   // Basis-Topic (Default uhr4) / base topic (default uhr4)
     constexpr const char* PK_RENUM_PLAN        = "renumPlan";    // laufende Neunummerierung der Zeigersaetze (Stufe|alt>neu,...)
     constexpr const char* PK_SUBDIAL_HAND_VER  = "subdialHandVer"; // Version des erzeugten Sekundenzeigers von Satz 3 (SUBDIAL_HAND_VERSION)
+    constexpr const char* PK_GENERATED_HAND_VER = "genHandVer";  // Version der erzeugten Stunden-/Minutenzeiger (GENERATED_HAND_VERSION)
     constexpr const char* PK_SUBDIAL_SET       = "subdialSet";   // Nummer des erzeugten Zeigersatzes fuers Sekundenfeld
                                                                  // number of the generated hand set for the subdial
     constexpr const char* PK_STRIP_CFG_DONE    = "stripCfgDone"; // Streifen-Einstellungen in stripcfg_*.txt uebernommen

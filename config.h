@@ -232,28 +232,22 @@
 #error "ESP32-S3-Touch-LCD-4: PSRAM 'OPI PSRAM' waehlen / choose it"
 #endif
 
-    // Platzhalter - die Stiftleisten des Boards (CAN: GPIO 0/6, RS485: GPIO 43/44) sind frei, Lichtsensor, Taster
-    // und DCF77 sind hier nicht vorgesehen; ohne angeschlossenen Sensor meldet die Uhr "Photoresistor not found".
-    // GPIO 0 ist der BOOT-Taster, daher laeuft DCF77 dort nur zum Schein (kein Modul).
+    // Ausser den Pins fuer das Display (RGB-Bus, 3-Draht-SPI) und I2C hat das Board keine freien GPIOs: kein
+    // DCF77-Empfaenger, kein externer Taster, kein Lichtsensor (Pins -1, die Uhr greift sie nicht an; ohne Lichtsensor
+    // gilt die manuelle Helligkeit). Der BOOT-Taster (GPIO 0) bleibt.
 
-    // Placeholders - the board's headers (CAN: GPIO 0/6, RS485: GPIO 43/44) are free, light sensor, button and
-    // DCF77 are not planned here; without a connected sensor the clock reports "Photoresistor not found".
-    // GPIO 0 is the BOOT button, so DCF77 only runs nominally there (no module).
+    // Apart from the pins for the display (RGB bus, 3-wire SPI) and I2C the board has no free GPIOs: no DCF77
+    // receiver, no external button, no light sensor (pins -1, the clock does not touch them; without a light sensor
+    // the manual brightness applies). The BOOT button (GPIO 0) stays.
 
 #define LED_BOARD      -1   // keine LED / no LED
 #define LED_BOARD_GPIO -1
 
-    // BUTTON1 ist high-aktiv mit Pull-down: GPIO 43 (UART-TX) liegt im Leerlauf high und loeste einen Dauer-Tastendruck
-    // aus, deshalb GPIO 6 (CAN-Stiftleiste, unbelegt). Die Pins 43/44 dienen nur dem Platzhalter der Messbruecke.
+#define ADC_3V -1
+#define ADC_PIN -1
+#define ADC_GND -1
 
-    // BUTTON1 is active high with a pull-down: GPIO 43 (UART TX) idles high and caused a permanent button press, so
-    // GPIO 6 (CAN header, unused) is used. Pins 43/44 serve only as the placeholder of the measuring bridge.
-
-#define ADC_3V 43
-#define ADC_PIN 4
-#define ADC_GND 44
-
-#define BUTTON1 6
+#define BUTTON1 -1
 #define BOOT_BUTTON 0
 
     // I2C: Port-Expander CH32V003 (0x24), Touch GT911 (0x14 nach dem Reset) und RTC PCF85063 (0x51; die Uhr kennt nur den DS3231)
@@ -277,7 +271,7 @@
 #define CS_2    -1
 #define LGFX_CS_PIN CS_1
 
-#define DCF77_DATAPIN 0
+#define DCF77_DATAPIN -1   // kein DCF77-Empfaenger moeglich / no DCF77 receiver possible
 #define TFT_Backlight -1   // Beleuchtung nur an/aus ueber den Expander (EXIO1), kein PWM-Pin
                            // backlight only on/off via the expander (EXIO1), no PWM pin
 
@@ -555,6 +549,14 @@
 
 #define TFT_ROTATION_NA 4
 
+    // Letzter waehlbarer Rotationswert fuer Display 1: "n.a." (nicht angeschlossen) gibt es nur mit zweitem Display -
+    // bei nur einem Display bliebe die Uhr sonst dunkel.
+
+    // Last selectable rotation value for display 1: "n.a." (not connected) exists only with a second display - with
+    // only one display the clock would otherwise stay dark.
+
+#define ROTATION1_LAST (HAS_DISPLAY2 ? TFT_ROTATION_NA : TFT_ROTATION_NA - 1)
+
     // Auswahlwert "automatisch" fuer Display 1 (nur mit Lagesensor, HAS_IMU): gespeichert wird er nicht als
     // Rotation, sondern als autoRotation (imu_rotation.h). IMU_ROTATION_DIR: Drehsinn des Sensors gegenueber
     // dem Display (1 oder -1, am Geraet pruefen), IMU_STABLE_MS: so lange muss eine neue Lage anliegen.
@@ -597,6 +599,15 @@
 #define BACKLIGHT_C6_MAX_SAFE 128
 
 
+    // Pins mit Nummer -1 gibt es auf dem Board nicht (siehe ESP32-S3-Touch-LCD-4): lesen und setzen tut dann nichts.
+    // Pins numbered -1 do not exist on the board (see ESP32-S3-Touch-LCD-4): reading and setting then does nothing.
+
+inline bool pinIsHigh(int pin) { return pin >= 0 && digitalRead(pin) == HIGH; }
+inline bool pinIsLow(int pin) { return pin >= 0 && digitalRead(pin) == LOW; }
+inline void pinModeSafe(int pin, uint8_t mode) { if (pin >= 0) pinMode(pin, mode); }
+inline void pinWriteSafe(int pin, uint8_t value) { if (pin >= 0) digitalWrite(pin, value); }
+inline String pinText(int pin) { return pin >= 0 ? String(pin) : String("n/a"); }
+
     // Zeigerformat: Drehpunkte und Breiten je Display fest (Dateiformat), Drehpunkt-Spalte = halbe Breite.
     // Alte Zeiger werden oben und seitlich transparent aufgefuellt. handPivotY = Displayradius, der Zeiger
     // reicht bis zum Rand.
@@ -611,8 +622,10 @@ struct DisplayGeometry {
                            // clock face = display area, square
     int handLegacyWidth;   // alte Zeigerbreite (Dateiformat)
                            // old hand width (file format)
-    int handWidth;         // neue Zeigerbreite
-                           // new hand width
+    int handWidth;         // neue Zeigerbreite (ungerade: die Symmetrieachse liegt auf der mittleren Pixelspalte)
+                           // new hand width (odd: the symmetry axis lies on the middle pixel column)
+    int handPriorWidth;    // bisherige Zeigerbreite (vor der ungeraden Breite), sonst wie handWidth
+                           // previous hand width (before the odd width), otherwise as handWidth
     int handLegacyHeight;
     int handLegacyPivotY;  // Drehpunkt im alten Format
                            // pivot in the old format
@@ -635,30 +648,35 @@ struct DisplayGeometry {
 
 constexpr DisplayGeometry DISPLAY_GEOMETRY[DISPLAY_TYPE_COUNT] = {
 
-    // name       clock legW  W  legH legPiv piv text hub   BL     swRot  panelW panelH round
+    // name       clock legW  W  priorW legH legPiv piv text hub   BL     swRot  panelW panelH round
 
     // GC9A01: BL nur auf dem Waveshare ESP32-S3-LCD-1.28 ab Werk an (Beleuchtung dort fest an GPIO 40)
     // GC9A01: BL on by default only on the Waveshare ESP32-S3-LCD-1.28 (backlight hard-wired to GPIO 40 there)
 
-    { "GC9A01",   240,  21,  25, 131, 100,  120,  2,  6,  BOARD_WAVESHARE_S3_GC9A01 != 0, false, 240, 240, true },
-    { "GC9D01",   160,  13,  15,  86,  66,   80,  1,  3,  true,  true,  160,   160,   true },
-    { "ILI9341",  240,  21,  25, 131, 100,  120,  2,  6,  false, false, 240,   320,   false },
-    { "ST7789",   172,  15,  17,  94,  72,   86,  2,  4,  true,  false, 172,   320,   false }, // Meldungen quer (statusLandscape())
+    { "GC9A01",   240,  21,  25,  25, 131, 100,  120,  2,  6,  BOARD_WAVESHARE_S3_GC9A01 != 0, false, 240, 240, true },
+    { "GC9D01",   160,  13,  15,  15,  86,  66,   80,  1,  3,  true,  true,  160,   160,   true },
+    { "ILI9341",  240,  21,  25,  25, 131, 100,  120,  2,  6,  false, false, 240,   320,   false },
+    { "ST7789",   172,  15,  17,  17,  94,  72,   86,  2,  4,  true,  false, 172,   320,   false }, // Meldungen quer (statusLandscape())
                                                                                         // messages in landscape (statusLandscape())
-    { "ST7789_240", 240, 21, 25, 131, 100,  120,  2,  6,  true,  false, 240,   240,   false },
+    { "ST7789_240", 240, 21, 25, 25, 131, 100,  120,  2,  6,  true,  false, 240,   240,   false },
 
     // ST7701_480 (Waveshare ESP32-S3-Touch-LCD-4): das Doppelte des GC9A01-Eintrags, Werte am Geraet noch zu pruefen.
     // Beleuchtung nur an/aus (BL false), Software-Rotation (Bild im PSRAM), quadratisch ohne Streifen.
     // ST7701_480 (Waveshare ESP32-S3-Touch-LCD-4): twice the GC9A01 entry, values still to be checked on the device.
     // Backlight only on/off (BL false), software rotation (image in PSRAM), square without a strip.
 
-    { "ST7701_480", 480,  42,  50, 262, 200,  240,  4, 12,  true,  true,  480,   480,   false },
+    { "ST7701_480", 480,  42,  51,  50, 262, 200,  240,  4, 12,  true,  true,  480,   480,   false },
 
     // TL021_480 (Adafruit Qualia mit 2,1" rundem Display): wie ST7701_480, aber rund; Beleuchtung nur an/aus (BL false)
     // TL021_480 (Adafruit Qualia with the 2.1" round display): like ST7701_480, but round; backlight only on/off (BL false)
 
-    { "TL021_480", 480,  42,  50, 262, 200,  240,  4, 12,  false, true,  480,   480,   true },
+    { "TL021_480", 480,  42,  51,  50, 262, 200,  240,  4, 12,  false, true,  480,   480,   true },
 };
+
+    // Hoehe eines Zeigers im bisherigen Format (ohne HAND_EXTRA_BELOW) fuer einen beliebigen Displaytyp (Sicherungen)
+    // Height of a hand in the previous format (without HAND_EXTRA_BELOW) for any display type (backups)
+
+constexpr int handPriorHeightOf(const DisplayGeometry& g) { return g.handLegacyHeight + (g.handPivotY - g.handLegacyPivotY); }
 
     // Obergrenzen ueber alle Typen - fuer fest dimensionierte Puffer
     // (rowBuffer in globals.h).
@@ -673,7 +691,8 @@ constexpr DisplayGeometry DISPLAY_GEOMETRY[DISPLAY_TYPE_COUNT] = {
 
 constexpr bool displayGeometryValid(const DisplayGeometry& g, int maxClock = CLOCK_MAX) {
     return g.handPivotY >= g.handLegacyPivotY                                       // HAND_TOP_PAD >= 0
-        && g.handWidth >= g.handLegacyWidth && (g.handWidth - g.handLegacyWidth) % 2 == 0 // Drehpunkt-Spalte bleibt mittig / pivot column stays centred
+        && g.handWidth >= g.handPriorWidth && g.handPriorWidth >= g.handLegacyWidth && (g.handPriorWidth - g.handLegacyWidth) % 2 == 0 // alte Zeiger bleiben mittig / old hands stay centred
+        && g.handWidth % 2 == 1                                                     // Symmetrieachse auf einer Pixelspalte (Zeiger mit einem Pixel Breite) / symmetry axis on a pixel column (hands one pixel wide)
         && g.handPivotY <= g.clock / 2                                              // Drehpunkt innerhalb des Radius / pivot inside the radius
         && g.clock <= maxClock
         && g.panelWidth >= g.clock && g.panelHeight >= g.clock;                     // Uhr passt aufs Panel / clock fits the panel
@@ -699,6 +718,7 @@ static_assert(displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_GC9A01]) &&
 #define TFT_HEIGHT          (displayGeom->panelHeight)
 #define HAND_LEGACY_WIDTH   (displayGeom->handLegacyWidth)
 #define HAND_WIDTH          (displayGeom->handWidth)
+#define HAND_PRIOR_WIDTH    (displayGeom->handPriorWidth)
 #define HAND_LEGACY_HEIGHT  (displayGeom->handLegacyHeight)
 #define HAND_LEGACY_PIVOT_Y (displayGeom->handLegacyPivotY)
 #define HAND_PIVOT_Y        (displayGeom->handPivotY)
@@ -707,8 +727,17 @@ static_assert(displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_GC9A01]) &&
 
 #define HAND_TOP_PAD (HAND_PIVOT_Y - HAND_LEGACY_PIVOT_Y)          // 20 bzw. 14
                                                                    // 20 or 14
-#define HAND_HEIGHT (HAND_LEGACY_HEIGHT + HAND_TOP_PAD)            // 151 bzw. 100
-                                                                   // 151 or 100
+
+    // Zeigerhoehe: bisheriges Format (alte Hoehe + Auffuellung oben, Drehpunkt bei HAND_PIVOT_Y) plus HAND_EXTRA_BELOW
+    // Zeilen UNTER dem Zeiger. Der Drehpunkt bleibt in allen drei Hoehen (alt, bisher, neu) an derselben Stelle, siehe
+    // placeHand().
+
+    // Hand height: previous format (old height + padding at the top, pivot at HAND_PIVOT_Y) plus HAND_EXTRA_BELOW rows
+    // BELOW the hand. The pivot stays at the same place in all three heights (old, previous, new), see placeHand().
+
+#define HAND_EXTRA_BELOW 15
+#define HAND_PRIOR_HEIGHT (HAND_LEGACY_HEIGHT + HAND_TOP_PAD)      // 151 bzw. 100 (vor HAND_EXTRA_BELOW) / 151 or 100 (before HAND_EXTRA_BELOW)
+#define HAND_HEIGHT (HAND_PRIOR_HEIGHT + HAND_EXTRA_BELOW)         // 166 bzw. 115 / 166 or 115
 
 
     // System / Debug

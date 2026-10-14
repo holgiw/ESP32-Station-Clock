@@ -110,7 +110,7 @@
     // entries and restarts; from 30 s full factory reset.
 
     void checkButton() {
-        if (digitalRead(BUTTON1) == HIGH || digitalRead(BOOT_BUTTON) == LOW || extraButtonDown()) {
+        if (pinIsHigh(BUTTON1) || pinIsLow(BOOT_BUTTON) || extraButtonDown()) {
 
             const unsigned long WIFI_RESET_HOLD = 2 * WAIT_10s;
             const unsigned long FACTORY_RESET_HOLD = 3 * WAIT_10s;
@@ -118,7 +118,7 @@
             int shownStage = 0;   // 0 = WLAN-Anzeige, 1 = WLAN-Countdown, 2 = Werksreset-Countdown
                                   // 0 = WiFi info, 1 = WiFi countdown, 2 = factory reset countdown
             int shownSecs = -1;
-            DEBUG_PRINTLN(String("[BUTTON] Pressed (") + (digitalRead(BUTTON1) == HIGH ? "button" : (digitalRead(BOOT_BUTTON) == LOW ? "boot button" : "extra button")) + ")");
+            DEBUG_PRINTLN(String("[BUTTON] Pressed (") + (pinIsHigh(BUTTON1) ? "button" : (pinIsLow(BOOT_BUTTON) ? "boot button" : "extra button")) + ")");
 
             clearTFT();
 
@@ -130,7 +130,7 @@
             // Blockierender Loop während Button gedrückt
             // Blocking loop while button is pressed
 
-            while (digitalRead(BUTTON1) == HIGH || digitalRead(BOOT_BUTTON) == LOW || extraButtonDown()) {
+            while (pinIsHigh(BUTTON1) || pinIsLow(BOOT_BUTTON) || extraButtonDown()) {
                 unsigned long held = millis() - pressStart;
 
                 if (held >= FACTORY_RESET_HOLD) {
@@ -267,6 +267,73 @@
 
     void lcd4TouchDone() { gt911Write(0x814E, 0); }
 
+    // Die letzten 8 Beruehrungen (Aufsetzen): Position des Touch-Chips (x, y) und auf dem Zifferblatt (sx, sy), fuer
+    // /api/touchlog.
+
+    // The last 8 touches (touch-down): position of the touch chip (x, y) and on the clock face (sx, sy), for
+    // /api/touchlog.
+
+    inline int lcd4TouchLog[8][4] = {};
+    inline uint32_t lcd4TouchLogCount = 0;
+
+    String lcd4TouchDebug() {
+        String r = "{\"count\":" + String(lcd4TouchLogCount) + ",\"rotation\":" + String(tftRotation1) + ",\"touches\":[";
+        for (uint32_t k = 0; k < 8 && k < lcd4TouchLogCount; k++) {
+            const int* e = lcd4TouchLog[(lcd4TouchLogCount - 1 - k) % 8]; // neueste zuerst / newest first
+            r += String(k ? "," : "") + "[" + String(e[0]) + "," + String(e[1]) + "," + String(e[2]) + "," + String(e[3]) + "]";
+        }
+        r += "],\"max\":";
+        uint8_t cfg[4] = {};
+        if (gt911Addr && gt911Read(0x8048, cfg, 4)) {
+            r += "[" + String(cfg[0] | (cfg[1] << 8)) + "," + String(cfg[2] | (cfg[3] << 8)) + "]"; // X-/Y-Aufloesung des Chips / X/Y resolution of the chip
+        }
+        else {
+            r += "null";
+        }
+        return r + "}";
+    }
+
+    // Fuer die Touch-Zonen: 0 = nichts Neues, 1 = Beruehrung an der Stelle (x, y), 2 = losgelassen. Koordinaten wie im
+    // GT911: Register 0x8150 = x (2 Byte), y (2 Byte), Groesse.
+
+    // For the touch zones: 0 = nothing new, 1 = touch at (x, y), 2 = released. Coordinates as in the GT911: register
+    // 0x8150 = x (2 bytes), y (2 bytes), size.
+
+    int lcd4TouchRead(int& x, int& y) {
+        if (!gt911Addr) {
+            lcd4TouchPressed(); // sucht den Touch-Chip / searches the touch chip
+            return 0;
+        }
+        uint8_t status = 0;
+        if (!gt911Read(0x814E, &status, 1) || !(status & 0x80)) return 0;
+        const uint8_t points = status & 0x0F;
+        uint8_t p[8] = {};
+        const bool ok = points > 0 && gt911Read(0x8150, p, 8);
+        gt911Write(0x814E, 0);
+        if (points == 0) return 2;
+        if (!ok) return 0;
+        x = p[0] | (p[1] << 8); // 0x8150 = X niedrig, X hoch, Y niedrig, Y hoch / X low, X high, Y low, Y high
+        y = p[2] | (p[3] << 8);
+        return 1;
+    }
+
+    // Position des Touch-Chips (liegt fest am Panel) in die Lage des Zifferblatts umrechnen (480 x 480, Ursprung links
+    // oben): Das Bild ist um tftRotation1 x 90 Grad im Uhrzeigersinn gedreht (am Geraet bei 180 Grad geprueft), die
+    // Beruehrung muss genauso gedreht werden.
+
+    // Convert a position of the touch chip (fixed to the panel) to the orientation of the clock face (480 x 480, origin
+    // top left): the image is rotated clockwise by tftRotation1 x 90 degrees (checked on the device at 180 degrees), the
+    // touch has to be rotated the same way.
+
+    void touchToScreen(int x, int y, int& sx, int& sy) {
+        switch (tftRotation1) {
+            case 1:  sx = y;       sy = 479 - x; break;
+            case 2:  sx = 479 - x; sy = 479 - y; break;
+            case 3:  sx = 479 - y; sy = x;       break;
+            default: sx = x;       sy = y;       break;
+        }
+    }
+
 #else
 
     void lcd4TouchDone() {} // Qualia: lcd4TouchPressed() meldet jede Beruehrung nur einmal / reports every touch only once
@@ -307,7 +374,79 @@
         if (millis() - lastPoll < 25) return;
         lastPoll = millis();
 
+#if BOARD_WAVESHARE_S3_LCD4
+
+        // Touch-Zonen (Ecken, je ZONE_PX gross): rechts oben die WLAN-Anzeige (Status), links unten das vorherige und
+        // rechts unten das naechste Preset. Entprellt: Die Beruehrung muss DEBOUNCE_MS in derselben Zone bleiben,
+        // je Aufsetzen wird nur einmal ausgeloest (bis zum Loslassen oder 200 ms ohne neue Position), und nach dem
+        // Loslassen oder einer Aktion sind RELEASE_MS lang keine neuen Beruehrungen erlaubt.
+
+        // Touch zones (corners, ZONE_PX each): top right the WiFi info (status), bottom left the previous and bottom
+        // right the next preset. Debounced: the touch has to stay in the same zone for DEBOUNCE_MS, only one action
+        // per touch-down (until release or 200 ms without a new position), and after a release or an action new
+        // touches are ignored for RELEASE_MS.
+
+        static bool touching = false, acted = false, logged = false;
+        static int zoneCandidate = 0;
+        static unsigned long touchLast = 0, zoneSince = 0, blockedUntil = 0;
+        const int ZONE_PX = 160;
+        const unsigned long DEBOUNCE_MS = 50, RELEASE_MS = 400;
+
+        int x = 0, y = 0;
+        const int state = lcd4TouchRead(x, y);
+        if (state != 1) {
+            if (touching && (state == 2 || millis() - touchLast >= 200)) {
+                touching = false;
+                acted = false;
+                logged = false;
+                zoneCandidate = 0;
+                blockedUntil = millis() + RELEASE_MS;
+            }
+            return;
+        }
+
+        touchLast = millis();
+        if ((long)(blockedUntil - millis()) > 0) return;
+        if (!touching) {
+            touching = true;
+            acted = false;
+            zoneCandidate = 0;
+        }
+        if (acted) return;
+
+        int sx = 0, sy = 0;
+        touchToScreen(x, y, sx, sy);
+        int zone = 0; // 1 Status, 2 vorheriges, 3 naechstes Preset / 1 status, 2 previous, 3 next preset
+        if (sy < ZONE_PX && sx >= 480 - ZONE_PX) zone = 1;
+        else if (sy >= 480 - ZONE_PX && sx < ZONE_PX) zone = 2;
+        else if (sy >= 480 - ZONE_PX && sx >= 480 - ZONE_PX) zone = 3;
+        if (zone != zoneCandidate) {
+            zoneCandidate = zone;
+            zoneSince = millis();
+        }
+        if (!logged) {
+            logged = true;
+            lcd4TouchLog[lcd4TouchLogCount % 8][0] = x;
+            lcd4TouchLog[lcd4TouchLogCount % 8][1] = y;
+            lcd4TouchLog[lcd4TouchLogCount % 8][2] = sx;
+            lcd4TouchLog[lcd4TouchLogCount % 8][3] = sy;
+            lcd4TouchLogCount++;
+            DEBUG_PRINTLN("[TOUCH] Touch at x=" + String(x) + " y=" + String(y) + " -> screen " + String(sx) + "," + String(sy) + ", zone " + String(zone));
+        }
+        if (zone == 0 || millis() - zoneSince < DEBOUNCE_MS) return;
+
+        acted = true;
+        if (zone == 2 || zone == 3) {
+            switchPreset(zone == 3 ? 1 : -1);
+            blockedUntil = millis() + RELEASE_MS;
+            return;
+        }
+
+#else
+
         if (!lcd4TouchPressed()) return;
+
+#endif
 
         DEBUG_PRINTLN("[TOUCH] Touch - showing the WiFi info for 5 s");
         clearTFT();

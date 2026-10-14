@@ -693,7 +693,6 @@ case "$state" in
     *)  BOARD=s2 ;;
 esac
 if [ "$BOARD" = s3lcd4 ]; then echo "ESP32-S3 (480x480) an / on $PORT"; elif [ "$BOARD" = s3qualia ]; then echo "ESP32-S3 Qualia (480x480 rund / round) an / on $PORT"; else echo "ESP32-${BOARD^^} an / on $PORT"; fi
-[ "$BOARD" = s3lcd4 ] && echo "ESP32-S3-Touch-LCD-4 (480x480): EXPERIMENTELL / EXPERIMENTAL"
 [ "$BOARD" = s3qualia ] && echo "Adafruit Qualia ESP32-S3: EXPERIMENTELL, NICHT AM GERAET GETESTET / EXPERIMENTAL, NOT TESTED ON THE DEVICE"
 if [ "${UHR4_LOCAL:-}" = 1 ]; then
     BIN_DIR="esp32$BOARD"

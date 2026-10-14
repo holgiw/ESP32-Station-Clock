@@ -4,7 +4,21 @@
 
 ## 2026-10-14
 
+### Hinzugefügt
+- Neue Schnittstelle `/api/setbrightness?value=0..255` (GET oder POST): setzt die Helligkeit fest bis zum Neustart, die PWM-Beleuchtung gleitet dabei langsam hin (etwa 10 ms je Stufe; ohne PWM sofort); `value=auto` kehrt langsam zur normalen Regelung zurück (siehe `API.md`).
+
 ### Geändert
+- ESP32-S3-Touch-LCD-4 (Waveshare) gilt nicht mehr als experimentell; der Adafruit Qualia bleibt experimentell und ungetestet.
+- Rotation „nicht angeschlossen (n.a.)“ gibt es nur noch bei Boards mit zweitem Display (nur ESP32-S2); mit einem Display wäre die Uhr dunkel. Ein gespeichertes „n.a.“ für Display 1 wird dort beim Start auf die Vorgabe zurückgesetzt.
+- ESP32-S3-Touch-LCD-4: Das Board hat außer Display und I2C keine freien GPIOs – kein DCF77-Empfänger, kein externer Taster, kein Lichtsensor möglich. Die Pins dafür sind entfernt (-1), die Uhr greift keine mehr an (vorher GPIO 0, 4, 6, 43 und 44), das Menü zeigt „DCF77“ nicht mehr, die Infoseite „n/a“. Es gilt die manuelle Helligkeit; der BOOT-Taster bleibt.
+- Zeigersatz-Designer: Die Seite ist erst bedienbar, wenn alle Zeiger geladen sind (Zeichenfläche, Werkzeuge, Speichern und Verwerfen sind bis dahin gesperrt).
+- Zifferblatt-Designer, Logo: „Transparente Farbe“ – die gewählte Farbe des Logos (z. B. der weiße Hintergrund eines BMP) wird durchsichtig, mit einstellbarer Toleranz; die Farbe lässt sich im Vorschaubild des Logos anklicken.
+- Zifferblatt-Designer: ebenso – bedienbar erst, wenn Zifferblatt, Streifen, Zeiger und Schriften der Uhr geladen sind.
+- Zeigerbreite beim 480x480 (Waveshare ESP32-S3-Touch-LCD-4, Qualia): 51 statt 50 Pixel. Die Symmetrieachse des Designers (Spiegeln) liegt damit auf der mittleren Pixelspalte, auch Zeiger mit einem Pixel Breite lassen sich symmetrisch zeichnen; Drehpunkt, Mittellinie, Formgenerator und Vorschauen nutzen dieselbe Achse. Zeiger der Breite 50 (bisher) und 42 (alt) bleiben gültig und sitzen unverändert; die erzeugten Zeiger legt die Uhr einmal neu an. Die anderen Displays hatten schon eine ungerade Breite.
+- Zeigerformat: Die Zeiger sind unter dem Drehpunkt um 15 Pixel länger (z. B. 25 × 166 statt 25 × 151; 160er-Display 15 × 115 statt 15 × 100). Bestehende Zeiger im bisherigen und im älteren Format laufen unverändert weiter, der Drehpunkt bleibt an derselben Stelle; die Uhr füllt sie beim Laden unten transparent auf. Beide Designer, Sicherungen anderer Displaytypen und die Dateiliste kennen das neue Maß. Die von der Uhr erzeugten Zeiger enden wie bisher.
+- Zeigersatz-Designer: „Bild laden“ ersetzt den gewählten Zeiger (Stunde, Minute oder Sekunde) durch ein BMP oder anderes Bild; es wird proportional auf die Zeigergröße skaliert (mittig, unten bündig), Weiß und Durchsichtiges werden transparent. Neben „Als neues Design speichern“ steht die nächste freie Nummer (z. B. set_7). Zifferblatt-Designer: der Speichern-Knopf steht vor dem Namensfeld.
+- Die von der Uhr erzeugten Stunden- und Minutenzeiger (Zeigersätze 0, 1, 2 und der Sekundenfeld-Satz) sind um ein Drittel schmaler (nur die Breite); die Uhr legt sie beim ersten Start mit dieser Version einmal neu an, der Sekundenzeiger bleibt.
+- ESP32-S3-Touch-LCD-4: Touch-Zonen statt „jede Berührung“: Die Ecke rechts oben (160 x 160 Pixel) zeigt die WLAN-Anzeige, die Ecke links unten lädt das vorherige, die Ecke rechts unten das nächste Preset (Reihenfolge der Seite „Presets“, nach Namen sortiert). Neu: `/api/touchlog` (die letzten Berührungen, zur Fehlersuche). Das Laden eines Presets ist dieselbe Funktion wie `/api/setMode` (`applyModeArguments()`).
 - Wartet die Uhr auf WPS oder läuft sie im Access-Point-Modus, leuchtet das Display mit der maximalen Helligkeit, mindestens mit 100 (bisher 50 % mit PWM-Beleuchtung bzw. maximale Helligkeit ohne).
 - Start ohne Uhrzeit (normaler Start, kein Access Point, kein WPS): Das Display beginnt mit der minimalen Helligkeit statt mit voller bzw. 50 % - auch schon beim Start des Displays und während der WLAN-Suche. Sobald die Uhrzeit gültig ist, dimmt die PWM-Beleuchtung langsam (ein Schritt je 30 ms) auf den Wert der Regelung hoch, z. B. im Zeitfenster auf die volle Helligkeit; ohne PWM-Beleuchtung springt die Helligkeit wie bisher.
 - Die Zeiger-Startanimation nach dem Start dauert 5 s statt 3 s; spätere Sprünge (Korrektur, Rocrail) bleiben bei 3 s.
@@ -478,7 +492,21 @@
 
 ## 2026-10-14
 
+### Added
+- New interface `/api/setbrightness?value=0..255` (GET or POST): sets the brightness fixed until restart, the PWM backlight glides slowly (about 10 ms per step; at once without PWM); `value=auto` returns slowly to the normal control (see `API.md`).
+
 ### Changed
+- The ESP32-S3-Touch-LCD-4 (Waveshare) is no longer considered experimental; the Adafruit Qualia stays experimental and untested.
+- Rotation "not connected (n.a.)" now exists only on boards with a second display (ESP32-S2 only); with one display the clock would be dark. A stored "n.a." for display 1 is reset to the default at the start there.
+- ESP32-S3-Touch-LCD-4: apart from display and I2C the board has no free GPIOs - no DCF77 receiver, no external button, no light sensor possible. The pins for them are removed (-1), the clock touches none any more (before GPIO 0, 4, 6, 43 and 44), the menu no longer shows "DCF77", the info page "n/a". The manual brightness applies; the BOOT button stays.
+- Hand designer: the page is usable only when all hands are loaded (canvas, tools, save and discard are locked until then).
+- Clock face designer, logo: "Transparent colour" - the chosen colour of the logo (e.g. the white background of a BMP) becomes see-through, with an adjustable tolerance; the colour can be clicked in the preview of the logo.
+- Clock face designer: likewise - usable only when the clock face, strip, hands and fonts of the clock are loaded.
+- Hand width on the 480x480 (Waveshare ESP32-S3-Touch-LCD-4, Qualia): 51 instead of 50 pixels. The symmetry axis of the designer (mirroring) now lies on the middle pixel column, hands one pixel wide can also be drawn symmetrically; pivot, centre line, shape generator and previews use the same axis. Hands of width 50 (previous) and 42 (old) stay valid and sit unchanged; the clock creates the generated hands anew once. The other displays already had an odd width.
+- Hand format: the hands are 15 pixels longer below the pivot (e.g. 25 × 166 instead of 25 × 151; 160 display 15 × 115 instead of 15 × 100). Existing hands in the previous and in the older format keep working unchanged, the pivot stays at the same place; the clock pads them transparent at the bottom when loading. Both designers, backups of other display types and the file list know the new size. The hands generated by the clock end as before.
+- Hand designer: "Load image" replaces the selected hand (hour, minute or second) with a BMP or another image; it is scaled proportionally to the hand size (centred, flush at the bottom), white and see-through areas become transparent. Next to "Save as new design" the next free number is shown (e.g. set_7). Clock face designer: the save button stands before the name field.
+- The hour and minute hands generated by the clock (hand sets 0, 1, 2 and the subdial set) are one third narrower (width only); the clock creates them anew once at the first start with this version, the second hand stays.
+- ESP32-S3-Touch-LCD-4: touch zones instead of "any touch": the top right corner (160 x 160 pixels) shows the WiFi info, the bottom left corner loads the previous and the bottom right corner the next preset (order of the "Presets" page, sorted by name). New: `/api/touchlog` (the last touches, for troubleshooting). Loading a preset is the same function as `/api/setMode` (`applyModeArguments()`).
 - While the clock waits for WPS or runs in access point mode, the display runs at the maximum brightness, at least 100 (before: 50 % with PWM backlight, or maximum brightness without).
 - Start without a time (normal start, no access point, no WPS): the display begins at the minimum brightness instead of full or 50 % - already when the display starts and during the WiFi search. As soon as the time is valid, the PWM backlight dims up slowly (one step per 30 ms) to the value of the control, e.g. to full brightness inside the time window; without a PWM backlight the brightness jumps as before.
 - The hand start animation after the start takes 5 s instead of 3 s; later jumps (correction, Rocrail) stay at 3 s.

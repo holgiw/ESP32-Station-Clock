@@ -416,6 +416,10 @@
     void redirectTo(const String& location, const String& body = "") ;
     String beginPage() ;
     void updateNtpServersFromRequest() ;
+    void switchPreset(int direction) ;
+#if BOARD_WAVESHARE_S3_LCD4
+    String lcd4TouchDebug() ;
+#endif
     String sanitizeHostname(String input) ;
     void setupWebServer() ;
     String completeUploadName(const String& path, const String& uri) ;

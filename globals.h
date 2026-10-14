@@ -1023,6 +1023,7 @@
     uint8_t currentBrightness = 255;
     uint8_t brightnessTestValue = 0;       // Wert des Helligkeitstests / value of the brightness test
     unsigned long brightnessTestUntil = 0; // millis() am Ende des Tests, 0 = kein Test / millis() at the end of the test, 0 = no test
+    int16_t brightnessOverride = -1;       // /api/setbrightness: fester Wert 0-255 bis zum Neustart oder "auto", -1 = normale Regelung / fixed value 0-255 until restart or "auto", -1 = normal control
     uint8_t lastAppliedBrightness = 255; // gehoert zum Zifferblatt-Cache und wird von loadClockFace() gepflegt
                                          // belongs to the clock face cache and is maintained by loadClockFace()
 

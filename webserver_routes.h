@@ -859,6 +859,8 @@
 
         for (const auto& item : navItems) {
 
+            if (item.path == "/dcf77" && DCF77_DATAPIN < 0) continue; // ohne Pin kein DCF77 / no DCF77 without a pin
+
             if (item.path == currentPath) {
 
                 // Wenn der aktuelle Pfad mit dem Navigationseintrag übereinstimmt, nur Text anzeigen
@@ -1588,6 +1590,47 @@
     }
 
 
+    // Quelle der Argumente fuer applyModeArguments(): normal die Anfrage des Webservers, beim Wischen auf dem
+    // Touch (switchPreset()) die Abfragezeichenfolge der Preset-URL.
+
+    // Source of the arguments for applyModeArguments(): normally the web server request, when swiping on the
+    // touch (switchPreset()) the query string of the preset URL.
+
+    String modeQuery = "";
+    bool modeFromQuery = false;
+
+    // Wert eines Parameters in einer Abfragezeichenfolge ("a=1&b=2"), URL-dekodiert; found zeigt, ob er vorkommt.
+    // Value of a parameter in a query string ("a=1&b=2"), URL-decoded; found shows whether it occurs.
+
+    String queryParamValue(const String& query, const char* name, bool* found = nullptr) {
+        const String key = String(name) + "=";
+        int pos = 0;
+        while (pos <= (int)query.length()) {
+            int amp = query.indexOf('&', pos);
+            int end = (amp < 0) ? (int)query.length() : amp;
+            if (query.startsWith(key, pos)) {
+                if (found) *found = true;
+                return presetUrlDecode(query.substring(pos + key.length(), end));
+            }
+            if (amp < 0) break;
+            pos = amp + 1;
+        }
+        if (found) *found = false;
+        return "";
+    }
+
+    bool modeHasArg(const char* name) {
+        if (!modeFromQuery) return webserver.hasArg(name);
+        bool found = false;
+        queryParamValue(modeQuery, name, &found);
+        return found;
+    }
+
+    String modeArg(const char* name) {
+        return modeFromQuery ? queryParamValue(modeQuery, name) : webserver.arg(name);
+    }
+
+
     // Liest ein GET/POST-Feld als int mit Validierung: fehlt/ungueltig ->
     // defaultValue statt stillschweigend 0, Ergebnis auf [minVal, maxVal] geklemmt.
 
@@ -1605,8 +1648,8 @@
         if (defaultValue < minVal) defaultValue = minVal;
         if (defaultValue > maxVal) defaultValue = maxVal;
 
-        if (!webserver.hasArg(name)) return defaultValue;
-        String val = webserver.arg(name);
+        if (!modeHasArg(name.c_str())) return defaultValue;
+        String val = modeArg(name.c_str());
         val.trim();
         if (val.length() == 0) return defaultValue;
         for (size_t i = 0; i < val.length(); i++) {
@@ -1618,6 +1661,281 @@
         if (parsed < minVal) parsed = minVal;
         if (parsed > maxVal) parsed = maxVal;
         return (int)parsed;
+    }
+
+
+    // Array-Indizes der vorhandenen Presets (Name und URL gesetzt) in der Reihenfolge der Seite /presets: nach Namen
+    // natuerlich sortiert. Die Indizes selbst bleiben unveraendert (Umbenennen, Loeschen), gewechselt wird in dieser
+    // Reihenfolge.
+
+    // Array indices of the existing presets (name and URL set) in the order of the /presets page: naturally sorted
+    // by name. The indices themselves stay unchanged (rename, delete); switching follows this order.
+
+    std::vector<int> sortedPresetIndices() {
+        std::vector<int> sortedIndices;
+        for (int i = 0; i < MAX_PRESETS; i++) {
+            if (!presets[i].name.isEmpty() && !presets[i].url.isEmpty()) {
+                sortedIndices.push_back(i);
+            }
+        }
+        for (size_t i = 1; i < sortedIndices.size(); i++) {
+            int key = sortedIndices[i];
+            long j = (long)i - 1;
+            while (j >= 0 && naturalLess(presets[key].name, presets[sortedIndices[j]].name)) {
+                sortedIndices[j + 1] = sortedIndices[j];
+                j--;
+            }
+            sortedIndices[j + 1] = key;
+        }
+        return sortedIndices;
+    }
+
+
+    // Uebernimmt die Parameter von /api/setMode (Zifferblatt, Zeiger, Modi, Nabe, Zeitzone, Rocrail, Helligkeit ...) -
+    // aus der Webanfrage oder, mit modeFromQuery, aus einer Preset-URL. Gemeinsam fuer die Route und das Wischen.
+
+    // Applies the parameters of /api/setMode (clock face, hands, modes, hub, time zone, Rocrail, brightness ...) -
+    // from the web request or, with modeFromQuery, from a preset URL. Shared by the route and swiping.
+
+    void applyModeArguments() {
+        Serial.println("[API] Received GET request to /api/setMode with arguments");
+        if (modeHasArg("face")) {
+            String face = modeArg("face");
+           // face.replace(".", "");
+            if (!face.startsWith("/")) face = "/" + face;
+            if (face == "/face_default.bmp" || LittleFS.exists(face)) {
+                preferences.putString(PK_BACKGROUND, face);
+                selectedBackground = face;
+            }
+        }
+
+        if (modeHasArg("handSet")) {
+            String handSet = modeArg("handSet");
+            preferences.putString(PK_HANDSET, handSet);
+        }
+
+        // Nur bei echter Aenderung - jedes Preset enthaelt die Zeitzone, sonst stiesse jeder Aufruf einen
+        // NTP-Abgleich an.
+
+        // Only on an actual change - every preset contains the time zone, otherwise every call would trigger
+        // an NTP sync.
+
+        if (modeHasArg("timeZone") && modeArg("timeZone") != timezone) {
+            String tz = modeArg("timeZone");
+            preferences.putString(PK_TIMEZONE, tz);
+            timezone = tz;
+            applyTimezoneToSystem(); // sofort wirksam, auch ohne erreichbaren NTP-Server
+                                     // effective right away, even without a reachable NTP server
+
+            // Nur die Task anstossen (siehe time_sync.h) statt hier auf
+            // DNS/UDP zu warten - der Webserver darf dabei nicht blockieren.
+            // pollNtpSyncTask() in loop() wertet das Ergebnis aus.
+
+            // Only kick off the task (see time_sync.h) instead of waiting
+            // on DNS/UDP here - the web server must not block on this.
+            // pollNtpSyncTask() in loop() evaluates the result.
+
+            startNtpSyncTask("Timezone change sync");
+        }
+
+        if (!modeFromQuery) updateNtpServersFromRequest(); // nie aus einer Preset-URL / never from a preset URL
+
+        if (modeHasArg("hubSize")) {
+            hubSize = argToIntClamped("hubSize", hubSize, 0, 100);
+            preferences.putUInt(PK_CENTER_SIZE, hubSize);
+        }
+        if (modeHasArg("hubColor")) {
+            uint32_t rgb = strtoul(modeArg("hubColor").c_str(), NULL, 16); // 24-Bit RGB
+
+            // 24-bit RGB
+            // DEBUG_PRINTLN("[API] Received hubColor: " + modeArg("hubColor") + " -> " + String(rgb, HEX));
+
+            uint8_t r = (rgb >> 16) & 0xFF; // Rot extrahieren
+                                            // extract red
+            uint8_t g = (rgb >> 8) & 0xFF;  // Grün extrahieren
+                                            // extract green
+            uint8_t b = rgb & 0xFF;         // Blau extrahieren
+                                            // extract blue
+
+            // Konvertiere RGB888 zu RGB565
+            // Convert RGB888 to RGB565
+
+            hubColor = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
+            preferences.putLong(PK_CENTER_COLOR, rgb);
+        }
+
+
+        if (modeHasArg("stationMode")) {
+            String stationModeArg = modeArg("stationMode");
+            stationMode = (stationModeArg == "1" || stationModeArg.equalsIgnoreCase("true")); // Konvertiere zu bool
+                                                                                              // convert to bool
+            preferences.putBool(PK_STATION_MODE, stationMode);
+        }
+
+        // Rocrail-Modellzeit an/aus (nur bei Aenderung) - die Serveradressen bleiben Geraeteeinstellung
+        // Rocrail model time on/off (only on a change) - the server addresses stay a device setting
+
+        if (modeHasArg("rocrail")) {
+            String rocrailArg = modeArg("rocrail");
+            bool on = (rocrailArg == "1" || rocrailArg.equalsIgnoreCase("true"));
+            if (on != rocrailEnabled) setRocrailEnabled(on);
+        }
+
+        // "WLAN neu verbinden" (wifiActive) - loop() prueft es bei jedem Durchlauf
+        // "Reconnect WiFi" (wifiActive) - loop() checks it on every pass
+
+        if (modeHasArg("wifiReconnect")) {
+            String wifiArg = modeArg("wifiReconnect");
+            bool on = (wifiArg == "1" || wifiArg.equalsIgnoreCase("true"));
+            if (on != wifiActive) {
+                wifiActive = on;
+                preferences.putBool(PK_WIFI_ACTIVE, on);
+            }
+        }
+
+        // Rotation NICHT aus Presets (source=preset) - sie ist eine Geraeteeinstellung; alte Preset-URLs
+        // enthalten noch "rotation=". Direkte API-Aufrufe duerfen sie weiter setzen.
+
+        // Rotation NOT from presets (source=preset) - it is a device setting; old preset URLs still
+        // contain "rotation=". Direct API calls may still set it.
+
+        if (modeHasArg("rotation") && modeArg("source") != "preset") {
+            String rotationArg = modeArg("rotation");
+
+            // Eigener Name statt "tftRotation" (wuerde die globale Variable verdecken). Als long, damit
+            // z.B. "rotation=256" nicht vor der Pruefung zu 0 abgeschnitten wird.
+
+            // Own name instead of "tftRotation" (would shadow the global variable). As long, so e.g.
+            // "rotation=256" is not truncated to 0 before validation.
+
+            long requestedRotation = -1;
+
+            // Prüfe, ob der Wert in Grad angegeben ist
+            // Check whether the value is given in degrees
+
+            if (rotationArg == "0" || rotationArg == "90" || rotationArg == "180" || rotationArg == "270") {
+                if (rotationArg == "0") requestedRotation = 0;
+                else if (rotationArg == "90") requestedRotation = 1;
+                else if (rotationArg == "180") requestedRotation = 2;
+                else if (rotationArg == "270") requestedRotation = 3;
+            }
+
+            // "na" / "n.a." = Display 1 nicht angeschlossen
+            // "na" / "n.a." = display 1 not connected
+
+            else if (rotationArg.equalsIgnoreCase("na") || rotationArg.equalsIgnoreCase("n.a.")) {
+                requestedRotation = TFT_ROTATION_NA;
+            }
+
+            // Prüfe, ob der Wert als Index (0-3, 4 = n.a.) angegeben ist
+            // Check whether the value is given as an index (0-3, 4 = n.a.)
+
+            else {
+                requestedRotation = rotationArg.toInt();
+            }
+
+            // Validierung des Wertes
+            // Validate the value
+
+            if (requestedRotation >= 0 && requestedRotation <= ROTATION1_LAST) {
+                applyDisplayRotation(1, (uint8_t)requestedRotation);
+            }
+        }
+
+   
+        if (modeHasArg("showSecondHand")) {
+            String showSecondHandArg = modeArg("showSecondHand");
+            showSecondHand = (showSecondHandArg == "1" || showSecondHandArg.equalsIgnoreCase("true")); // Konvertiere zu bool
+                                                                                                       // convert to bool
+            preferences.putBool(PK_SHOW_SECOND_HAND, showSecondHand);
+        }
+
+        if (modeHasArg("smoothMinute")) {
+            String smoothMinuteArg = modeArg("smoothMinute");
+            smoothMinute = (smoothMinuteArg == "1" || smoothMinuteArg.equalsIgnoreCase("true")); // Konvertiere zu bool
+                                                                                                 // convert to bool
+            preferences.putBool(PK_SMOOTH_MINUTE, smoothMinute);
+        }
+
+        if (modeHasArg("smoothSecond")) {
+            String smoothSecondArg = modeArg("smoothSecond");
+            smoothSecond = (smoothSecondArg == "1" || smoothSecondArg.equalsIgnoreCase("true")); // Konvertiere zu bool
+                                                                                                 // convert to bool
+            preferences.putBool(PK_SMOOTH_SECOND, smoothSecond);
+        }
+
+        // Helligkeit aus Presets (applyBrightnessPresetValue() in display.h,
+        // gleiche Klemmung wie beim Weiterschalten per Taste)
+
+        // Brightness from presets (applyBrightnessPresetValue() in display.h,
+        // same clamping as when switching via the button)
+
+        static const char* const brightnessKeys[] = {
+            "minBrightness", "maxBrightness", "brightStart", "brightEnd",
+            "lowThreshold", "highThreshold", "gamma", "autoBrightness"
+        };
+        for (const char* key : brightnessKeys) {
+            if (modeHasArg(key)) applyBrightnessPresetValue(key, modeArg(key));
+        }
+
+        // Der Streifen gehoert zum Zifferblatt (stripcfg_*.txt) - Streifen-Werte aelterer Presets bleiben unbeachtet
+        // The strip belongs to the clock face (stripcfg_*.txt) - strip values of older presets are ignored
+
+        freeClockFaceBuffer();
+        loadClockFace();
+        loadHandSprites();
+        updateClock();
+    }
+
+
+    // Naechstes (direction > 0) oder vorheriges Preset laden, in der Reihenfolge der Seite /presets (nach Namen sortiert),
+    // am Ende geht es von vorn weiter. Das aktive Preset wird an Zifferblatt und Zeigersatz erkannt (das zuletzt
+    // gewaehlte hat Vorrang). Ohne aktives Preset: das erste bzw. letzte.
+
+    // Load the next (direction > 0) or previous preset, in the order of the /presets page (sorted by name), at the
+    // end it continues from the start. The active preset is recognized by clock face and hand set (the one chosen
+    // last has priority). Without an active preset: the first or last one.
+
+    void switchPreset(int direction) {
+        static int lastIndex = -1;
+
+        const std::vector<int> order = sortedPresetIndices();
+        const int count = (int)order.size();
+        if (count == 0) return;
+
+        const String face = selectedBackground.startsWith("/") ? selectedBackground.substring(1) : selectedBackground;
+        const String handSet = preferences.getString(PK_HANDSET, "");
+
+        auto matches = [&](int i) {
+            const int q = presets[i].url.indexOf('?');
+            if (q < 0) return false;
+            const String query = presets[i].url.substring(q + 1);
+            String presetFace = queryParamValue(query, "face");
+            if (presetFace.startsWith("/")) presetFace = presetFace.substring(1);
+            return presetFace == face && queryParamValue(query, "handSet") == handSet;
+        };
+
+        int pos = -1; // Stelle in der sortierten Liste / position in the sorted list
+        for (int k = 0; k < count && pos < 0; k++) {
+            if (order[k] == lastIndex && matches(order[k])) pos = k;
+        }
+        for (int k = 0; k < count && pos < 0; k++) {
+            if (matches(order[k])) pos = k;
+        }
+
+        int nextPos;
+        if (pos < 0) nextPos = (direction > 0) ? 0 : count - 1;
+        else nextPos = ((pos + direction) % count + count) % count;
+        if (nextPos == pos) return; // nur ein Preset / only one preset
+
+        const int next = order[nextPos];
+        modeQuery = presets[next].url.substring(presets[next].url.indexOf('?') + 1);
+        modeFromQuery = true;
+        applyModeArguments();
+        modeFromQuery = false;
+        modeQuery = "";
+        lastIndex = next;
+        DEBUG_PRINTLN("[PRESET] Switched to preset " + String(nextPos + 1) + "/" + String(count) + " (" + presets[next].name + ")");
     }
 
 
@@ -1767,11 +2085,11 @@
         flush(chunk);
 
         if (photoresistorFound) {
-            chunk += "<li>Photoresistor found on GPIO: " + String(ADC_PIN) + "</li>";
+            chunk += "<li>Photoresistor found on GPIO: " + pinText(ADC_PIN) + "</li>";
             chunk += "<li>Actual brightness (0-255): " + String(currentBrightness) + "</li><br>";
         }
         else {
-            chunk += "<li>Photoresistor not found on GPIO: " + String(ADC_PIN) + "</li><br>";
+            chunk += "<li>Photoresistor not found on GPIO: " + pinText(ADC_PIN) + "</li><br>";
         }
 
         flush(chunk);
@@ -1818,18 +2136,18 @@
                 syncInfo.tm_hour, syncInfo.tm_min, syncInfo.tm_sec);
             chunk += "<li>DCF77 last sync: " + String(syncBuf) + "</li>";
         }
-        chunk += "<li>DCF77 Data GPIO: " + String(DCF77_DATAPIN) + "</li>";  
+        chunk += "<li>DCF77 Data GPIO: " + pinText(DCF77_DATAPIN) + "</li>";  
         chunk += "<li>DCF77 Input: both edges (CHANGE), polarity-independent</li><br>";
 
         flush(chunk);
 
-        chunk += "<li>BUTTON GPIO: " + String(BUTTON1) + "</li>";
+        chunk += "<li>BUTTON GPIO: " + pinText(BUTTON1) + "</li>";
         chunk += "<li>BUTTON_BOOT GPIO: " + String(BOOT_BUTTON) + "</li>";
 
         chunk += "<li>LED_BOARD GPIO: " + String(LED_BOARD_GPIO) + "</li>";
-        chunk += "<li>ADC_VCC GPIO: " + String(ADC_3V) + "</li>";
-        chunk += "<li>ADC (photoresistor) GPIO: " + String(ADC_PIN) + "</li>";
-        chunk += "<li>ADC_GND GPIO: " + String(ADC_GND) + "</li>";
+        chunk += "<li>ADC_VCC GPIO: " + pinText(ADC_3V) + "</li>";
+        chunk += "<li>ADC (photoresistor) GPIO: " + pinText(ADC_PIN) + "</li>";
+        chunk += "<li>ADC_GND GPIO: " + pinText(ADC_GND) + "</li>";
         if (photoresistorFound) {
             chunk += "<li>ADC Value: " + String(getAdjustedAdcValue(analogRead(ADC_PIN))) + "</li><br>";
         }
@@ -2101,193 +2419,7 @@
         // API to set clock mode and other settings
 
         webserver.on("/api/setMode", HTTP_GET, []() {
-            Serial.println("[API] Received GET request to /api/setMode with arguments");
-            if (webserver.hasArg("face")) {
-                String face = webserver.arg("face");
-               // face.replace(".", "");
-                if (!face.startsWith("/")) face = "/" + face;
-                if (face == "/face_default.bmp" || LittleFS.exists(face)) {
-                    preferences.putString(PK_BACKGROUND, face);
-                    selectedBackground = face;
-                }
-            }
-
-            if (webserver.hasArg("handSet")) {
-                String handSet = webserver.arg("handSet");
-                preferences.putString(PK_HANDSET, handSet);
-            }
-
-            // Nur bei echter Aenderung - jedes Preset enthaelt die Zeitzone, sonst stiesse jeder Aufruf einen
-            // NTP-Abgleich an.
-
-            // Only on an actual change - every preset contains the time zone, otherwise every call would trigger
-            // an NTP sync.
-
-            if (webserver.hasArg("timeZone") && webserver.arg("timeZone") != timezone) {
-                String tz = webserver.arg("timeZone");
-                preferences.putString(PK_TIMEZONE, tz);
-                timezone = tz;
-                applyTimezoneToSystem(); // sofort wirksam, auch ohne erreichbaren NTP-Server
-                                         // effective right away, even without a reachable NTP server
-
-                // Nur die Task anstossen (siehe time_sync.h) statt hier auf
-                // DNS/UDP zu warten - der Webserver darf dabei nicht blockieren.
-                // pollNtpSyncTask() in loop() wertet das Ergebnis aus.
-
-                // Only kick off the task (see time_sync.h) instead of waiting
-                // on DNS/UDP here - the web server must not block on this.
-                // pollNtpSyncTask() in loop() evaluates the result.
-
-                startNtpSyncTask("Timezone change sync");
-            }
-
-            updateNtpServersFromRequest();
-
-            if (webserver.hasArg("hubSize")) {
-                hubSize = argToIntClamped("hubSize", hubSize, 0, 100);
-                preferences.putUInt(PK_CENTER_SIZE, hubSize);
-            }
-            if (webserver.hasArg("hubColor")) {
-                uint32_t rgb = strtoul(webserver.arg("hubColor").c_str(), NULL, 16); // 24-Bit RGB
-
-                // 24-bit RGB
-                // DEBUG_PRINTLN("[API] Received hubColor: " + webserver.arg("hubColor") + " -> " + String(rgb, HEX));
-
-                uint8_t r = (rgb >> 16) & 0xFF; // Rot extrahieren
-                                                // extract red
-                uint8_t g = (rgb >> 8) & 0xFF;  // Grün extrahieren
-                                                // extract green
-                uint8_t b = rgb & 0xFF;         // Blau extrahieren
-                                                // extract blue
-
-                // Konvertiere RGB888 zu RGB565
-                // Convert RGB888 to RGB565
-
-                hubColor = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
-                preferences.putLong(PK_CENTER_COLOR, rgb);
-            }
-
-
-            if (webserver.hasArg("stationMode")) {
-                String stationModeArg = webserver.arg("stationMode");
-                stationMode = (stationModeArg == "1" || stationModeArg.equalsIgnoreCase("true")); // Konvertiere zu bool
-                                                                                                  // convert to bool
-                preferences.putBool(PK_STATION_MODE, stationMode);
-            }
-
-            // Rocrail-Modellzeit an/aus (nur bei Aenderung) - die Serveradressen bleiben Geraeteeinstellung
-            // Rocrail model time on/off (only on a change) - the server addresses stay a device setting
-
-            if (webserver.hasArg("rocrail")) {
-                String rocrailArg = webserver.arg("rocrail");
-                bool on = (rocrailArg == "1" || rocrailArg.equalsIgnoreCase("true"));
-                if (on != rocrailEnabled) setRocrailEnabled(on);
-            }
-
-            // "WLAN neu verbinden" (wifiActive) - loop() prueft es bei jedem Durchlauf
-            // "Reconnect WiFi" (wifiActive) - loop() checks it on every pass
-
-            if (webserver.hasArg("wifiReconnect")) {
-                String wifiArg = webserver.arg("wifiReconnect");
-                bool on = (wifiArg == "1" || wifiArg.equalsIgnoreCase("true"));
-                if (on != wifiActive) {
-                    wifiActive = on;
-                    preferences.putBool(PK_WIFI_ACTIVE, on);
-                }
-            }
-
-            // Rotation NICHT aus Presets (source=preset) - sie ist eine Geraeteeinstellung; alte Preset-URLs
-            // enthalten noch "rotation=". Direkte API-Aufrufe duerfen sie weiter setzen.
-
-            // Rotation NOT from presets (source=preset) - it is a device setting; old preset URLs still
-            // contain "rotation=". Direct API calls may still set it.
-
-            if (webserver.hasArg("rotation") && webserver.arg("source") != "preset") {
-                String rotationArg = webserver.arg("rotation");
-
-                // Eigener Name statt "tftRotation" (wuerde die globale Variable verdecken). Als long, damit
-                // z.B. "rotation=256" nicht vor der Pruefung zu 0 abgeschnitten wird.
-
-                // Own name instead of "tftRotation" (would shadow the global variable). As long, so e.g.
-                // "rotation=256" is not truncated to 0 before validation.
-
-                long requestedRotation = -1;
-
-                // Prüfe, ob der Wert in Grad angegeben ist
-                // Check whether the value is given in degrees
-
-                if (rotationArg == "0" || rotationArg == "90" || rotationArg == "180" || rotationArg == "270") {
-                    if (rotationArg == "0") requestedRotation = 0;
-                    else if (rotationArg == "90") requestedRotation = 1;
-                    else if (rotationArg == "180") requestedRotation = 2;
-                    else if (rotationArg == "270") requestedRotation = 3;
-                }
-
-                // "na" / "n.a." = Display 1 nicht angeschlossen
-                // "na" / "n.a." = display 1 not connected
-
-                else if (rotationArg.equalsIgnoreCase("na") || rotationArg.equalsIgnoreCase("n.a.")) {
-                    requestedRotation = TFT_ROTATION_NA;
-                }
-
-                // Prüfe, ob der Wert als Index (0-3, 4 = n.a.) angegeben ist
-                // Check whether the value is given as an index (0-3, 4 = n.a.)
-
-                else {
-                    requestedRotation = rotationArg.toInt();
-                }
-
-                // Validierung des Wertes
-                // Validate the value
-
-                if (requestedRotation >= 0 && requestedRotation <= TFT_ROTATION_NA) {
-                    applyDisplayRotation(1, (uint8_t)requestedRotation);
-                }
-            }
-
-   
-            if (webserver.hasArg("showSecondHand")) {
-                String showSecondHandArg = webserver.arg("showSecondHand");
-                showSecondHand = (showSecondHandArg == "1" || showSecondHandArg.equalsIgnoreCase("true")); // Konvertiere zu bool
-                                                                                                           // convert to bool
-                preferences.putBool(PK_SHOW_SECOND_HAND, showSecondHand);
-            }
-
-            if (webserver.hasArg("smoothMinute")) {
-                String smoothMinuteArg = webserver.arg("smoothMinute");
-                smoothMinute = (smoothMinuteArg == "1" || smoothMinuteArg.equalsIgnoreCase("true")); // Konvertiere zu bool
-                                                                                                     // convert to bool
-                preferences.putBool(PK_SMOOTH_MINUTE, smoothMinute);
-            }
-
-            if (webserver.hasArg("smoothSecond")) {
-                String smoothSecondArg = webserver.arg("smoothSecond");
-                smoothSecond = (smoothSecondArg == "1" || smoothSecondArg.equalsIgnoreCase("true")); // Konvertiere zu bool
-                                                                                                     // convert to bool
-                preferences.putBool(PK_SMOOTH_SECOND, smoothSecond);
-            }
-
-            // Helligkeit aus Presets (applyBrightnessPresetValue() in display.h,
-            // gleiche Klemmung wie beim Weiterschalten per Taste)
-
-            // Brightness from presets (applyBrightnessPresetValue() in display.h,
-            // same clamping as when switching via the button)
-
-            static const char* const brightnessKeys[] = {
-                "minBrightness", "maxBrightness", "brightStart", "brightEnd",
-                "lowThreshold", "highThreshold", "gamma", "autoBrightness"
-            };
-            for (const char* key : brightnessKeys) {
-                if (webserver.hasArg(key)) applyBrightnessPresetValue(key, webserver.arg(key));
-            }
-
-            // Der Streifen gehoert zum Zifferblatt (stripcfg_*.txt) - Streifen-Werte aelterer Presets bleiben unbeachtet
-            // The strip belongs to the clock face (stripcfg_*.txt) - strip values of older presets are ignored
-
-            freeClockFaceBuffer();
-            loadClockFace();
-            loadHandSprites();
-            updateClock();
+            applyModeArguments();
 
             if (webserver.hasArg("source")) {
                 String sourceArg = webserver.arg("source");
@@ -2368,21 +2500,7 @@
             // Only sort the display order, array indices stay unchanged so
             // rename/delete links remain correct.
 
-            std::vector<int> sortedIndices;
-            for (int i = 0; i < MAX_PRESETS; i++) {
-                if (!presets[i].name.isEmpty() && !presets[i].url.isEmpty()) {
-                    sortedIndices.push_back(i);
-                }
-            }
-            for (size_t i = 1; i < sortedIndices.size(); i++) {
-                int key = sortedIndices[i];
-                long j = (long)i - 1;
-                while (j >= 0 && naturalLess(presets[key].name, presets[sortedIndices[j]].name)) {
-                    sortedIndices[j + 1] = sortedIndices[j];
-                    j--;
-                }
-                sortedIndices[j + 1] = key;
-            }
+            std::vector<int> sortedIndices = sortedPresetIndices();
 
             int rowCount = 0;
             for (int i : sortedIndices) {
@@ -2883,7 +3001,7 @@
             html += translate("Height") + ": <input name = 'h' type = 'number' value = '" + String(suggestH) + "' required><br>";
             if (isHandFile) {
                 html += "<small>" + translate("Hands: keep the current size, other sizes distort the hand and shift the pivot") + " (" +
-                        String(HAND_LEGACY_WIDTH) + "/" + String(HAND_WIDTH) + " x " + String(HAND_LEGACY_HEIGHT) + "/" + String(HAND_HEIGHT) + ")</small><br>";
+                        String(HAND_LEGACY_WIDTH) + "/" + (HAND_PRIOR_WIDTH != HAND_WIDTH ? String(HAND_PRIOR_WIDTH) + "/" : String("")) + String(HAND_WIDTH) + " x " + String(HAND_LEGACY_HEIGHT) + "/" + String(HAND_PRIOR_HEIGHT) + "/" + String(HAND_HEIGHT) + ")</small><br>";
             }
             html += "<button type='submit'>" + translate("Scale and Save") + "</button></form>";
             html += "<br><br>";
@@ -3048,7 +3166,7 @@
                         DEBUG_PRINTLN(String("[IMU] Automatic rotation ") + (autoRotation ? "on" : "off"));
                     }
                     if (wantAuto && newRotation1 == TFT_ROTATION_NA) newRotation1 = 0;
-                    if (!wantAuto && requestedRotation >= 0 && requestedRotation <= TFT_ROTATION_NA) {
+                    if (!wantAuto && requestedRotation >= 0 && requestedRotation <= ROTATION1_LAST) {
                         newRotation1 = (uint8_t)requestedRotation;
                     }
                 }
@@ -4145,11 +4263,11 @@
 
             float scaleFactor = (float)previewSize / CLOCK_WIDTH;
 
-            // Drehpunkt wie setPivot() im Geraet (Breite/2, HAND_PIVOT_Y), jeweils
+            // Drehpunkt wie setPivot() im Geraet (handPivotX(), HAND_PIVOT_Y), jeweils
             // auf die Pixelmitte - ungerundet (CSS kann Nachkommastellen), Breite
             // pro Zeiger (Zifferblatt kann sie vorgeben).
 
-            // Pivot like setPivot() on the device (width/2, HAND_PIVOT_Y), each at
+            // Pivot like setPivot() on the device (handPivotX(), HAND_PIVOT_Y), each at
             // the pixel centre - unrounded (CSS accepts decimals), width per hand
             // (the clock face can specify it).
 
@@ -4157,7 +4275,7 @@
             String scaledPivotY = String((HAND_PIVOT_Y + 0.5f) * scaleFactor, 2);
             auto handImg = [&](const char* id, const char* part, int w) -> String {
                 String scaledW = String(w * scaleFactor, 2);
-                String scaledPivotX = String(((w / 2) + 0.5f) * scaleFactor, 2);
+                String scaledPivotX = String((handPivotX(w) + 0.5f) * scaleFactor, 2);
                 return "<img id='" + String(id) + "' src='/previewhand?part=" + String(part) + "&w=" + String(w) + "&v=" + cacheBuster +
                        "' style='position:absolute;left:-" + scaledPivotX + "px;top:-" + scaledPivotY +
                        "px;width:" + scaledW + "px;height:" + scaledHandHeight +
@@ -4811,6 +4929,16 @@
             });
 
 #if BOARD_RGB_PANEL
+#if BOARD_WAVESHARE_S3_LCD4
+        // Die letzten Beruehrungen mit Position des Touch-Chips und auf dem Zifferblatt (Fehlersuche Touch-Zonen)
+        // The last touches with position of the touch chip and on the clock face (troubleshooting touch zones)
+
+        webserver.on("/api/touchlog", HTTP_GET, []() {
+            webserver.sendHeader("Cache-Control", "no-store");
+            webserver.send(200, "application/json", lcd4TouchDebug());
+            });
+#endif
+
         webserver.on("/api/lcdstats", HTTP_GET, []() {
             String r = "{\"bounceLines\":" + String(lcd4BounceLines) + ",\"gapLimitUs\":" + String((uint32_t)lcd4BounceGapUs) +
                        ",\"maxGapUs\":" + String(lcd4MaxGapUs) + ",\"stallsBounce\":" + String(lcd4StallCount) +
@@ -5693,7 +5821,7 @@
             chunk += "<div style='display:flex;align-items:center;gap:6px;white-space:nowrap;'>" + translate("Rotation Display 1") + ": " + infoTip(rotationTip) + " <select name='rotation' style='width:190px;'>";
             const char* rotationLabels[] = { "0&deg;", "90&deg;", "180&deg;", "270&deg;" };
             String rotationNaLabel = translate("not connected (n.a.)");
-            for (int i = 0; i <= TFT_ROTATION_NA; i++) {
+            for (int i = 0; i <= ROTATION1_LAST; i++) {
                 chunk += "<option value='" + String(i) + "'";
                 if (i == tftRotation1 && !autoRotation) chunk += " selected";
                 chunk += ">" + (i == TFT_ROTATION_NA ? rotationNaLabel : String(rotationLabels[i])) + "</option>";
@@ -7099,7 +7227,7 @@
             }
 
             ensureFaceSettings();
-            chunk += "<script>var HD={w:" + String(HAND_WIDTH) + ",h:" + String(HAND_HEIGHT) + ",lh:" + String(HAND_LEGACY_HEIGHT) + ",lw:" + String(HAND_LEGACY_WIDTH) +
+            chunk += "<script>var HD={w:" + String(HAND_WIDTH) + ",h:" + String(HAND_HEIGHT) + ",lh:" + String(HAND_LEGACY_HEIGHT) + ",ph:" + String(HAND_PRIOR_HEIGHT) + ",lpy:" + String(HAND_LEGACY_PIVOT_Y) + ",lw:" + String(HAND_LEGACY_WIDTH) + ",pw:" + String(HAND_PRIOR_WIDTH) +
                      ",px:" + String(HAND_WIDTH / 2) + ",py:" + String(HAND_PIVOT_Y) +
                      ",cw:" + String(CLOCK_WIDTH) + ",active:'" + jsSafe(handSetFileId(preferences.getString(PK_HANDSET, ""))) +
                      "',face:'" + jsSafe(selectedBackground) + "',hub:" + String(hubSize) + ",hubColor:'" + String(hubHex) +
@@ -7230,7 +7358,7 @@
             ensureFaceSettings();
             chunk += "<script>var FD={w:" + String(CLOCK_WIDTH) + ",h:" + String(CLOCK_HEIGHT) + ",round:" + String(roundJs) +
                      ",active:'" + jsSafe(selectedBackground) + "',faces:[" + facesJs + "],free:" + String(freeBytes) +
-                     ",hand:{w:" + String(HAND_WIDTH) + ",h:" + String(HAND_HEIGHT) + ",lh:" + String(HAND_LEGACY_HEIGHT) + ",lw:" + String(HAND_LEGACY_WIDTH) + ",py:" + String(HAND_PIVOT_Y) +
+                     ",hand:{w:" + String(HAND_WIDTH) + ",h:" + String(HAND_HEIGHT) + ",lh:" + String(HAND_LEGACY_HEIGHT) + ",ph:" + String(HAND_PRIOR_HEIGHT) + ",lpy:" + String(HAND_LEGACY_PIVOT_Y) + ",lw:" + String(HAND_LEGACY_WIDTH) + ",pw:" + String(HAND_PRIOR_WIDTH) + ",py:" + String(HAND_PIVOT_Y) +
                      ",set:'" + jsSafe(handSetFileId(preferences.getString(PK_HANDSET, ""))) + "'" +
                      ",widths:{hour:" + String(hourHandWidth) + ",minute:" + String(minuteHandWidth) + ",second:" + String(secondHandWidth) + "}}" +
                      ",hub:" + String(hubSize) + ",hubColor:'" + String(hubHex) + "',showSec:" + String(showSecondHand ? "true" : "false") +
@@ -7842,6 +7970,35 @@
             if (brightnessTestUntil == 0) brightnessTestUntil = 1;
             webserver.send(200, "application/json", "{\"ok\":true}");
             });
+
+        // Helligkeit setzen: value=0..255 gilt sofort und bleibt bis zum Neustart; value=auto (oder -1) schaltet zur
+        // normalen Regelung (Zeitfenster, Lichtsensor, Rocrail) zurueck. Waehrend der Einrichtung (Access Point, WPS)
+        // bleibt deren Helligkeit. GET und POST.
+
+        // Set the brightness: value=0..255 applies at once and stays until restart; value=auto (or -1) returns to the
+        // normal control (time window, light sensor, Rocrail). During setup (access point, WPS) its brightness stays.
+        // GET and POST.
+
+        auto setBrightnessHandler = []() {
+            String arg = webserver.hasArg("value") ? webserver.arg("value") : String("");
+            arg.trim();
+            if (arg.equalsIgnoreCase("auto") || arg == "-1") {
+                brightnessOverride = -1;
+                webserver.send(200, "application/json", "{\"ok\":true,\"mode\":\"auto\"}");
+                return;
+            }
+            bool digits = arg.length() > 0 && arg.length() <= 3;
+            for (size_t i = 0; digits && i < arg.length(); i++) digits = isDigit(arg.charAt(i));
+            int v = digits ? arg.toInt() : -1;
+            if (v < 0 || v > 255) {
+                webserver.send(400, "application/json", "{\"ok\":false,\"error\":\"value must be 0..255 or auto\"}");
+                return;
+            }
+            brightnessOverride = v;
+            webserver.send(200, "application/json", "{\"ok\":true,\"brightness\":" + String(v) + "}");
+            };
+        webserver.on("/api/setbrightness", HTTP_GET, setBrightnessHandler);
+        webserver.on("/api/setbrightness", HTTP_POST, setBrightnessHandler);
 
 #if HAS_IMU
 

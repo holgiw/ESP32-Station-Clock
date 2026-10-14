@@ -777,4 +777,22 @@
             }
             preferences.putUChar(PK_SUBDIAL_HAND_VER, SUBDIAL_HAND_VERSION);
         }
+
+        // Neue Version der erzeugten Stunden- und Minutenzeiger (schmaler): in allen erzeugten Saetzen nur diese beiden
+        // Dateien neu anlegen, der Sekundenzeiger bleibt
+        // New version of the generated hour and minute hands (narrower): in all generated sets create only these two
+        // files anew, the second hand stays
+
+        if (preferences.getUChar(PK_GENERATED_HAND_VER, 1) < GENERATED_HAND_VERSION) {
+            for (int style = 0; style <= 3; style++) {
+                String id = style == 3 ? subdialHandSet() : String(style);
+                if (!handSetExists(id)) continue;
+                for (const char* part : { "hour", "minute", "second" }) {
+                    if (strcmp(part, "second") == 0 && HAND_WIDTH == HAND_PRIOR_WIDTH) continue; // bleibt die Breite, aendert sich der Sekundenzeiger nicht / if the width stays, the second hand does not change
+                    LittleFS.remove("/hand_set" + id + "_" + part + ".bmp");
+                }
+                writeGeneratedHandSet(style, id);
+            }
+            preferences.putUChar(PK_GENERATED_HAND_VER, GENERATED_HAND_VERSION);
+        }
     }

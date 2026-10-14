@@ -201,6 +201,7 @@
         { "Clock Face Designer", "Zifferblatt-Designer" },
         { "old format", "altes Format" },
         { "new format", "neues Format" },
+        { "previous format", "bisheriges Format" },
         { "File", "Datei" },
         { "Uploading... please wait", "Wird hochgeladen... bitte warten" },
         { "no.", "Nr." },

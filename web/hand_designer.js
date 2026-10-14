@@ -37,6 +37,7 @@
       mMinSmooth: 'Minute schleichend', mMinJump: 'Minute springt',
       protHint: 'Von der Firmware erzeugte Zeigers\u00e4tze lassen sich nicht \u00fcberschreiben - als neues Design speichern.',
       pos: 'Pixel', pivot: 'Drehpunkt',
+      name: 'Name:', img: 'Bild laden', imgHint: 'BMP oder anderes Bild: ersetzt den gew\u00e4hlten Zeiger (Stunde, Minute oder Sekunde). Es wird proportional auf h\u00f6chstens {0} x {1} Pixel skaliert, waagerecht mittig und unten b\u00fcndig; Wei\u00df und durchsichtige Bereiche werden transparent.', imgErr: 'Das Bild konnte nicht gelesen werden.',
       widthHint: 'Das aktuelle Zifferblatt zeigt diesen Zeiger nur {0} px breit - ausgegraute Spalten werden auf der Uhr abgeschnitten.' },
     en: { base: 'Based on:', set: 'Set', active: 'active', reset: 'Discard changes',
       saveBtn: 'Save as new design', part: 'Hand', hour: 'Hour', minute: 'Minute', second: 'Second', tools: 'Tool',
@@ -71,10 +72,11 @@
       mMinSmooth: 'smooth minute', mMinJump: 'minute jumps',
       protHint: 'Hand sets created by the firmware cannot be overwritten - save as a new design.',
       pos: 'Pixel', pivot: 'Pivot',
+      name: 'Name:', img: 'Load image', imgHint: 'BMP or another image: replaces the selected hand (hour, minute or second). It is scaled proportionally to at most {0} x {1} pixels, centred horizontally and flush at the bottom; white and see-through areas become transparent.', imgErr: 'The image could not be read.',
       widthHint: 'The current clock face shows this hand only {0} px wide - greyed-out columns are cut off on the clock.' },
   };
   var L = TX[HD.lang] ? HD.lang : 'en';
-  function t(k, a) { var s = TX[L][k] || TX.en[k] || k; return a === undefined ? s : s.replace('{0}', a); }
+  function t(k, a, b) { var s = TX[L][k] || TX.en[k] || k; if (a !== undefined) s = s.replace('{0}', a); if (b !== undefined) s = s.replace('{1}', b); return s; }
 
   // Zustand
   // State
@@ -181,9 +183,9 @@
       ectx.fillRect((off + sw) * Z, 0, (W - off - sw) * Z, H * Z);
     }
     ectx.strokeStyle = 'rgba(245,166,35,0.55)'; ectx.beginPath();
-    ectx.moveTo((PX + 0.5) * Z, 0); ectx.lineTo((PX + 0.5) * Z, H * Z);
+    ectx.moveTo(W / 2 * Z, 0); ectx.lineTo(W / 2 * Z, H * Z); // Symmetrieachse: Mitte der Zeichenflaeche / symmetry axis: centre of the canvas
     ectx.moveTo(0, (PY + 0.5) * Z); ectx.lineTo(W * Z, (PY + 0.5) * Z); ectx.stroke();
-    ectx.beginPath(); ectx.arc((PX + 0.5) * Z, (PY + 0.5) * Z, Z * 0.8, 0, Math.PI * 2); ectx.stroke();
+    ectx.beginPath(); ectx.arc(W / 2 * Z, (PY + 0.5) * Z, Z * 0.8, 0, Math.PI * 2); ectx.stroke();
     if (polyPts.length) {
       ectx.strokeStyle = '#f5a623'; ectx.beginPath();
       polyPts.forEach(function (p, i) { if (i) ectx.lineTo(p.x * Z, p.y * Z); else ectx.moveTo(p.x * Z, p.y * Z); });
@@ -367,7 +369,7 @@
   });
   ed.addEventListener('pointermove', function (ev) {
     var c = cell(ev);
-    $('posInfo').textContent = inGrid(c) ? t('pos') + ' ' + c.x + ' / ' + c.y + '   (' + t('pivot') + ' ' + PX + ' / ' + PY + ')' : '';
+    $('posInfo').textContent = inGrid(c) ? t('pos') + ' ' + c.x + ' / ' + c.y + '   (' + t('pivot') + ' ' + ((W - 1) / 2) + ' / ' + PY + ')' : '';
     if (!drag) return;
     c.x = Math.max(0, Math.min(W - 1, c.x)); c.y = Math.max(0, Math.min(H - 1, c.y));
     if (/^(ell|circ)f?$/.test(tool)) {
@@ -541,6 +543,58 @@
     part = target; commit(pix[keep].slice()); part = keep; drawEditor();
   };
 
+  // Bild laden: 16-Bit-BMPs selbst dekodieren (nicht jeder Browser zeigt sie an), alles andere ueber <img>. Das Bild
+  // ersetzt den gewaehlten Zeiger, proportional skaliert auf hoechstens W x H, waagerecht mittig und unten buendig
+  // (wie ein Zeiger im Geraeteformat). Weiss und durchsichtige Bereiche werden transparent.
+
+  // Load image: decode 16-bit BMPs ourselves (not every browser displays them), everything else via <img>. The image
+  // replaces the selected hand, scaled proportionally to at most W x H, centred horizontally and flush at the bottom
+  // (like a hand in the device format). White and see-through areas become transparent.
+
+  function imageSource(file) {
+    if (/\.bmp$/i.test(file.name)) {
+      return file.arrayBuffer().then(function (ab) {
+        var img = parseBmp(ab), c = document.createElement('canvas'), id;
+        c.width = img.w; c.height = img.h;
+        var cx = c.getContext('2d');
+        id = cx.createImageData(img.w, img.h);
+        for (var y = 0; y < img.h; y++) for (var x = 0; x < img.w; x++) {
+          var rgb = rgbOf(img.px(x, y)), i = (y * img.w + x) * 4;
+          id.data[i] = rgb[0]; id.data[i + 1] = rgb[1]; id.data[i + 2] = rgb[2]; id.data[i + 3] = 255;
+        }
+        cx.putImageData(id, 0, 0);
+        return c;
+      });
+    }
+    return new Promise(function (ok, fail) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () { URL.revokeObjectURL(url); ok(img); };
+      img.onerror = function () { URL.revokeObjectURL(url); fail(new Error('img')); };
+      img.src = url;
+    });
+  }
+  $('imgFile').onchange = function () {
+    var f = this.files[0], input = this;
+    if (!f) return;
+    imageSource(f).then(function (img) {
+      var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+      var s = Math.min(W / iw, H / ih), dw = Math.max(1, Math.round(iw * s)), dh = Math.max(1, Math.round(ih * s));
+      var c = document.createElement('canvas'), cx;
+      c.width = W; c.height = H;
+      cx = c.getContext('2d');
+      cx.imageSmoothingQuality = 'high';
+      cx.drawImage(img, (W - dw) >> 1, H - dh, dw, dh);
+      var d = cx.getImageData(0, 0, W, H).data, buf = new Int32Array(N).fill(TRANSPARENT);
+      for (var i = 0; i < N; i++) {
+        if (d[i * 4 + 3] < 128) continue;
+        var v = ((d[i * 4] >> 3) << 11) | ((d[i * 4 + 1] >> 2) << 5) | (d[i * 4 + 2] >> 3);
+        if (v === 0xFFFF || v === 0x0120) continue; // wie auf dem Geraet transparent / transparent as on the device
+        buf[i] = v;
+      }
+      commit(buf);
+    }).catch(function () { showMsg(t('imgErr'), false); }).then(function () { input.value = ''; });
+  };
+
   // Formgenerator
   // Shape generator
 
@@ -555,7 +609,7 @@
     Object.keys(genFields).forEach(function (id) { g[genFields[id]] = Math.max(0, +$(id).value || 0); });
     g.len = Math.min(g.len, PY + 0.5); g.tail = Math.min(g.tail, tailMax + 0.5);
     if (pix[part].some(function (v) { return v >= 0; }) && !confirm(t('confirmGen'))) return;
-    var cx = PX + 0.5, cy = PY + 0.5, buf = new Int32Array(N).fill(TRANSPARENT);
+    var cx = W / 2, cy = PY + 0.5, buf = new Int32Array(N).fill(TRANSPARENT);
     polyOn(buf, [
       { x: cx - g.tipW / 2, y: cy - g.len }, { x: cx + g.tipW / 2, y: cy - g.len },
       { x: cx + g.baseW / 2, y: cy }, { x: cx + g.tailW / 2, y: cy + g.tail },
@@ -576,8 +630,8 @@
 
   function decodeBmp(ab) {
     var img = parseBmp(ab), out = new Int32Array(N).fill(TRANSPARENT);
-    var known = (img.w === W || img.w === HD.lw) && (img.h === H || img.h === HD.lh);
-    var sw = known ? img.w : W, sh = known ? img.h : H, ox = (W - sw) >> 1, oy = H - sh;
+    var known = (img.w === W || img.w === HD.pw || img.w === HD.lw) && (img.h === H || img.h === HD.ph || img.h === HD.lh);
+    var sw = known ? img.w : W, sh = known ? img.h : H, ox = (!known || sw === W) ? 0 : (HD.pw - sw) >> 1, oy = (known && sh === HD.lh) ? HD.py - HD.lpy : 0; // wie placeHand() im Geraet / like placeHand() on the device
     for (var ty = 0; ty < sh; ty++) for (var tx = 0; tx < sw; tx++) {
       var v = img.px(Math.floor(tx * img.w / sw), Math.floor(ty * img.h / sh));
       out[(ty + oy) * W + tx + ox] = (v === 0xFFFF || v === 0x0120) ? TRANSPARENT : v;
@@ -594,19 +648,31 @@
   // runs on older firmware.
 
   function encodeBmp(buf) {
-    var top = H > HD.lh ? H - HD.lh : 0, side = W > HD.lw ? (W - HD.lw) >> 1 : 0;
+    var top = HD.py - HD.lpy, bottom = H - HD.ph, left = 0, right = 0;
     for (var i = 0; i < top * W; i++) if (buf[i] >= 0) { top = 0; break; }
-    for (var y = 0; y < H && side; y++) for (var x = 0; x < W; x++) {
-      if ((x < side || x >= W - side) && buf[y * W + x] >= 0) { side = 0; break; }
+    for (i = (H - bottom) * W; i < N; i++) if (buf[i] >= 0) { bottom = 0; break; }
+    if (top && !bottom) top = 0; // die alte Hoehe braucht beide Raender leer / the old height needs both margins empty
+
+    // Breite: die alte, wenn nur ihre Spalten belegt sind (mittig in der bisherigen Breite, wie placeHand() im Geraet),
+    // sonst die bisherige, wenn die zusaetzlichen Spalten rechts leer sind, sonst die volle.
+    // Width: the old one if only its columns are used (centred in the previous width, like placeHand() on the device),
+    // otherwise the previous one if the extra columns on the right are empty, otherwise the full one.
+
+    function colsEmpty(a, b) {
+      for (var yy = 0; yy < H; yy++) for (var xx = a; xx < b; xx++) if (buf[yy * W + xx] >= 0) return false;
+      return true;
     }
-    var ow = W - 2 * side, oh = H - top, rs = Math.floor((ow * 2 + 3) / 4) * 4, hs = 66, size = hs + rs * oh;
+    var lo = (HD.pw - HD.lw) >> 1;
+    if (HD.lw < W && colsEmpty(0, lo) && colsEmpty(lo + HD.lw, W)) { left = lo; right = W - lo - HD.lw; }
+    else if (HD.pw < W && colsEmpty(HD.pw, W)) { right = W - HD.pw; }
+    var ow = W - left - right, oh = H - top - bottom, rs = Math.floor((ow * 2 + 3) / 4) * 4, hs = 66, size = hs + rs * oh;
     var ab = new ArrayBuffer(size), dv = new DataView(ab);
     dv.setUint8(0, 66); dv.setUint8(1, 77); dv.setUint32(2, size, true); dv.setUint32(10, hs, true);
     dv.setUint32(14, 40, true); dv.setInt32(18, ow, true); dv.setInt32(22, -oh, true); dv.setUint16(26, 1, true);
     dv.setUint16(28, 16, true); dv.setUint32(30, 3, true); dv.setUint32(34, rs * oh, true);
     dv.setUint32(54, 0xF800, true); dv.setUint32(58, 0x07E0, true); dv.setUint32(62, 0x001F, true);
     for (y = 0; y < oh; y++) for (x = 0; x < ow; x++) {
-      var v = buf[(y + top) * W + x + side];
+      var v = buf[(y + top) * W + x + left];
       dv.setUint16(hs + y * rs + x * 2, v < 0 ? 0xFFFF : fix565(v), true);
     }
     return new Blob([ab], { type: 'image/bmp' });
@@ -624,6 +690,7 @@
   function activeBase() { return (HD.active && HD.sets.indexOf(HD.active) >= 0) ? HD.active : '0'; }
   function showBase() {
     $('baseInfo').textContent = t('base') + ' ' + t('set') + ' ' + activeBase() + ' (' + t('active') + ')';
+    $('nextSetInfo').textContent = t('name') + ' set_' + nextId(); // wird beim Speichern als neues Design vergeben / assigned when saving as a new design
   }
   function nextId() {
     var max = 0;
@@ -643,8 +710,21 @@
   // requests broke off and the hand stayed empty - saving would then have stored it empty as a new design.
 
   var loadFailed = [];
+
+  // Die Seite erst freigeben, wenn alle Zeiger geladen sind: bis dahin sind Zeichenflaeche, Werkzeuge und die Knoepfe zum
+  // Speichern und Verwerfen gesperrt (sonst liesse sich ein halb geladener Satz zeichnen oder speichern).
+
+  // Release the page only when all hands are loaded: until then the canvas, the tools and the buttons for saving and
+  // discarding are locked (otherwise a half-loaded set could be drawn on or saved).
+
+  function setBusy(b) {
+    $('hdRoot').classList.toggle('busy', b);
+    ['saveBtn', 'saveCurBtn', 'resetBtn', 'imgFile'].forEach(function (id) { $(id).disabled = b; });
+    if (!b) setDirty(dirty); // Knopfzustaende (auch die gesperrte Speichern-Taste der Firmware-Saetze) neu setzen / set the button states again (also the locked save button of firmware sets)
+  }
   function loadActive() {
     var id = activeBase(), notes = [], failed = [];
+    setBusy(true);
     showMsg(t('loading'));
     function attempt(u, tries) {
       return fetchHand(u).catch(function (e) {
@@ -668,7 +748,8 @@
     chain.then(function () {
       loadFailed = failed;
       PARTS.forEach(function (p) { undoSt[p] = []; redoSt[p] = []; });
-      setDirty(false);
+      dirty = false;
+      setBusy(false);
       showBase(); drawEditor(); schedulePreview();
       if (failed.length) showMsg(t('loadFailed') + failed.join(', '), false);
       else showMsg(t('loaded') + (notes.length ? ' - ' + notes.join(', ') : ''), true);
@@ -834,7 +915,7 @@
       pctx.save();
       if (p === 'second') pctx.translate(plan.sx, plan.sy); else pctx.translate(plan.hx, plan.hy);
       pctx.rotate(ang[p] * Math.PI / 180);
-      pctx.drawImage(handCanvas(pix[p], p), -((spriteWidth(p) >> 1) + 0.5), -(PY + 0.5));
+      pctx.drawImage(handCanvas(pix[p], p), -((W - 1) / 2 - cropOffset(p) + 0.5), -(PY + 0.5)); // Drehpunkt wie handPivotX() im Geraet / pivot like handPivotX() on the device
       pctx.restore();
     });
     if (HD.hub > 0) {
@@ -893,7 +974,7 @@
 
   var labels = { tPart: 'part', tTools: 'tools', tSym: 'sym',
     tColor: 'color', tStd: 'std', tPal: 'pal', tEdit: 'edit', tShift: 'shift', tCopy: 'copy', tGen: 'gen', tLen: 'len', tTipW: 'tipW',
-    tBaseW: 'baseW', tTail: 'tail', tTailW: 'tailW', tDisc: 'disc', tDiscPos: 'discPos', tPreview: 'preview', tLive: 'live' };
+    tBaseW: 'baseW', tTail: 'tail', tTailW: 'tailW', tDisc: 'disc', tDiscPos: 'discPos', tPreview: 'preview', tLive: 'live', tImg: 'img' };
   Object.keys(labels).forEach(function (id) { $(id).textContent = t(labels[id]); });
   $('resetBtn').textContent = t('reset'); $('saveBtn').textContent = t('saveBtn'); $('saveCurBtn').textContent = t('saveCurBtn');
   $('pickBtn').textContent = t('pickBtn'); $('pickBtn').title = t('pickTip');
@@ -901,6 +982,7 @@
   $('undoBtn').textContent = t('undo'); $('redoBtn').textContent = t('redo'); $('clearBtn').textContent = t('clear');
   $('blurAllBtn').textContent = t('blurAll');
   $('genBtn').textContent = t('genBtn');
+  $('imgHint').textContent = t('imgHint', W, H);
 
   // Start
   // Start
