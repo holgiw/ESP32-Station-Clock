@@ -1,0 +1,2 @@
+Die Ordner esp32* neben dieser Datei enthalten die Builds: flashESP flasht daraus ohne Internet (Download erzwingen: clocksetup.ps1 -Download, flashESP.sh: UHR4_DOWNLOAD=1).
+The esp32* folders next to this file contain the builds: flashESP flashes from them without internet (force the download: clocksetup.ps1 -Download, flashESP.sh: UHR4_DOWNLOAD=1).

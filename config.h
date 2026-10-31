@@ -1,0 +1,1095 @@
+#pragma once
+
+    // Reihenfolge: zuerst Prozessor/Display (Pins, Displaymasse), danach die restlichen Werte nach Modul
+    // sortiert. Variablen (tft, webserver, preferences, ...) stehen nur in globals.h.
+
+    // Order: processor/display first (pins, display dimensions), then the remaining values sorted by module.
+    // Variables (tft, webserver, preferences, ...) are only in globals.h.
+
+
+    // Displaytyp und Hintergrundbeleuchtung sind Einstellungen (PK_DISPLAY_TYPE, useBacklight) - eine
+    // Firmware je Board fuer dessen Displays (GC9A01, GC9D01, ILI9341 bzw. ST7789; rechteckige mit Streifen
+    // fuer Uhrzeit und Datum). Masse je Typ in DISPLAY_GEOMETRY, DISPLAY_TYPE_DEFAULT ist die Werkseinstellung.
+
+    // Display type and backlight are settings (PK_DISPLAY_TYPE, useBacklight) - one firmware per board for
+    // its displays (GC9A01, GC9D01, ILI9341 or ST7789; rectangular ones with a time and date strip).
+    // Dimensions per type in DISPLAY_GEOMETRY, DISPLAY_TYPE_DEFAULT is the factory default.
+
+#define DISPLAY_TYPE_GC9A01  0
+#define DISPLAY_TYPE_GC9D01  1
+#define DISPLAY_TYPE_ILI9341 2
+#define DISPLAY_TYPE_ST7789  3   // Waveshare ESP32-C6-LCD-1.47 (172x320)
+#define DISPLAY_TYPE_ST7789_240 4 // Waveshare ESP32-C6-LCD-1.3 (240x240)
+#define DISPLAY_TYPE_ST7701_480 5 // Waveshare ESP32-S3-Touch-LCD-4 (480x480, RGB-Bus)
+#define DISPLAY_TYPE_TL021_480 6  // Adafruit Qualia ESP32-S3 mit dem 2,1" runden Display TL021WVC02 (480x480, RGB-Bus)
+#define DISPLAY_TYPE_COUNT   7
+
+    // Board, erkannt am Chip: ESP32-S2 (Lolin S2 Pico) mit wechselbarem Display, Waveshare ESP32-C6-LCD mit
+    // fest verbautem ST7789 (1.47 = 172x320 oder 1.3 = 240x240, welches waehlt der Displaytyp) oder Waveshare
+    // ESP32-S3-LCD-1.28 mit fest verbautem GC9A01. Pinbelegung weiter unten.
+
+    // Board, recognized by the chip: ESP32-S2 (Lolin S2 Pico) with an exchangeable display, Waveshare
+    // ESP32-C6-LCD with a built-in ST7789 (1.47 = 172x320 or 1.3 = 240x240, chosen by the display type) or
+    // Waveshare ESP32-S3-LCD-1.28 with a built-in GC9A01. Pin mapping further below.
+
+    // Kurzname des Chips fuer Anzeige und Dateinamen (Kopfzeile der Weboberflaeche, Sicherung)
+    // Short name of the chip for display and file names (header of the web interface, backup)
+
+#if CONFIG_IDF_TARGET_ESP32S3
+#ifdef UHR4_BOARD_S3_LCD4
+#define CHIP_SHORT_NAME "S3-480"
+#elif defined(UHR4_BOARD_QUALIA)
+#define CHIP_SHORT_NAME "S3-QUALIA"
+#else
+#define CHIP_SHORT_NAME "S3"
+#endif
+#elif CONFIG_IDF_TARGET_ESP32C6
+#define CHIP_SHORT_NAME "C6"
+#elif CONFIG_IDF_TARGET_ESP32S2
+#define CHIP_SHORT_NAME "S2"
+#else
+#define CHIP_SHORT_NAME "ESP32"
+#endif
+
+    // Der ESP32-S3 kommt auf zwei Boards vor: Waveshare ESP32-S3-LCD-1.28 (GC9A01, SPI) und Waveshare
+    // ESP32-S3-Touch-LCD-4 (ST7701, 480x480, RGB-Bus). Das zweite waehlt der Build mit
+    // -DUHR4_BOARD_S3_LCD4 (buildAll.bat s3lcd4; Visual Micro: Compiler-Flag eintragen). BOARD_S3_ANY gilt
+    // fuer beide (OTA, Partitionstabelle, WLAN-Sendeleistung).
+
+    // The ESP32-S3 is used on two boards: Waveshare ESP32-S3-LCD-1.28 (GC9A01, SPI) and Waveshare
+    // ESP32-S3-Touch-LCD-4 (ST7701, 480x480, RGB bus). The build selects the second one with
+    // -DUHR4_BOARD_S3_LCD4 (buildAll.bat s3lcd4; Visual Micro: add the compiler flag). BOARD_S3_ANY applies to
+    // both (OTA, partition table, WiFi transmit power).
+
+#if CONFIG_IDF_TARGET_ESP32C6
+#define BOARD_WAVESHARE_C6_ST7789 1
+#define BOARD_WAVESHARE_S3_GC9A01 0
+#define BOARD_WAVESHARE_S3_LCD4 0
+#define BOARD_QUALIA 0
+#define DISPLAY_TYPE_DEFAULT DISPLAY_TYPE_ST7789
+#elif CONFIG_IDF_TARGET_ESP32S3 && defined(UHR4_BOARD_S3_LCD4)
+#define BOARD_WAVESHARE_C6_ST7789 0
+#define BOARD_WAVESHARE_S3_GC9A01 0
+#define BOARD_WAVESHARE_S3_LCD4 1
+#define BOARD_QUALIA 0
+#define DISPLAY_TYPE_DEFAULT DISPLAY_TYPE_ST7701_480
+#elif CONFIG_IDF_TARGET_ESP32S3 && defined(UHR4_BOARD_QUALIA)
+#define BOARD_WAVESHARE_C6_ST7789 0
+#define BOARD_WAVESHARE_S3_GC9A01 0
+#define BOARD_WAVESHARE_S3_LCD4 0
+#define BOARD_QUALIA 1
+#define DISPLAY_TYPE_DEFAULT DISPLAY_TYPE_TL021_480
+#elif CONFIG_IDF_TARGET_ESP32S3
+#define BOARD_WAVESHARE_C6_ST7789 0
+#define BOARD_WAVESHARE_S3_GC9A01 1
+#define BOARD_WAVESHARE_S3_LCD4 0
+#define BOARD_QUALIA 0
+#define DISPLAY_TYPE_DEFAULT DISPLAY_TYPE_GC9A01
+#else
+#define BOARD_WAVESHARE_C6_ST7789 0
+#define BOARD_WAVESHARE_S3_GC9A01 0
+#define BOARD_WAVESHARE_S3_LCD4 0
+#define BOARD_QUALIA 0
+#define DISPLAY_TYPE_DEFAULT DISPLAY_TYPE_GC9A01
+#endif
+#define BOARD_RGB_PANEL (BOARD_WAVESHARE_S3_LCD4 || BOARD_QUALIA) // RGB-Panel am ESP32-S3, gemeinsamer Code / RGB panel on the ESP32-S3, shared code
+#define BOARD_S3_ANY (BOARD_WAVESHARE_S3_GC9A01 || BOARD_RGB_PANEL)
+
+#if defined(GC9A01) || defined(GC9D01) || defined(GC9A01_WITH_BACKLIGHT) || defined(ILI9341)
+#error "Displaytyp wird nicht mehr per #define gewaehlt - Einstellung im Zifferblatt-Tab / display type is no longer chosen via #define - setting in the clock face tab"
+#endif
+
+    // Build-Kennung - steht auf den Info-Seiten und damit in jeder .bin (Suche nach "UHR4_BUILD_DISPLAY=").
+    // Der S2-Build enthaelt alle wechselbaren Displaytypen, der C6-Build die beiden ST7789 der
+    // Waveshare-Boards, der S3-Build das GC9A01 des Waveshare-Boards.
+
+    // Build marker - shown on the info pages and therefore in every .bin (search for "UHR4_BUILD_DISPLAY=").
+    // The S2 build contains all exchangeable display types, the C6 build the two ST7789 of the Waveshare
+    // boards, the S3 build the GC9A01 of the Waveshare board.
+
+#if BOARD_WAVESHARE_C6_ST7789
+#define BUILD_DISPLAY_MARKER "UHR4_BUILD_DISPLAY=ST7789+ST7789_240"
+#elif BOARD_WAVESHARE_S3_GC9A01
+#define BUILD_DISPLAY_MARKER "UHR4_BUILD_DISPLAY=GC9A01_S3"
+#elif BOARD_WAVESHARE_S3_LCD4
+#define BUILD_DISPLAY_MARKER "UHR4_BUILD_DISPLAY=ST7701_480_S3"
+#elif BOARD_QUALIA
+#define BUILD_DISPLAY_MARKER "UHR4_BUILD_DISPLAY=TL021_480_S3"
+#else
+#define BUILD_DISPLAY_MARKER "UHR4_BUILD_DISPLAY=GC9A01+GC9D01+ILI9341"
+#endif
+
+    // Interner Schluessel (AES-256, 64 Hex-Zeichen) fuer die WLAN-Daten in Sicherungen. Muss in allen
+    // uhr4-Firmwares gleich sein (Wiederherstellen auf anderer Uhr); Aendern macht aeltere Sicherungen
+    // unlesbar. Kein echter Schutz - der Schluessel steckt in Quelltext und Firmware.
+
+    // Internal key (AES-256, 64 hex characters) for the WiFi data in backups. Must be the same in all uhr4
+    // firmwares (restore on another clock); changing it makes older backups unreadable. No real protection -
+    // the key is in the source code and firmware.
+
+#define BACKUP_WIFI_KEY "ade1b6a09c1f5b970301983cddf75b160e99f45a70771438015f88eddbc3d174"
+
+    // Interner Schluessel (AES-256, 64 Hex-Zeichen) fuer die WLAN-Passwoerter im NVS - ein Speicherabzug
+    // zeigt sie nicht im Klartext, schuetzt aber nur gegen blosses Durchsehen. In allen uhr4-Firmwares
+    // gleich; Aendern macht gespeicherte Passwoerter unlesbar.
+
+    // Internal key (AES-256, 64 hex characters) for the WiFi passwords in NVS - a flash dump does not show
+    // them in plain text, but it only protects against simply looking through. Same in all uhr4 firmwares;
+    // changing it makes stored passwords unreadable.
+
+#define WIFI_STORE_KEY "06c92514eb89bb624df9f3f7b291777edd2b44adf583e3ac403d916992664bdd"
+
+#if BOARD_WAVESHARE_C6_ST7789
+
+    // Ohne "USB CDC On Boot: Enabled" laeuft Serial ueber UART0 (GPIO 16/17 = RTC) statt ueber USB - flashESP
+    // koennte weder WLAN noch Displaytyp senden. Beim "ESP32C6 Dev Module" steht die Option sonst auf Disabled.
+
+    // Without "USB CDC On Boot: Enabled" Serial runs over UART0 (GPIO 16/17 = RTC) instead of USB - flashESP
+    // could send neither WiFi nor display type. On the "ESP32C6 Dev Module" the option is Disabled otherwise.
+
+#if !ARDUINO_USB_CDC_ON_BOOT
+#error "ESP32-C6: Board-Option USB CDC On Boot auf Enabled stellen / set the board option USB CDC On Boot to Enabled"
+#endif
+
+    // Das Programm ist groesser als 2 MB: nur mit der Tabelle uhr4_c6 (2,25 MB App, siehe boards.local.txt und
+    // uhr4_c6.csv) passt es, mit "No OTA" bricht der Linker mit einer unverstaendlichen Meldung ab.
+
+    // The program is larger than 2 MB: it only fits with the table uhr4_c6 (2.25 MB app, see boards.local.txt and
+    // uhr4_c6.csv), with "No OTA" the linker aborts with a cryptic message.
+
+#ifndef ARDUINO_PARTITION_uhr4_c6
+#error "ESP32-C6: Partition Scheme 'uhr4 C6 (2.25MB APP/1.6MB SPIFFS)' waehlen - boards.local.txt und uhr4_c6.csv in den Core-Ordner kopieren / choose it - copy boards.local.txt and uhr4_c6.csv into the core folder"
+#endif
+
+    // Waveshare ESP32-C6-LCD-1.47 und -1.3 gleich belegt: Display (6, 7, 14, 15, 21, BL 22) und RGB-LED (8,
+    // per digitalWrite(LED_BUILTIN)) fest verbaut. Lichtsensor, RTC, DCF77 und Taster an GPIO 1, 2, 3, 16,
+    // 17, 20, 23 - die einzigen Pins beider Stiftleisten, dieselbe Verdrahtung passt an beide Boards.
+
+    // Waveshare ESP32-C6-LCD-1.47 and -1.3 mapped alike: display (6, 7, 14, 15, 21, BL 22) and RGB LED (8,
+    // via digitalWrite(LED_BUILTIN)) built in. Light sensor, RTC, DCF77 and buttons on GPIO 1, 2, 3, 16, 17,
+    // 20, 23 - the only pins on both pin headers, the same wiring fits both boards.
+
+#define LED_BOARD      LED_BUILTIN
+#define LED_BOARD_GPIO 8
+
+#define ADC_3V 1
+#define ADC_PIN 2
+#define ADC_GND 3
+
+#define BUTTON1 23
+#define BOOT_BUTTON 9
+
+    // RTC an TX/RX (UART0) - die serielle Ausgabe laeuft ueber USB, nur der Boot-Code sendet kurz auf TX
+    // RTC on TX/RX (UART0) - serial output goes via USB, only the boot code briefly sends on TX
+
+#define SDA_PIN 16
+#define SCL_PIN 17
+
+#define TFT_SCLK  7
+#define TFT_MOSI  6
+#define TFT_DC    15
+#define TFT_RST   21
+
+#define CS_1    14
+#define CS_2    -1   // kein zweites Display moeglich (Displayleitungen nicht an der Stiftleiste)
+                     // no second display possible (display lines not on the pin header)
+
+    // CS schaltet hier LovyanGFX: liegt CS dauerhaft LOW, verschiebt ein Taktimpuls beim Bus-Init nach einem
+    // Software-Neustart die Bits und das ST7789 bleibt schwarz. Mit CS HIGH beim Init und je Uebertragung
+    // einer neuen Flanke faengt sich das Panel.
+
+    // LovyanGFX drives CS here: with CS held LOW, a clock pulse during bus init after a software restart
+    // shifts the bits and the ST7789 stays black. With CS HIGH during init and a fresh edge per transfer
+    // the panel resyncs.
+
+#define LGFX_CS_PIN CS_1
+
+#define DCF77_DATAPIN 20
+#define TFT_Backlight 22
+
+#elif BOARD_WAVESHARE_S3_LCD4
+
+    // Waveshare ESP32-S3-Touch-LCD-4 (V2/V3): 480x480, ST7701 ueber RGB-Bus (Pins in lgfx_config.h), 3-Draht-SPI
+    // zum ST7701 (CS 42, SCK 2, SDA 1) und Port-Expander (V3: CH32V003 auf 0x24) an I2C 15/7 (LCD-Reset, Touch-Reset,
+    // Beleuchtung, Beeper). Das Board nutzt das USB des ESP32-S3 selbst (GPIO 19/20): "USB CDC On Boot: Enabled".
+
+    // Waveshare ESP32-S3-Touch-LCD-4 (V2/V3): 480x480, ST7701 on an RGB bus (pins in lgfx_config.h), 3-wire SPI
+    // to the ST7701 (CS 42, SCK 2, SDA 1) and port expander (V3: CH32V003 at 0x24) on I2C 15/7 (LCD reset, touch
+    // reset, backlight, buzzer). The board uses the ESP32-S3's own USB (GPIO 19/20): "USB CDC On Boot: Enabled".
+
+#if !ARDUINO_USB_CDC_ON_BOOT
+#error "ESP32-S3-Touch-LCD-4: Board-Option USB CDC On Boot auf Enabled stellen / set the board option USB CDC On Boot to Enabled"
+#endif
+
+#ifndef ARDUINO_PARTITION_app3M_fat9M_16MB
+#error "ESP32-S3-Touch-LCD-4: Flash Size 16MB, Partition Scheme '16M Flash (3MB APP/9.9MB FATFS)' waehlen / choose it"
+#endif
+
+    // Das Bild liegt im PSRAM (480x480x2 Byte je Bild): ESP32-S3-N16R8 mit 8 MB OPI-PSRAM ("OPI PSRAM").
+    // The image lives in PSRAM (480x480x2 bytes per image): ESP32-S3-N16R8 with 8 MB OPI PSRAM ("OPI PSRAM").
+
+#ifndef BOARD_HAS_PSRAM
+#error "ESP32-S3-Touch-LCD-4: PSRAM 'OPI PSRAM' waehlen / choose it"
+#endif
+
+    // Ausser den Pins fuer das Display (RGB-Bus, 3-Draht-SPI) und I2C hat das Board keine freien GPIOs: kein
+    // DCF77-Empfaenger, kein externer Taster, kein Lichtsensor (Pins -1, die Uhr greift sie nicht an; ohne Lichtsensor
+    // gilt die manuelle Helligkeit). Der BOOT-Taster (GPIO 0) bleibt.
+
+    // Apart from the pins for the display (RGB bus, 3-wire SPI) and I2C the board has no free GPIOs: no DCF77
+    // receiver, no external button, no light sensor (pins -1, the clock does not touch them; without a light sensor
+    // the manual brightness applies). The BOOT button (GPIO 0) stays.
+
+#define LED_BOARD      -1   // keine LED / no LED
+#define LED_BOARD_GPIO -1
+
+#define ADC_3V -1
+#define ADC_PIN -1
+#define ADC_GND -1
+
+#define BUTTON1 -1
+#define BOOT_BUTTON 0
+
+    // I2C: Port-Expander CH32V003 (0x24), Touch GT911 (0x14 nach dem Reset) und RTC PCF85063 (0x51; die Uhr kennt nur den DS3231)
+    // I2C: port expander CH32V003 (0x24), touch GT911 (0x14 after the reset) and RTC PCF85063 (0x51; the clock only knows the DS3231)
+
+#define SDA_PIN 15
+#define SCL_PIN 7
+
+    // Kein SPI-Display: die Namen bleiben, damit gemeinsamer Code uebersetzt. CS_1 = Chip-Select des ST7701
+    // (3-Draht-SPI, nur waehrend der Startfolge), im Betrieb HIGH.
+
+    // No SPI display: the names stay so that shared code compiles. CS_1 = chip select of the ST7701 (3-wire SPI,
+    // only during the start-up sequence), HIGH during operation.
+
+#define TFT_SCLK  -1
+#define TFT_MOSI  -1
+#define TFT_DC    -1
+#define TFT_RST   -1
+
+#define CS_1    42
+#define CS_2    -1
+#define LGFX_CS_PIN CS_1
+
+#define DCF77_DATAPIN -1   // kein DCF77-Empfaenger moeglich / no DCF77 receiver possible
+#define TFT_Backlight -1   // Beleuchtung nur an/aus ueber den Expander (EXIO1), kein PWM-Pin
+                           // backlight only on/off via the expander (EXIO1), no PWM pin
+
+#elif BOARD_QUALIA
+
+    // Adafruit Qualia ESP32-S3 for RGB666 displays mit dem 2,1" runden Display TL021WVC02 (480x480): RGB-Bus (Pins in
+    // lgfx_config.h), Port-Expander PCA9554A (0x3F) an I2C 8/18 fuer Reset, Beleuchtung, 3-Draht-SPI und zwei Tasten, Touch CST826
+    // (0x15). Das Board nutzt das USB des ESP32-S3 selbst (GPIO 19/20): "USB CDC On Boot: Enabled". Pins nach der Variante
+    // "adafruit_qualia_s3_rgb666" des ESP32-Cores. NICHT AM GERAET GETESTET.
+
+    // Adafruit Qualia ESP32-S3 for RGB666 displays with the 2.1" round display TL021WVC02 (480x480): RGB bus (pins in
+    // lgfx_config.h), port expander PCA9554A (0x3F) on I2C 8/18 for reset, backlight, 3-wire SPI and two buttons, touch CST826
+    // (0x15). The board uses the ESP32-S3's own USB (GPIO 19/20): "USB CDC On Boot: Enabled". Pins per the variant
+    // "adafruit_qualia_s3_rgb666" of the ESP32 core. NOT TESTED ON THE DEVICE.
+
+#if !ARDUINO_USB_CDC_ON_BOOT
+#error "Qualia: Board-Option USB CDC On Boot auf Enabled stellen / set the board option USB CDC On Boot to Enabled"
+#endif
+
+#ifndef ARDUINO_PARTITION_app3M_fat9M_16MB
+#error "Qualia: Flash Size 16MB, Partition Scheme '16M Flash (3MB APP/9.9MB FATFS)' waehlen / choose it"
+#endif
+
+#ifndef BOARD_HAS_PSRAM
+#error "Qualia: PSRAM 'OPI PSRAM' waehlen / choose it"
+#endif
+
+    // Freie Stifte der Stiftleiste als Platzhalter (GPIO 0 ist hier eine RGB-Datenleitung und darf nicht abgefragt werden):
+    // Lichtsensor 5/6/7, Taster 16 (BUTTON1, high-aktiv) und 17 (BOOT_BUTTON, low-aktiv), DCF77 4. Zusaetzlich zaehlen die
+    // Tasten UP/DOWN am Expander (extraButtonDown()). CS_1 liegt auf 15 (nur Platzhalter, der Controller wird ueber den Expander
+    // angesprochen).
+
+    // Free header pins as placeholders (GPIO 0 is an RGB data line here and must not be read): light sensor 5/6/7, button
+    // 16 (BUTTON1, active high) and 17 (BOOT_BUTTON, active low), DCF77 4. In addition the buttons UP/DOWN on the expander count
+    // (extraButtonDown()). CS_1 is on 15 (only a placeholder, the controller is addressed via the expander).
+
+#define LED_BOARD      -1   // keine LED / no LED
+#define LED_BOARD_GPIO -1
+
+#define ADC_3V 5
+#define ADC_PIN 6
+#define ADC_GND 7
+
+#define BUTTON1 16
+#define BOOT_BUTTON 17
+
+#define SDA_PIN 8
+#define SCL_PIN 18
+
+#define TFT_SCLK  -1
+#define TFT_MOSI  -1
+#define TFT_DC    -1
+#define TFT_RST   -1
+
+#define CS_1    15
+#define CS_2    -1
+#define LGFX_CS_PIN CS_1
+
+#define DCF77_DATAPIN 4
+#define TFT_Backlight -1   // Beleuchtung nur an/aus ueber den Expander (Pin 4), kein PWM-Pin
+                           // backlight only on/off via the expander (pin 4), no PWM pin
+
+#elif BOARD_WAVESHARE_S3_GC9A01
+
+    // USB laeuft ueber den CH343P-Wandler an UART0 (GPIO 43/44), nicht ueber das USB des ESP32-S3. Mit "USB
+    // CDC On Boot: Enabled" ginge Serial an die nicht angeschlossenen GPIO 19/20 - flashESP koennte weder WLAN
+    // noch Displaytyp senden.
+
+    // USB runs via the CH343P converter on UART0 (GPIO 43/44), not via the ESP32-S3's USB. With "USB CDC On
+    // Boot: Enabled" Serial would go to the unconnected GPIO 19/20 - flashESP could send neither WiFi nor
+    // display type.
+
+#if ARDUINO_USB_CDC_ON_BOOT
+#error "ESP32-S3-LCD-1.28: Board-Option USB CDC On Boot auf Disabled stellen / set the board option USB CDC On Boot to Disabled"
+#endif
+
+    // LittleFS liegt auf der Partition "ffat" dieses Schemas (LITTLEFS_PARTITION weiter unten)
+    // LittleFS lives on this scheme's "ffat" partition (LITTLEFS_PARTITION further below)
+
+#ifndef ARDUINO_PARTITION_app3M_fat9M_16MB
+#error "ESP32-S3-LCD-1.28: Flash Size 16MB, Partition Scheme '16M Flash (3MB APP/9.9MB FATFS)' waehlen / choose it"
+#endif
+
+    // Der Chip (ESP32-S3R2) hat 2 MB PSRAM. Ohne ihn bleiben nur ~30 KB Heap, die Weboberflaeche und das WLAN
+    // arbeiten dann an der Speichergrenze (Seiten laufen in die Zeitueberschreitung).
+
+    // The chip (ESP32-S3R2) has 2 MB PSRAM. Without it only ~30 KB of heap is left, the web interface and WiFi
+    // then run at the memory limit (pages time out).
+
+#ifndef BOARD_HAS_PSRAM
+#error "ESP32-S3-LCD-1.28: PSRAM 'QSPI PSRAM' waehlen (Visual Micro: Board-Optionen, Arduino IDE: Tools > PSRAM) / choose it"
+#endif
+
+    // Waveshare ESP32-S3-LCD-1.28: Display (DC 8, CS 9, SCLK 10, MOSI 11, RST 12, BL 40), Lagesensor QMI8658
+    // an I2C 6/7 (INT 47/48) und Akku-Messung an GPIO 1 fest verbaut, keine Board-LED. Lichtsensor, Taster
+    // und DCF77 an freien Pins der Stiftleiste (ADC1, da ADC2 bei WLAN gesperrt; GPIO 3 ist Strapping-Pin).
+
+    // Waveshare ESP32-S3-LCD-1.28: display (DC 8, CS 9, SCLK 10, MOSI 11, RST 12, BL 40), QMI8658 motion
+    // sensor on I2C 6/7 (INT 47/48) and battery measurement on GPIO 1 built in, no board LED. Light sensor,
+    // button and DCF77 on free header pins (ADC1, as ADC2 is blocked with WiFi; GPIO 3 is a strapping pin).
+
+#define LED_BOARD      -1   // keine LED / no LED
+#define LED_BOARD_GPIO -1
+
+#define ADC_3V 2
+#define ADC_PIN 4
+#define ADC_GND 5
+
+#define BUTTON1 16
+#define BOOT_BUTTON 0
+
+    // RTC DS3231 (0x68) am I2C des Lagesensors (0x6A/0x6B), Pull-ups sind auf dem Board
+    // RTC DS3231 (0x68) on the motion sensor's I2C (0x6A/0x6B), pull-ups are on the board
+
+#define SDA_PIN 6
+#define SCL_PIN 7
+
+#define TFT_SCLK  10
+#define TFT_MOSI  11
+#define TFT_DC    8
+#define TFT_RST   12
+
+#define CS_1    9
+#define CS_2    -1   // zweites Display (noch) nicht vorgesehen
+                     // second display not provided (yet)
+
+    // CS schaltet LovyanGFX wie beim ESP32-C6 - ein Software-Neustart laesst das Panel so nicht schwarz
+    // CS is driven by LovyanGFX as on the ESP32-C6 - so a software restart does not leave the panel black
+
+#define LGFX_CS_PIN CS_1
+
+#define DCF77_DATAPIN 17
+#define TFT_Backlight 40
+
+#else
+
+    // Pinbelegung ESP32-S2 (Lolin S2 Pico) <-> TFT: 3.3V->VCC (rot), GND->GND (blau), Rest siehe
+    // PCB-Referenz: https://github.com/holgiw/ESP32-Station-Clock/blob/master/PCB/ESP32-S2%20GC9A01.jpg
+
+    // Pin mapping ESP32-S2 (Lolin S2 Pico) <-> TFT: 3.3V->VCC (red), GND->GND (blue), rest see PCB reference:
+    // https://github.com/holgiw/ESP32-Station-Clock/blob/master/PCB/ESP32-S2%20GC9A01.jpg
+
+
+#define LED_BOARD 15 // BUILTIN LED
+#define LED_BOARD_GPIO LED_BOARD
+
+#define ADC_3V 1
+#define ADC_PIN 2
+#define ADC_GND 4
+
+#define BUTTON1 16
+#define BOOT_BUTTON 0
+
+
+    // I2C / RTC
+
+#define SDA_PIN 39
+#define SCL_PIN 37
+
+    // TFT-SPI (beide Displays am selben Bus) - wird in lgfx_config.h
+    // verwendet, an der LovyanGFX-Bibliothek selbst ist nichts einzustellen.
+    // Belegung laut PCB-Referenz: 7 scl, 11 sda, 33 dc, 5 rst.
+
+    // TFT SPI (both displays on the same bus) - used in lgfx_config.h,
+    // nothing has to be configured inside the LovyanGFX library itself.
+    // Mapping per PCB reference: 7 scl, 11 sda, 33 dc, 5 rst.
+
+#define TFT_SCLK  7
+#define TFT_MOSI  11
+#define TFT_DC    33  // Data/Command
+#define TFT_RST   5   // Reset
+
+    // SPI-CS Display 1 - manuell gesteuert (setCS1()/setCS2() in display.h),
+    // LovyanGFX bekommt pin_cs = -1 (lgfx_config.h). Beide Displays haengen
+    // an einem Geraet, der CS-Wechsel waehlt nur den Chip aus.
+
+    // SPI CS for display 1 - driven manually (setCS1()/setCS2() in
+    // display.h), LovyanGFX gets pin_cs = -1 (lgfx_config.h). Both displays
+    // hang off one device, switching CS only selects the chip.
+
+#define CS_1    12
+#define LGFX_CS_PIN -1   // CS manuell, siehe oben / CS manual, see above
+
+    // SPI-CS Display 2 (baugleich) - bei der Uhranzeige nur bedient, solange die Rotation von Display 2 nicht "n.a." ist.
+    // SPI CS for display 2 (identical) - for the clock display only driven while display 2's rotation is not "n.a.".
+
+#define CS_2    18
+
+    // DCF77
+
+#define DCF77_DATAPIN 35
+
+    // Hintergrundbeleuchtung - ob der Pin per PWM geregelt wird, entscheidet die Einstellung useBacklight
+    // (globals.h).
+
+    // Backlight - whether the pin is PWM-controlled is decided by the useBacklight setting (globals.h).
+
+#define TFT_Backlight 3  // Hintergrundbeleuchtung
+                         // Backlight
+#endif
+
+    // Partition fuer LittleFS: ESP32-S3 mit Schema "16M Flash (3MB APP/9.9MB FATFS)" (zwei App-Partitionen fuer
+    // OTA) - die Datenpartition heisst dort "ffat", LittleFS nutzt sie trotzdem. S2/C6 mit "No OTA": "spiffs".
+
+    // Partition for LittleFS: ESP32-S3 with the scheme "16M Flash (3MB APP/9.9MB FATFS)" (two app partitions
+    // for OTA) - the data partition is called "ffat" there, LittleFS uses it anyway. S2/C6 with "No OTA": "spiffs".
+
+#if BOARD_S3_ANY
+#define LITTLEFS_PARTITION "ffat"
+#else
+#define LITTLEFS_PARTITION "spiffs"
+#endif
+
+    // Firmware-Update ueber WLAN (ota_update.h) nur mit zwei App-Partitionen, also nur auf dem ESP32-S3.
+    // Haengt ein Update, startet die Uhr nach OTA_TIMEOUT_MS neu, statt stehen zu bleiben.
+
+    // Firmware update over WiFi (ota_update.h) only with two app partitions, so only on the ESP32-S3. If an
+    // update hangs, the clock restarts after OTA_TIMEOUT_MS instead of standing still.
+
+#define HAS_OTA BOARD_S3_ANY
+
+    // Sendeleistung des WLAN automatisch waehlen: Stufen probieren, die klappende je WLAN merken. ESP32-S3: bei voller
+    // Leistung (20 dBm) antworten Router nicht (2 AUTH_EXPIRE), daher von unten nach oben; S2 und C6 von oben nach unten.
+
+    // Choose the WiFi transmit power automatically: try steps, remember the one that works per WiFi. ESP32-S3: at full
+    // power (20 dBm) routers do not answer (2 AUTH_EXPIRE), so bottom up; S2 and C6 top down.
+
+#define WIFI_TX_AUTO 1
+#if BOARD_S3_ANY
+#define WIFI_TX_STEPS { WIFI_POWER_8_5dBm, WIFI_POWER_13dBm, WIFI_POWER_17dBm, WIFI_POWER_19_5dBm }
+#define WIFI_TX_FIRST WIFI_POWER_8_5dBm
+#else
+#define WIFI_TX_STEPS { WIFI_POWER_20dBm, WIFI_POWER_17dBm, WIFI_POWER_13dBm, WIFI_POWER_8_5dBm }
+#define WIFI_TX_FIRST WIFI_POWER_20dBm
+#endif
+#define WIFI_TX_OPEN WIFI_POWER_19_5dBm // offene Hotspots: volle Leistung / open hotspots: full power
+#define OTA_TIMEOUT_MS (3 * WAIT_1m)
+#define OTA_PORT 3232 // ArduinoOTA (Visual Micro, Arduino IDE)
+
+    // Update von GitHub (ota_update.h, nur ESP32-S3): Dateien des neuesten Releases, uhr4-s3.txt (Zeile 1: Build-Zeit
+    // "YYYY-MM-DD HH:MM:SS", Zeile 2: SHA-256 der .bin) und uhr4-s3.bin. Erzeugt von build_uhr4/publish_s3_update.ps1.
+
+    // Update from GitHub (ota_update.h, ESP32-S3 only): files of the latest release, uhr4-s3.txt (line 1: build time
+    // "YYYY-MM-DD HH:MM:SS", line 2: SHA-256 of the .bin) and uhr4-s3.bin. Created by build_uhr4/publish_s3_update.ps1.
+
+    // Das 480x480-Board (ESP32-S3-Touch-LCD-4) hat eine eigene Firmware: uhr4-s3lcd4.txt / uhr4-s3lcd4.bin
+
+    // The 480x480 board (ESP32-S3-Touch-LCD-4) has its own firmware: uhr4-s3lcd4.txt / uhr4-s3lcd4.bin
+
+#if BOARD_WAVESHARE_S3_LCD4
+#define FW_UPDATE_ASSET "uhr4-s3lcd4"
+#elif BOARD_QUALIA
+#define FW_UPDATE_ASSET "uhr4-s3qualia"
+#else
+#define FW_UPDATE_ASSET "uhr4-s3"
+#endif
+#define FW_UPDATE_URL "https://github.com/" GITHUB_REPO_OWNER "/" GITHUB_REPO_NAME "/releases/latest/download/" FW_UPDATE_ASSET
+
+#define HAS_DISPLAY2 (CS_2 >= 0)
+#if BOARD_WAVESHARE_S3_GC9A01
+#define TFT_SPI_FREQUENCY 80000000 // Waveshare ESP32-S3-LCD-1.28: GC9A01 fest am Chip, kurze Leitung - halbiert die Sendezeit
+                                   // Waveshare ESP32-S3-LCD-1.28: GC9A01 right at the chip, short wires - halves the send time
+#else
+#define TFT_SPI_FREQUENCY 40000000 // hoechster ganzzahliger Teiler von 80 MHz unter den frueheren 60 MHz
+                                   // highest integer divider of 80 MHz below the former 60 MHz
+#endif
+
+    // Rotationswert "nicht angeschlossen (n.a.)": fuer die Uhranzeige wird das Display
+    // dann weder angesteuert noch berechnet (Zifferblatt/Zeiger entfallen). Status- und
+    // Startmeldungen (Boot, AP-Modus, Codes) erscheinen weiterhin immer auf beiden Displays.
+
+    // Rotation value "not connected (n.a.)": for the clock display the display is then
+    // neither driven nor calculated (face/hands are skipped). Status and boot messages
+    // (boot, AP mode, codes) still always appear on both displays.
+
+#define TFT_ROTATION_NA 4
+
+    // Letzter waehlbarer Rotationswert fuer Display 1: "n.a." (nicht angeschlossen) gibt es nur mit zweitem Display -
+    // bei nur einem Display bliebe die Uhr sonst dunkel.
+
+    // Last selectable rotation value for display 1: "n.a." (not connected) exists only with a second display - with
+    // only one display the clock would otherwise stay dark.
+
+#define ROTATION1_LAST (HAS_DISPLAY2 ? TFT_ROTATION_NA : TFT_ROTATION_NA - 1)
+
+    // Auswahlwert "automatisch" fuer Display 1 (nur mit Lagesensor, HAS_IMU): gespeichert wird er nicht als
+    // Rotation, sondern als autoRotation (imu_rotation.h). IMU_ROTATION_DIR: Drehsinn des Sensors gegenueber
+    // dem Display (1 oder -1, am Geraet pruefen), IMU_STABLE_MS: so lange muss eine neue Lage anliegen.
+
+    // Selection value "automatic" for display 1 (only with a motion sensor, HAS_IMU): it is not stored as a
+    // rotation but as autoRotation (imu_rotation.h). IMU_ROTATION_DIR: turning direction of the sensor relative
+    // to the display (1 or -1, check on the device), IMU_STABLE_MS: a new position must last this long.
+
+#define TFT_ROTATION_AUTO 5
+#define HAS_IMU BOARD_WAVESHARE_S3_GC9A01
+#define IMU_ROTATION_DIR 1
+#define IMU_STABLE_MS 1500
+
+    // Werkseinstellung: Display 1 angeschlossen (0 Grad), Display 2 nicht angeschlossen.
+    // Factory default: display 1 connected (0 degrees), display 2 not connected.
+
+#define TFT_ROTATION1_DEFAULT 0
+#define TFT_ROTATION2_DEFAULT TFT_ROTATION_NA
+
+    // Testknopf auf der Helligkeitsseite: zeigt den eingetragenen Wert so lange auf der Uhr, danach gilt wieder
+    // die normale Regelung
+
+    // Test button on the brightness page: shows the entered value on the clock for this long, then the normal
+    // control applies again
+
+#define BRIGHTNESS_TEST_MS 10000
+#define BACKLIGHT_FREQ 5000
+#define BACKLIGHT_RESOLUTION 8
+
+    // Helligkeit bei WPS und Access Point: maxBrightness, mindestens BACKLIGHT_SETUP_MIN - Meldungen und AP-Passwort
+    // bleiben lesbar. Auf dem ESP32-C6 warnt die Helligkeitsseite ab einem Maximum ueber BACKLIGHT_C6_MAX_SAFE -
+    // Waveshare weist auf moegliche Ueberhitzung der Beleuchtung hin.
+
+    // Brightness during WPS and access point: maxBrightness, at least BACKLIGHT_SETUP_MIN - messages and the AP
+    // password stay readable. On the ESP32-C6 the brightness page warns from a maximum above BACKLIGHT_C6_MAX_SAFE -
+    // Waveshare points out possible overheating of the backlight.
+
+#define BACKLIGHT_SETUP_MIN 100
+#define SETUP_BRIGHTNESS_LEVEL() ((uint8_t)(maxBrightness > BACKLIGHT_SETUP_MIN ? maxBrightness : BACKLIGHT_SETUP_MIN))
+#define BACKLIGHT_C6_MAX_SAFE 128
+
+
+    // Pins mit Nummer -1 gibt es auf dem Board nicht (siehe ESP32-S3-Touch-LCD-4): lesen und setzen tut dann nichts.
+    // Pins numbered -1 do not exist on the board (see ESP32-S3-Touch-LCD-4): reading and setting then does nothing.
+
+inline bool pinIsHigh(int pin) { return pin >= 0 && digitalRead(pin) == HIGH; }
+inline bool pinIsLow(int pin) { return pin >= 0 && digitalRead(pin) == LOW; }
+inline void pinModeSafe(int pin, uint8_t mode) { if (pin >= 0) pinMode(pin, mode); }
+inline void pinWriteSafe(int pin, uint8_t value) { if (pin >= 0) digitalWrite(pin, value); }
+inline String pinText(int pin) { return pin >= 0 ? String(pin) : String("n/a"); }
+
+    // Zeigerformat: Drehpunkte und Breiten je Display fest (Dateiformat), Drehpunkt-Spalte = halbe Breite.
+    // Alte Zeiger werden oben und seitlich transparent aufgefuellt. handPivotY = Displayradius, der Zeiger
+    // reicht bis zum Rand.
+
+    // Hand format: pivots and widths fixed per display (file format), pivot column = half the width. Old
+    // hands are padded transparent at the top and sides. handPivotY = display radius, the hand reaches the
+    // edge.
+
+struct DisplayGeometry {
+    const char* name;
+    int clock;             // Zifferblatt = Displayausschnitt, quadratisch
+                           // clock face = display area, square
+    int handLegacyWidth;   // alte Zeigerbreite (Dateiformat)
+                           // old hand width (file format)
+    int handWidth;         // neue Zeigerbreite (ungerade: die Symmetrieachse liegt auf der mittleren Pixelspalte)
+                           // new hand width (odd: the symmetry axis lies on the middle pixel column)
+    int handPriorWidth;    // bisherige Zeigerbreite (vor der ungeraden Breite), sonst wie handWidth
+                           // previous hand width (before the odd width), otherwise as handWidth
+    int handLegacyHeight;
+    int handLegacyPivotY;  // Drehpunkt im alten Format
+                           // pivot in the old format
+    int handPivotY;        // Drehpunkt im neuen Format
+                           // pivot in the new format
+    int textSize;          // Status-/Boottext
+                           // status/boot text
+    int centerSize;        // Werkseinstellung Nabe
+                           // factory default hub size
+    bool backlightDefault; // Werkseinstellung useBacklight: GC9D01 immer an Pin 3 verdrahtet
+                           // factory default useBacklight: GC9D01 always wired to pin 3
+    bool swRotation;       // Hardware-Rotation wirkungslos -> Software-Rotation (mit PSRAM)
+                           // hardware rotation ineffective -> software rotation (with PSRAM)
+    int panelWidth;        // Panel bei Rotation 0 - groesser als clock: Streifen fuer Uhrzeit/Datum
+                           // panel at rotation 0 - larger than clock: strip for time/date
+    int panelHeight;
+    bool round;            // rundes Display: Ecken der Zifferblaetter weiss maskieren (scaleAndSaveBmp())
+                           // round display: mask the clock face corners white (scaleAndSaveBmp())
+};
+
+constexpr DisplayGeometry DISPLAY_GEOMETRY[DISPLAY_TYPE_COUNT] = {
+
+    // name       clock legW  W  priorW legH legPiv piv text hub   BL     swRot  panelW panelH round
+
+    // GC9A01: BL nur auf dem Waveshare ESP32-S3-LCD-1.28 ab Werk an (Beleuchtung dort fest an GPIO 40)
+    // GC9A01: BL on by default only on the Waveshare ESP32-S3-LCD-1.28 (backlight hard-wired to GPIO 40 there)
+
+    { "GC9A01",   240,  21,  25,  25, 131, 100,  120,  2,  6,  BOARD_WAVESHARE_S3_GC9A01 != 0, false, 240, 240, true },
+    { "GC9D01",   160,  13,  15,  15,  86,  66,   80,  1,  3,  true,  true,  160,   160,   true },
+    { "ILI9341",  240,  21,  25,  25, 131, 100,  120,  2,  6,  false, false, 240,   320,   false },
+    { "ST7789",   172,  15,  17,  17,  94,  72,   86,  2,  4,  true,  false, 172,   320,   false }, // Meldungen quer (statusLandscape())
+                                                                                        // messages in landscape (statusLandscape())
+    { "ST7789_240", 240, 21, 25, 25, 131, 100,  120,  2,  6,  true,  false, 240,   240,   false },
+
+    // ST7701_480 (Waveshare ESP32-S3-Touch-LCD-4): das Doppelte des GC9A01-Eintrags, Werte am Geraet noch zu pruefen.
+    // Beleuchtung nur an/aus (BL false), Software-Rotation (Bild im PSRAM), quadratisch ohne Streifen.
+    // ST7701_480 (Waveshare ESP32-S3-Touch-LCD-4): twice the GC9A01 entry, values still to be checked on the device.
+    // Backlight only on/off (BL false), software rotation (image in PSRAM), square without a strip.
+
+    { "ST7701_480", 480,  42,  51,  50, 262, 200,  240,  4, 12,  true,  true,  480,   480,   false },
+
+    // TL021_480 (Adafruit Qualia mit 2,1" rundem Display): wie ST7701_480, aber rund; Beleuchtung nur an/aus (BL false)
+    // TL021_480 (Adafruit Qualia with the 2.1" round display): like ST7701_480, but round; backlight only on/off (BL false)
+
+    { "TL021_480", 480,  42,  51,  50, 262, 200,  240,  4, 12,  false, true,  480,   480,   true },
+};
+
+    // Hoehe eines Zeigers im bisherigen Format (ohne HAND_EXTRA_BELOW) fuer einen beliebigen Displaytyp (Sicherungen)
+    // Height of a hand in the previous format (without HAND_EXTRA_BELOW) for any display type (backups)
+
+constexpr int handPriorHeightOf(const DisplayGeometry& g) { return g.handLegacyHeight + (g.handPivotY - g.handLegacyPivotY); }
+
+    // Obergrenzen ueber alle Typen - fuer fest dimensionierte Puffer
+    // (rowBuffer in globals.h).
+
+    // Upper bounds across all types - for fixed-size buffers (rowBuffer in globals.h).
+
+#if BOARD_RGB_PANEL
+#define CLOCK_MAX 480
+#else
+#define CLOCK_MAX 240
+#endif
+
+constexpr bool displayGeometryValid(const DisplayGeometry& g, int maxClock = CLOCK_MAX) {
+    return g.handPivotY >= g.handLegacyPivotY                                       // HAND_TOP_PAD >= 0
+        && g.handWidth >= g.handPriorWidth && g.handPriorWidth >= g.handLegacyWidth && (g.handPriorWidth - g.handLegacyWidth) % 2 == 0 // alte Zeiger bleiben mittig / old hands stay centred
+        && g.handWidth % 2 == 1                                                     // Symmetrieachse auf einer Pixelspalte (Zeiger mit einem Pixel Breite) / symmetry axis on a pixel column (hands one pixel wide)
+        && g.handPivotY <= g.clock / 2                                              // Drehpunkt innerhalb des Radius / pivot inside the radius
+        && g.clock <= maxClock
+        && g.panelWidth >= g.clock && g.panelHeight >= g.clock;                     // Uhr passt aufs Panel / clock fits the panel
+}
+static_assert(displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_GC9A01]) &&
+              displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_GC9D01]) &&
+              displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_ILI9341]) &&
+              displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_ST7789]) &&
+              displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_ST7789_240]) &&
+              displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_ST7701_480], 480) &&
+              displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_TL021_480], 480), // nur auf dem ESP32-S3-Touch-LCD-4 nutzbar (CLOCK_MAX 480) / only usable on the ESP32-S3-Touch-LCD-4 (CLOCK_MAX 480)
+              "DISPLAY_GEOMETRY: hand pivot/width/clock size inconsistent");
+
+    // Diese Namen zeigen auf den zur Laufzeit gewaehlten Typ (displayGeom, globals.h) - daher NICHT in
+    // Array-Groessen, static_assert oder #if verwenden.
+
+    // These names point to the type selected at runtime (displayGeom, globals.h) - so do NOT use them in
+    // array sizes, static_assert or #if.
+
+#define CLOCK_WIDTH         (displayGeom->clock)
+#define CLOCK_HEIGHT        (displayGeom->clock)
+#define TFT_WIDTH           (displayGeom->panelWidth)
+#define TFT_HEIGHT          (displayGeom->panelHeight)
+#define HAND_LEGACY_WIDTH   (displayGeom->handLegacyWidth)
+#define HAND_WIDTH          (displayGeom->handWidth)
+#define HAND_PRIOR_WIDTH    (displayGeom->handPriorWidth)
+#define HAND_LEGACY_HEIGHT  (displayGeom->handLegacyHeight)
+#define HAND_LEGACY_PIVOT_Y (displayGeom->handLegacyPivotY)
+#define HAND_PIVOT_Y        (displayGeom->handPivotY)
+#define TFT_TEXT_SIZE       (displayGeom->textSize)
+#define BACKLIGHT_DEFAULT   (displayGeom->backlightDefault)
+
+#define HAND_TOP_PAD (HAND_PIVOT_Y - HAND_LEGACY_PIVOT_Y)          // 20 bzw. 14
+                                                                   // 20 or 14
+
+    // Zeigerhoehe: bisheriges Format (alte Hoehe + Auffuellung oben, Drehpunkt bei HAND_PIVOT_Y) plus HAND_EXTRA_BELOW
+    // Zeilen UNTER dem Zeiger. Der Drehpunkt bleibt in allen drei Hoehen (alt, bisher, neu) an derselben Stelle, siehe
+    // placeHand().
+
+    // Hand height: previous format (old height + padding at the top, pivot at HAND_PIVOT_Y) plus HAND_EXTRA_BELOW rows
+    // BELOW the hand. The pivot stays at the same place in all three heights (old, previous, new), see placeHand().
+
+#define HAND_EXTRA_BELOW 15
+#define HAND_PRIOR_HEIGHT (HAND_LEGACY_HEIGHT + HAND_TOP_PAD)      // 151 bzw. 100 (vor HAND_EXTRA_BELOW) / 151 or 100 (before HAND_EXTRA_BELOW)
+#define HAND_HEIGHT (HAND_PRIOR_HEIGHT + HAND_EXTRA_BELOW)         // 166 bzw. 115 / 166 or 115
+
+
+    // System / Debug
+
+#define DEBUG_PRINT(x)    { if (loggingEnabled) { Serial.print(x);   logToFile(String(x));}}
+#define DEBUG_PRINTLN(x)  { if (loggingEnabled) { Serial.println(x); logToFile(String(x));}}
+#define DEBUG_PRINTF(...) { if (loggingEnabled) { char buffer[128]; snprintf(buffer, sizeof(buffer), __VA_ARGS__); Serial.print(buffer); logToFile(String(buffer));}}
+
+    // Schwellwert fuer Heap-Warnungen (siehe checkHeapWarning() in
+    // system_utils.h) - loggt fruehzeitig statt erst spaeter ueber /status.
+
+    // Heap warning threshold (see checkHeapWarning() in system_utils.h) -
+    // logs early instead of only being noticed later via /status.
+
+#define HEAP_WARNING_THRESHOLD 20480 // 20 KB
+
+    // Erlaubter Wertebereich fuer die Groesse der Web-Vorschau (/preview) -
+    // vom Nutzer per Schieberegler einstellbar, in PK_PREVIEW_SIZE
+    // gespeichert. Zentral hier statt in /preview und /api/setPreviewSize dupliziert.
+
+    // Allowed value range for the web preview's size (/preview) - user-
+    // adjustable via a slider, stored in PK_PREVIEW_SIZE. Centralized here
+    // instead of duplicated in /preview and /api/setPreviewSize.
+
+#define PREVIEW_SIZE_MIN 150
+#define PREVIEW_SIZE_MAX 800
+#define PREVIEW_SIZE_DEFAULT 400
+
+    // Fuehrt einen Zeichenblock fuer Display 1 und 2 aus, korrekt rotiert (beginStatusDraw()/endStatusDraw())
+    // - fuer BEIDE Displays, auch bei "n.a.", ausser das Board hat kein zweites. Makro, da schon vor display.h
+    // benutzt (wifi_manager.h).
+
+    // Runs a drawing block for display 1 and 2, correctly rotated (beginStatusDraw()/endStatusDraw()) - for
+    // BOTH displays, even with "n.a.", unless the board has no second one. Macro since it is used before
+    // display.h (wifi_manager.h).
+
+#define DRAW_ON_BOTH_DISPLAYS(...) \
+    do { \
+        { lgfx::LovyanGFX& tft = beginStatusDraw(1); __VA_ARGS__ } \
+        endStatusDraw(1); \
+        if (HAS_DISPLAY2) { \
+            { lgfx::LovyanGFX& tft = beginStatusDraw(2); __VA_ARGS__ } \
+            endStatusDraw(2); \
+        } \
+        setCSIdle(); \
+    } while (0)
+
+    // GitHub-Repository - zentral hier, damit ein Fork/Umzug nur diese
+    // Stelle statt mehrerer in webserver_routes.h aendern muss.
+
+    // GitHub repository - kept centrally here, so a fork/move only needs
+    // changing this spot instead of several in webserver_routes.h.
+
+#define GITHUB_REPO_OWNER "holgiw"
+#define GITHUB_REPO_NAME "ESP32-Station-Clock"
+#define GITHUB_REPO_URL "https://github.com/" GITHUB_REPO_OWNER "/" GITHUB_REPO_NAME
+
+    // Zeit / NTP-Standardwerte & Timing-Makros
+    // Time / NTP defaults & timing macros
+
+    // Zeitserver & Zeitzone Standardwert
+    // time server & timezone default
+
+#define NTP_SERVER_1 "pool.ntp.org"
+#define NTP_SERVER_2 "ptbtime1.ptb.de"
+#define TIMEZONE_DEFAULT "CET-1CEST,M3.5.0,M10.5.0/3" // Mitteleuropaeische Zeit
+                                                      // Central European Time
+
+    // Versuche PRO NTP-Server, bevor setupNTP() zum naechsten wechselt - ein verlorenes UDP-Paket soll nicht
+    // gleich als Fehlschlag zaehlen. configTzTime() wird je Versuch neu aufgerufen, sonst sendet der
+    // SNTP-Client keine neue Anfrage.
+
+    // Attempts PER NTP server before setupNTP() moves on - a single lost UDP packet should not count as a
+    // failure. configTzTime() is called again per attempt, otherwise the SNTP client sends no new request.
+
+#define NTP_SYNC_ATTEMPTS 2
+
+    // Ab dieser Abweichung (Sekunden) wird die RTC bei einem NTP-/DCF77-Sync
+    // ueberhaupt geschrieben (siehe rtcDriftSec() in time_sync.h) - kleinere
+    // Differenzen sind normale Rundung, kein unnoetiger I2C-Schreibzugriff.
+
+    // Above this deviation (seconds) the RTC is actually written on an NTP/
+    // DCF77 sync (see rtcDriftSec() in time_sync.h) - smaller differences
+    // are normal rounding, not worth an unnecessary I2C write.
+
+#define RTC_UPDATE_MIN_DRIFT_SEC 2
+
+    // Startzeit der Anzeige ohne Uhrzeit aus NTP/DCF77/RTC/USB (Uhrmacher-Stellung 10:10:30). Die Uhr laeuft
+    // von dort weiter, bis eine echte Zeit kommt; die Systemzeit bleibt ungueltig (NTP-Server schweigt).
+
+    // Display start time without a time from NTP/DCF77/RTC/USB (watchmaker position 10:10:30). The clock
+    // keeps running from there until a real time arrives; the system time stays invalid (NTP server stays
+    // silent).
+
+#define START_TIME_HOUR 10
+#define START_TIME_MIN  10
+#define START_TIME_SEC  30
+
+    // So lange zeigt das Display nach dem Start des Access Points dessen Zugangsdaten, danach laeuft die Uhr.
+    // Der Access Point bleibt aktiv, ein kurzer Tasterdruck zeigt die Daten erneut.
+
+    // For this long after starting the access point the display shows its credentials, then the clock runs.
+    // The access point stays active, a short button press shows the credentials again.
+
+#define AP_INFO_SHOW_MS (2 * WAIT_1m)
+
+    // Versuche PRO WLAN-Netz beim Start (connectWiFiAtBoot()), bevor das naechste versucht bzw. aufgegeben
+    // wird (WPS/AP) - ein einzelner Fehlversuch soll ein gefundenes Netz nicht gleich verwerfen.
+
+    // Attempts PER WiFi network at boot (connectWiFiAtBoot()), before trying the next one or giving up
+    // (WPS/AP) - a single failed attempt should not discard a network that was found.
+
+#define WIFI_CONNECT_ATTEMPTS 2
+
+    // Access Point (Einrichtung): SSID und Passwort fest in der Firmware - stehen in Anleitung und auf dem
+    // Display, das klappt auch ohne lesbares Display. Auf jeder Uhr gleich; eigenes Passwort hier setzen
+    // (WPA2: 8-63 Zeichen).
+
+    // Access point (setup): SSID and password fixed in the firmware - they are in the manual and on the
+    // display, this works even without a readable display. Same on every clock; set your own password here
+    // (WPA2: 8-63 characters).
+
+#define AP_SSID "clock123"
+#define AP_PASSWORD "clocksetup"
+static_assert(sizeof(AP_PASSWORD) - 1 >= 8 && sizeof(AP_PASSWORD) - 1 <= 63, "AP_PASSWORD: WPA2 verlangt 8-63 Zeichen / WPA2 requires 8-63 characters");
+
+#define WAIT_1s 1000 // 1 Sekunde in Millisekunden
+                     // 1 second in milliseconds
+#define WAIT_3s 3000 // 3 Sekunden in Millisekunden
+                     // 3 seconds in milliseconds
+#define WAIT_5s 5000 // 5 Sekunden in Millisekunden
+                     // 5 seconds in milliseconds
+#define WAIT_10s 10000 // 10 Sekunden in Millisekunden
+                       // 10 seconds in milliseconds
+#define WAIT_15s 15000 // 15 Sekunden in Millisekunden
+                       // 15 seconds in milliseconds
+#define WAIT_30s 30000 // 30 Sekunden in Millisekunden
+                       // 30 seconds in milliseconds
+#define WAIT_1m 60000 // 1 Minute in Millisekunden
+                      // 1 minute in milliseconds
+#define WAIT_15m 900000 // 15 Minuten in Millisekunden
+                        // 15 minutes in milliseconds
+
+    // Gueltigkeitsdauer des Web-Factory-Reset-Codes (siehe factoryResetCode
+    // in globals.h) - danach verschwindet der Code vom Display wieder,
+    // ungenutzt, und muss bei Bedarf erneut angefordert werden.
+
+    // Validity period of the web factory-reset code (see factoryResetCode in
+    // globals.h) - after this it disappears from the display again, unused,
+    // and has to be requested again if still needed.
+
+#define FACTORY_RESET_CODE_TIMEOUT_MS WAIT_1m
+
+    // Maximale Fehlversuche fuer einen einzelnen Bestaetigungscode (siehe
+    // factoryResetCodeAttempts in globals.h), bevor er ungueltig wird und ein
+    // neuer angefordert werden muss - Bremse gegen Brute-Force-Raten.
+
+    // Maximum wrong attempts for a single confirmation code (see
+    // factoryResetCodeAttempts in globals.h) before it becomes invalid and a
+    // new one has to be requested - a brake against brute-force guessing.
+
+#define FACTORY_RESET_MAX_ATTEMPTS 5
+#define WAIT_1h 3600000 // 1 Stunde in Millisekunden
+                        // 1 hour in milliseconds
+#define WAIT_6h 21600000 // 6 Stunden in Millisekunden
+                         // 6 hours in milliseconds
+
+    // Rocrail-Modellzeit: der TCP-Port des Servers ist praktisch immer 8051. Verbindungsversuch minuetlich,
+    // in eigener Task (rocrailConnectTaskFunc()) - ein nicht erreichbarer Server blockiert loop()/Webserver
+    // nicht.
+
+    // Rocrail model time: the server's TCP port is practically always 8051. Connection attempt once a minute,
+    // in its own task (rocrailConnectTaskFunc()) - an unreachable server does not block loop()/the web
+    // server.
+
+#define ROCRAIL_DEFAULT_PORT 8051
+#define ROCRAIL_CONNECT_TIMEOUT_MS 5000 // 5 Sekunden in Millisekunden - laeuft in einer eigenen Task, blockiert also nichts (siehe oben)
+                                        // 5 seconds in milliseconds - runs in its own task, so this blocks nothing (see above)
+#define ROCRAIL_RECONNECT_INTERVAL_MS WAIT_1m
+#define ROCRAIL_LOG_THROTTLE_LIMIT 2 // gemeinsame Grenze fuer gedrosselte Rocrail-Logs (siehe
+                                     // shouldLogThrottled() in rocrail_client.h) - eine Stelle
+                                     // statt mehrfach wiederholtem Literal.
+
+                                     // shared limit for throttled Rocrail logs (see
+                                     // shouldLogThrottled() in rocrail_client.h) - one spot
+                                     // instead of a repeated literal.
+
+    // Ab dieser Winkeldifferenz gilt ein Vorwaerts-Frame als abnormal
+    // (verzoegerter Frame, z.B. durch eine blockierende Web-Anfrage) statt
+    // als normaler Tick - siehe Abfederung in renderClockFrame() (display.h).
+
+    // Above this angle difference, a forward frame counts as abnormal (a
+    // delayed frame, e.g. a blocking web request) instead of a normal tick
+    // - see the easing in renderClockFrame() (display.h).
+
+#define SECOND_HAND_MAX_NORMAL_FORWARD_STEP_DEG 6.5f
+
+    // Ab diesem Divider werden Sekundenzeiger UND Nabe ausgeblendet (siehe
+    // renderClockFrame()) - bei so hoher Beschleunigung ist ihre Bewegung/
+    // Sichtbarkeit ohnehin kaum noch sinnvoll.
+
+    // From this divider onwards, the second hand AND the hub are hidden
+    // (see renderClockFrame()) - at such high acceleration their movement/
+    // visibility isn't meaningfully useful anyway.
+
+#define ROCRAIL_HIDE_DETAILS_DIVIDER 11
+
+    // Bleibt ein <clock>-Update laenger als das aus, gilt die Modellzeit als
+    // veraltet - die Uhr faellt dann auf NTP/RTC/DCF77 zurueck (siehe
+    // rocrailTimeReady in renderClockFrame()).
+
+    // If a <clock> update stays absent longer than this, the model time
+    // counts as stale - the clock then falls back to NTP/RTC/DCF77 (see
+    // rocrailTimeReady in renderClockFrame()).
+
+#define ROCRAIL_STALE_TIMEOUT_MS (2 * WAIT_1m)
+
+    // Weicht eine neu gemeldete <clock>-Zeit ab, wird sanft statt schlagartig
+    // angeglichen (siehe advanceRocrailTime()) - Anteil der Abweichung, der
+    // pro Sekunde ausgeglichen wird. Oberhalb von SNAP_THRESHOLD wird stattdessen sofort gesprungen.
+
+    // If a newly reported <clock> time differs, it's eased in smoothly
+    // instead of abruptly (see advanceRocrailTime()) - fraction of the
+    // deviation corrected per second. Above SNAP_THRESHOLD it snaps directly instead.
+
+#define ROCRAIL_DRIFT_CORRECTION_RATE 0.5f
+#define ROCRAIL_DRIFT_SNAP_THRESHOLD_SECONDS 30.0f
+
+    // Diagnose: R2RNet-Multicast mithoeren und jedes Paket unveraendert loggen (startR2rnetDebugListener()) -
+    // nur zur Analyse. 224.0.1.20:8051 ist laut wiki.rocrail.net die R2RNet-Adresse.
+
+    // Diagnostic: listen on the R2RNet multicast and log every packet unchanged (startR2rnetDebugListener())
+    // - analysis only. 224.0.1.20:8051 is the R2RNet address per wiki.rocrail.net.
+
+#define R2RNET_DEBUG_MULTICAST_IP "224.0.1.20"
+#define R2RNET_DEBUG_MULTICAST_PORT 8051
+#define R2RNET_DEBUG_PACKET_BUFFER_SIZE 512
+#define R2RNET_DEBUG_LOG_LIMIT 20 // nur so viele Pakete je Beitritt loggen - reicht zur Formatanalyse, schont Log/Flash
+                                  // log only this many packets per join - enough for format analysis, spares log/flash
+
+    // DCF77-Status-Punkt in der Topbar: dcfTimeFound/dcf77Count werden nie
+    // zurueckgesetzt, daher diese Schwellwerte, damit der Punkt bei
+    // Empfangsausfall wieder auf gelb/rot faellt statt fuer immer gruen zu bleiben.
+
+    // DCF77 status dot in the topbar: dcfTimeFound/dcf77Count are never
+    // reset, hence these thresholds so the dot falls back to yellow/red on
+    // a reception outage instead of staying green forever.
+
+#define DCF77_SYNC_STALE_AFTER (15 * WAIT_1m)
+#define DCF77_PULSE_STALE_AFTER WAIT_1m
+
+    // Anwesenheitserkennung DCF77: ein floatender Pin kann durch Rauschen
+    // einzelne Interrupts ausloesen, echter Empfang aendert dcf77Count
+    // dagegen regelmaessig - MIN_STREAK/MAX_GAP_MS verlangen mehrere passende Aenderungen in Folge.
+
+    // DCF77 presence detection: a floating pin can trigger stray interrupts
+    // from noise, genuine reception changes dcf77Count regularly instead -
+    // MIN_STREAK/MAX_GAP_MS require several matching changes in a row.
+
+#define DCF77_PRESENCE_MIN_STREAK 6
+#define DCF77_PRESENCE_MAX_GAP_MS 1500
+
+    // Rauschfilter fuer den Bit-Fortschritt (processDcf77Bits()): Flanken unter diesem Wert (Prellen, echte
+    // Zustaende dauern >= ~100 ms) werden verworfen, ohne den Referenzzeitpunkt zu verschieben.
+
+    // Noise filter for the bit progress (processDcf77Bits()): edges below this value (bounce, genuine states
+    // last >= ~100 ms) are discarded without shifting the reference timestamp.
+
+#define DCF77_BIT_NOISE_IGNORE_MS 70
+
+    // Sekundenraster-Dekoder: Impulsabstand ist bei DCF77 immer ein
+    // Vielfaches einer Sekunde, daher bleibt die Position auch bei
+    // schwachem Empfang erhalten. PULSE_MAX/ONE_MIN: Impuls-/Bit-1-Schwelle, SECOND_MS: Rasterweite, STEP_TOLERANCE: erlaubte Abweichung.
+
+    // Second-grid decoder: with DCF77 the pulse spacing is always a whole
+    // number of seconds, so the position survives even weak reception.
+    // PULSE_MAX/ONE_MIN: pulse/bit-1 threshold, SECOND_MS: grid width, STEP_TOLERANCE: allowed deviation.
+
+#define DCF77_PULSE_MAX_MS 450
+#define DCF77_PULSE_ONE_MIN_MS 150
+#define DCF77_SECOND_MS 1000
+#define DCF77_STEP_TOLERANCE_MS 300
+    // Wie viele Sekunden eine Empfangsluecke ueberbruecken darf, ohne dass
+    // das Sekundenraster (dcf77Phase in globals.h) verlorengeht - bei 60s
+    // liegt der ESP32-Quarzfehler noch weit unter STEP_TOLERANCE_MS.
+
+    // How many seconds a reception gap may bridge without losing the second
+    // grid (dcf77Phase in globals.h) - at 60s the ESP32's crystal error is
+    // still far below STEP_TOLERANCE_MS.
+#define DCF77_MAX_PHASE_GAP_SECONDS 60
+
+    // Minutenmarken-Erkennung: eine Rasterposition gilt als Marke, wenn sie
+    // mind. MIN_MISSES mal fehlte und mind. MIN_LEAD Vorsprung vor dem
+    // naechstbesten Kandidaten hat. COUNT_MAX halbiert die Zaehler, MISS_COUNT_MAX_GAP begrenzt eine einzelne ausgefallene Sekunde.
+
+    // Minute marker detection: a grid position counts as the marker once it
+    // missed at least MIN_MISSES times and leads the next best candidate by
+    // at least MIN_LEAD. COUNT_MAX halves the counters, MISS_COUNT_MAX_GAP bounds a single dropped second.
+
+#define DCF77_MISS_COUNT_MAX_GAP 5
+
+#define DCF77_MARKER_MIN_MISSES 3
+#define DCF77_MARKER_MIN_LEAD 2
+#define DCF77_MARKER_COUNT_MAX 200
+
+    // So viele Telegramme in Folge mit unmoeglichen Festbits (Bit0!=0 bzw.
+    // Bit20!=1) gelten als Beweis fuer eine falsche Minutenmarke - mehr als
+    // eines, da ein einzelner Stoerimpuls zufaellig auch nur diese Bits treffen kann.
+
+    // This many consecutive telegrams with impossible fixed bits (bit0!=0
+    // resp. bit20!=1) count as proof the minute marker is wrong - more than
+    // one, since a single spurious pulse can happen to hit just these bits.
+
+#define DCF77_STRUCT_FAIL_LIMIT 3
+
+    // Maximalalter des letzten dekodierten Telegramms als Zeitquelle (applyDcf77DecodedTime()) - die
+    // verstrichene Zeit wird ueber millis() exakt nachgerechnet.
+
+    // Max age of the last decoded telegram as a time source (applyDcf77DecodedTime()) - the elapsed time is
+    // added back precisely via millis().
+
+#define DCF77_DECODED_MAX_AGE (10 * WAIT_1m)
+
+    // Dauer des LED-Blitzes je DCF77-Impuls - ein fester Blitz, damit der Endzustand nicht von der Impulsanzahl
+    // abhaengt.
+
+    // Duration of the LED flash per DCF77 pulse - a fixed flash, so the final state does not depend on the pulse
+    // count.
+
+#define DCF77_LED_BLINK_MS 80
+
+    // Geschwindigkeit des Sekundenzeigers im Bahnhofsuhr-Modus: 60*975ms =
+    // 58,5s Umlauf (Original-Hilfiker-Wert), Rest der Minute ruht der Zeiger
+    // oben auf der 12. Wert fliesst auch in die Web-Live-Vorschau ein.
+
+    // Second hand speed in station-clock mode: 60*975ms = 58.5s per sweep
+    // (original Hilfiker value), the hand rests at the top for the rest of
+    // the minute. Also used by the web live preview.
+
+#define FAST_SECOND 975.0f
+
+    // Hoehe der scrollbaren Textfenster im Log-Tab und auf der Info-Seite -
+    // an EINER Stelle, damit beide Fenster gleich hoch bleiben. vh statt
+    // fester Pixel: reicht auf grossen Monitoren weiter runter, min-height haelt es auf Handys trotzdem gross genug.
+
+    // Height of the scrollable text windows in the Log tab and on the info
+    // page - in ONE place, so both windows stay the same height. vh instead
+    // of fixed pixels: reaches further down on large monitors, min-height still keeps it usable on phones.
+
+#define INFO_LOG_WINDOW_HEIGHT_CSS "height:72vh;min-height:400px;"
+
+    // Transparent in R5G6B5 RGB(16)
+
+#define TRANSPARENT_COLOR 0x0120
+
