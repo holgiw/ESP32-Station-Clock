@@ -1,0 +1,39 @@
+@echo off
+rem Flasht die Uhr. Doppelklick: sucht zuerst die Uhr, fragt Displaytyp und WLAN
+rem ab, flasht sie und sendet danach die Einstellungen und die Uhrzeit des PCs
+rem per USB. Nur die Uhrzeit setzen: setTime.bat.
+rem Aufruf mit Parametern ohne Rueckfragen: flashESP.bat 3  (fuer COM3),
+rem optional mit Displaytyp: flashESP.bat 3 GC9D01  (ESP32-S2: 1/GC9A01,
+rem 2/GC9A01_WITH_BACKLIGHT, 3/GC9D01, 4/ILI9341; ESP32-C6: 1/ST7789, 2/ST7789_240;
+rem ESP32-S3-LCD-1.28: Display fest verbaut, keine Abfrage).
+rem Das Board erkennt das Skript am USB-Port und laedt den Build dieses Chips vom GitHub-Release
+rem (Internet noetig, kein Rueckfall auf lokale Dateien; im Repository und im Werkzeug-Zip liegen die Builds mit: dann ohne Internet). Am Ende ist die COM-Schnittstelle frei
+rem (kein serieller Monitor; clocksetup.ps1 -Flash -Monitor zeigt die Ausgabe der Uhr).
+rem Ablauf in clocksetup.ps1, Portsuche und Umschalten einer laufenden Uhr in den
+rem Download-Modus in port.ps1.
+rem Flashes the clock. Double-click: first finds the clock, asks for the display
+rem type and WiFi, flashes it and afterwards sends the settings and the PC's time
+rem via USB. Only set the time: setTime.bat.
+rem Usage with parameters without questions: flashESP.bat 3  (for COM3),
+rem optionally with display type: flashESP.bat 3 GC9D01  (ESP32-S2: 1/GC9A01,
+rem 2/GC9A01_WITH_BACKLIGHT, 3/GC9D01, 4/ILI9341; ESP32-C6: 1/ST7789, 2/ST7789_240;
+rem ESP32-S3-LCD-1.28: display built in, no question).
+rem The script recognizes the board by the USB port and downloads the build of that chip from the
+rem GitHub release (internet needed, no fallback to local files; the repository and the tools zip contain the builds: then no internet). At the end the COM port is free
+rem (no serial monitor; clocksetup.ps1 -Flash -Monitor shows the clock's output).
+rem Flow in clocksetup.ps1, port search and switching a running clock into download
+rem mode in port.ps1.
+setlocal
+cd /d "%~dp0"
+if not exist "%~dp0clocksetup.ps1" (
+    echo clocksetup.ps1 fehlt - das Zip zuerst komplett in einen Ordner auspacken und dort starten.
+    echo clocksetup.ps1 is missing - first unpack the whole zip into a folder and start it there.
+    pause
+    exit /b 1
+)
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0clocksetup.ps1" -Flash -Port "%~1" -Display "%~2"
+if not defined NOPAUSE (
+    echo.
+    set "ENTER="
+    set /p "ENTER=Eingabetaste druecken zum Beenden / Press Enter to close . . . "
+)
