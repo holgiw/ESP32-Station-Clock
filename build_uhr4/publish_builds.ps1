@@ -1,7 +1,7 @@
 # Erzeugt die Pakete, die flashESP.bat / flashESP.sh beim Flashen vom GitHub-Release laden:
-# je Chip uhr4-esp32s2.zip, uhr4-esp32c6.zip, uhr4-esp32s3.zip, uhr4-esp32s3lcd4.zip, uhr4-esp32s3qualia.zip (Bootloader, Partitionstabelle,
+# je Chip uhr4-esp32s2.zip, uhr4-esp32c6.zip, uhr4-esp32s3.zip, uhr4-esp32s3lcd4.zip (Bootloader, Partitionstabelle,
 # App, bei C6 und S3 boot_app0.bin - flach im Zip) und dazu uhr4-<chip>.sha256 ("<SHA-256>  <Zip>").
-# Quelle sind die Ordner esp32s2, esp32c6, esp32s3, esp32s3lcd4 und esp32s3qualia neben diesem Skript.
+# Quelle sind die Ordner esp32s2, esp32c6, esp32s3 und esp32s3lcd4 neben diesem Skript.
 #   .\publish_builds.ps1                      Pakete in einen Ordner schreiben (Standard: Temp), nichts hochladen
 #   .\publish_builds.ps1 -OutDir C:\test      Zielordner angeben
 #   .\publish_builds.ps1 -Upload              zusaetzlich in das Release hochladen (gh, ersetzt vorhandene Dateien)
@@ -10,9 +10,9 @@
 # Zum Testen ohne Release: $env:UHR4_BUILD_URL = 'file:///C:/test' vor flashESP.bat bzw. clocksetup.ps1.
 #
 # Creates the packages that flashESP.bat / flashESP.sh download from the GitHub release when flashing:
-# per chip uhr4-esp32s2.zip, uhr4-esp32c6.zip, uhr4-esp32s3.zip, uhr4-esp32s3lcd4.zip, uhr4-esp32s3qualia.zip (bootloader, partition table, app,
+# per chip uhr4-esp32s2.zip, uhr4-esp32c6.zip, uhr4-esp32s3.zip, uhr4-esp32s3lcd4.zip (bootloader, partition table, app,
 # boot_app0.bin for C6 and S3 - flat in the zip) and uhr4-<chip>.sha256 ("<SHA-256>  <zip>").
-# The source is the folders esp32s2, esp32c6, esp32s3, esp32s3lcd4 and esp32s3qualia next to this script.
+# The source is the folders esp32s2, esp32c6, esp32s3 and esp32s3lcd4 next to this script.
 #   .\publish_builds.ps1                      write the packages to a folder (default: temp), upload nothing
 #   .\publish_builds.ps1 -OutDir C:\test      set the target folder
 #   .\publish_builds.ps1 -Upload              also upload to the release (gh, replaces existing files)
@@ -37,9 +37,7 @@ if (-not (Test-Path $esp)) {
     if ($core) { $esp = $core.FullName }
 }
 if (-not (Test-Path $esp)) { throw 'esptool.exe not found (build_uhr4 or Arduino ESP32 core)' }
-# Das Qualia-Paket ist dabei, aber NICHT AM GERAET GETESTET (Release-Notizen und flashESP weisen darauf hin)
-# The Qualia package is included, but NOT TESTED ON THE DEVICE (release notes and flashESP point this out)
-$chips = @('s2', 'c6', 's3', 's3lcd4', 's3qualia')
+$chips = @('s2', 'c6', 's3', 's3lcd4')
 
 # Nichts veroeffentlichen, was den Windows-Benutzernamen oder Projektpfade des Build-PCs enthaelt (buildAll.bat setzt dafuer
 # -ffile-prefix-map). Pruefung der App-Images aller Chips.

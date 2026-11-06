@@ -336,17 +336,15 @@
 
 #else
 
-    void lcd4TouchDone() {} // Qualia: lcd4TouchPressed() meldet jede Beruehrung nur einmal / reports every touch only once
+    void lcd4TouchDone() {} // Platzhalter fuer Boards ohne Touch / placeholder for boards without touch
 
 #endif
 
     // Beruehrung des Displays: wie ein kurzer Tastendruck die WLAN-Anzeige (Name, IP-Adresse) fuer 5 Sekunden zeigen,
-    // dann zurueck zur Uhr. Abgefragt wird alle 25 ms; der Touch-Chip je Board in lcd4TouchPressed() (Waveshare: system_utils.h,
-    // Qualia: lgfx_qualia.h).
+    // dann zurueck zur Uhr. Abgefragt wird alle 25 ms; der Touch-Chip je Board in lcd4TouchPressed() (system_utils.h).
 
     // Touching the display: like a short button press show the WiFi info (name, IP address) for 5 seconds, then back to
-    // the clock. Polled every 25 ms; the touch chip per board in lcd4TouchPressed() (Waveshare: system_utils.h, Qualia:
-    // lgfx_qualia.h).
+    // the clock. Polled every 25 ms; the touch chip per board in lcd4TouchPressed() (system_utils.h).
 
     void checkTouch() {
         static unsigned long lastPoll = 0, lastReinit = 0, lastExpander = 0;

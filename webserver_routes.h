@@ -36,6 +36,7 @@
 
     String generateHtmlHeader(String extraHead) {
         String html = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">";
+        html += "<title>uhr4 - " + escapeHtmlText(String(hostname)) + "</title>"; // Name im Browser-Tab, sonst zeigt er nur die IP-Adresse / name in the browser tab, otherwise it shows only the IP address
         html.reserve(5000);  // Vorab reservierter Speicher fuer CSS+HTML
                               // Pre-reserved capacity for CSS+HTML
 
@@ -3103,6 +3104,15 @@
             // Save the logging setting - when switching it off, delete all log files and reset the counter
             // (deleteAllLogFiles()).
 
+            // Onboard-LED-Haken nur auswerten, wenn er gezeichnet wurde (Board mit LED)
+            // Evaluate the onboard LED checkbox only if it was rendered (board with an LED)
+
+            if (LED_BOARD >= 0) {
+                boardLedEnabled = webserver.hasArg("boardLed");
+                preferences.putBool(PK_BOARD_LED, boardLedEnabled);
+                if (!boardLedEnabled) setLedOff();
+            }
+
             bool wasLoggingEnabled = preferences.getBool(PK_LOGGING_ENABLED, false);
             loggingEnabled = webserver.hasArg("loggingEnabled");
             preferences.putBool(PK_LOGGING_ENABLED, loggingEnabled);
@@ -3820,7 +3830,7 @@
             generateStatusItems(chunk, [](String& part) { webserver.sendContent(part); part = ""; });
             chunk += "</ul>";
             chunk += "</br>";
-            chunk += "<li>Contact: <a href='mailto:howl-clock@gmx.de'>howl-clock@gmx.de</a></li>";
+            chunk += "<li>Contact: <a href='mailto:carleaner@gmx.de'>carleaner@gmx.de</a></li>";
 
             chunk += "<li>Project: <a href='" GITHUB_REPO_URL "' target='_blank'>GitHub</a></li>";
 
@@ -5331,7 +5341,7 @@
             generateStatusItems(chunk, [](String& part) { webserver.sendContent(part); part = ""; });
             chunk += "</ul>";
             chunk += "</br>";
-            chunk += "<li>Contact: <a href='mailto:howl-clock@gmx.de'>howl-clock@gmx.de</a></li>";
+            chunk += "<li>Contact: <a href='mailto:carleaner@gmx.de'>carleaner@gmx.de</a></li>";
             chunk += "<li>Project: <a href='" GITHUB_REPO_URL "' target='_blank'>GitHub</a></li>";
             chunk += "</ul>";
             chunk += "</div>"; // Ende .card
@@ -5803,6 +5813,13 @@
 
             chunk += checkboxRow("rocrailEnabled", rocrailEnabled, translate("Rocrail"), translate("Take over the model time from a Rocrail server (model railroad control software) for the hands - unlocks the Rocrail tab, where the server address can then be entered"));
 
+            // Onboard-LED ganz abschalten (Default an); nur auf Boards mit LED (S2, C6). Zwischen Rocrail und Logging.
+            // Switch the onboard LED off completely (default on); only on boards with an LED (S2, C6). Between Rocrail and logging.
+
+            if (LED_BOARD >= 0) {
+                chunk += checkboxRow("boardLed", boardLedEnabled, translate("Onboard LED"), translate("Unchecked, the LED on the board stays off completely: not at start, not on web access, not on DCF77 reception and not on WPS"));
+            }
+
             chunk += checkboxRow("loggingEnabled", loggingEnabled, translate("Enable Logging"), translate("Writes up to 9 log files to LittleFS for troubleshooting, switches off after 24 hours"));
 
             // Nur sichtbar mit DCF77-Hardware UND dcf77Confirmed - ohne je
@@ -5835,7 +5852,6 @@
                     { "ST7789", DISPLAY_TYPE_ST7789, "ST7789 (172x320, ESP32-C6-LCD-1.47) with time and date strip" },
                     { "ST7789_240", DISPLAY_TYPE_ST7789_240, "ST7789 (240x240, ESP32-C6-LCD-1.3)" },
                     { "ST7701_480", DISPLAY_TYPE_ST7701_480, "ST7701 (480x480, ESP32-S3-Touch-LCD-4)" },
-                    { "TL021_480", DISPLAY_TYPE_TL021_480, "TL021WVC02 (480x480 round, Adafruit Qualia)" },
                 };
                 chunk += "<div style='display:flex;flex-wrap:wrap;align-items:center;gap:6px;'>" + translate("Display type") + ": " + infoTip(withBacklightPin(translate("Type of the connected display - applies to both displays. BL = backlight: with BL the brightness is controlled via PWM on pin {pin} (same as the backlight checkbox in the brightness tab), without BL by darkening the pixels. Switching to another display type restarts the clock and resets backlight, brightness and hub size to the defaults of the new type; uploaded clock faces and hands only fit the size they were made for (GC9A01 and ILI9341 share the 240 size)"))) + " ";
                 chunk += "<select data-cur='" + String(curChoice) + "' data-t='" + String(displayType) + "' style='min-width:190px;max-width:100%;' onchange=\"var o=this.options[this.selectedIndex];if(confirm('" + translate("Change the display type to") + ": '+o.text+'?'+(o.dataset.t!=this.dataset.t?'\\n" + translate("The clock restarts to apply the display type") + ".':''))){var f=document.createElement('form');f.method='POST';f.action='/save_displaytype';var i=document.createElement('input');i.type='hidden';i.name='display';i.value=this.value;f.appendChild(i);document.body.appendChild(f);f.submit();}else{this.value=this.dataset.cur;}\">";

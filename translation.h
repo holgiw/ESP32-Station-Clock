@@ -314,6 +314,8 @@
         { "Try again", "Erneut versuchen" },
         { "Return to the main page in 10 seconds or refresh the website when the ESP is online again", "Kehren Sie in 10 Sekunden zur Hauptseite zur&uuml;ck oder aktualisieren Sie die Website, wenn der ESP wieder online ist" },
         { "Enable Logging", "Logging aktivieren" },
+        { "Onboard LED", "Onboard-LED" },
+        { "Unchecked, the LED on the board stays off completely: not at start, not on web access, not on DCF77 reception and not on WPS", "Ohne Haken bleibt die LED auf dem Board komplett aus: nicht beim Start, nicht bei Zugriffen auf die Weboberfl&auml;che, nicht beim DCF77-Empfang und nicht bei WPS" },
         { "Log file", "Log-Datei" },
         { "Auto-refresh (10s)", "Automatisch aktualisieren (10s)" },
         { "Logging is disabled.", "Logging ist deaktiviert." },

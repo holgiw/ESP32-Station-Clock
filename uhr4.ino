@@ -1,7 +1,7 @@
-    // howl-clock@gmx.de - Stationsuhr uhr4: ESP32-S2 Mini (Lolin S2 Pico), LittleFS, TFT
+    // carleaner@gmx.de - Stationsuhr uhr4: ESP32-S2 Mini (Lolin S2 Pico), LittleFS, TFT
     // GC9A01/GC9D01/ILI9341, ESP32-C6 mit ST7789 oder ESP32-S3 mit GC9A01. DCF77-Modul: https://de.elv.com/p/elv-dcf-empfangsmodul-dcf-2-P091610/
 
-    // Bibliotheken (Bibliotheksverwalter): LovyanGFX 1.2.31, RTClib 2.1.4 mit Adafruit BusIO 1.17.4. WiFi,
+    // Bibliotheken (Bibliotheksverwalter): LovyanGFX 1.3.0, RTClib 2.1.4 mit Adafruit BusIO 1.17.4. WiFi,
     // WebServer, LittleFS, Preferences, DNSServer, ESPmDNS und Wire bringt der Core "esp32" 3.3.12 von
     // Espressif mit.
 
@@ -24,10 +24,10 @@
     // liest board.txt. Arduino IDE: platform.local.txt aus dem Projektordner nach
     // %LOCALAPPDATA%\Arduino15\packages\esp32\hardware\esp32\3.3.12\ kopieren (Linux/macOS: siehe Datei).
 
-    // howl-clock@gmx.de - station clock uhr4: ESP32-S2 Mini (Lolin S2 Pico), LittleFS, TFT
+    // carleaner@gmx.de - station clock uhr4: ESP32-S2 Mini (Lolin S2 Pico), LittleFS, TFT
     // GC9A01/GC9D01/ILI9341, ESP32-C6 with ST7789 or ESP32-S3 with GC9A01. DCF77 module: https://de.elv.com/p/elv-dcf-empfangsmodul-dcf-2-P091610/
 
-    // Libraries (Library Manager): LovyanGFX 1.2.31, RTClib 2.1.4 with Adafruit BusIO 1.17.4. WiFi,
+    // Libraries (Library Manager): LovyanGFX 1.3.0, RTClib 2.1.4 with Adafruit BusIO 1.17.4. WiFi,
     // WebServer, LittleFS, Preferences, DNSServer, ESPmDNS and Wire come with the "esp32" core 3.3.12 by
     // Espressif.
 
@@ -426,6 +426,16 @@ void setup() {
         struct timeval noTime = { 0, 0 };
         settimeofday(&noTime, nullptr);
 
+        // Abgeschaltete Onboard-LED schon vor dem Laden der Einstellungen beachten, damit sie beim Start nie aufleuchtet
+        // Honour a switched-off onboard LED before the settings are loaded so it never lights up at boot
+
+        {
+            Preferences ledPrefs;
+            if (ledPrefs.begin("clock", true)) {
+                boardLedEnabled = ledPrefs.getBool(PK_BOARD_LED, true);
+                ledPrefs.end();
+            }
+        }
         setLedOn();
 
         Serial.begin(115200);
@@ -664,6 +674,8 @@ void setup() {
         // LED flash during DCF77 sync, switchable via checkbox (dcfSyncLedEnabled) - on by default.
 
         dcfSyncLedEnabled = preferences.getBool(PK_DCF_SYNC_LED, true);
+        boardLedEnabled = preferences.getBool(PK_BOARD_LED, true);
+        if (!boardLedEnabled) setLedOff();
 
         DEBUG_PRINTLN("[SETUP] Initializing..");
 

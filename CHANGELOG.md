@@ -2,6 +2,20 @@
 
 *English version below.*
 
+## 2026-11-06
+
+### Hinzugefügt
+- `buildAll.bat -parallel` baut alle gewählten Chips gleichzeitig (eigene Prozesse, eigener Cache je Chip). Gemessen auf einem Rechner mit 16 Kernen und 15 GB RAM: 10:32 Minuten statt etwa 59 Minuten nacheinander (S3 10:30, S2 10:03, C6 10:13, S3-480 10:31). Mit weniger Arbeitsspeicher kann es langsamer sein. Ohne `-parallel` baut es wie bisher nacheinander. Am Ende stehen jetzt in beiden Fällen die Bauzeit je Chip und die Gesamtzeit.
+- Onboard-LED abschaltbar (ESP32-S2 und ESP32-C6, Boards mit LED): Im Tab „Uhr Einstellungen“ gibt es zwischen „Rocrail“ und „Logging aktivieren“ den Haken „Onboard-LED“ (ab Werk an). Ohne Haken bleibt die LED komplett aus: nicht beim Start (die Einstellung wird schon vor dem Laden der übrigen Einstellungen gelesen), nicht bei Zugriffen auf die Weboberfläche, nicht beim DCF77-Empfang und nicht bei WPS. Preferences-Schlüssel `boardLed`.
+
+### Entfernt
+- Adafruit Qualia ESP32-S3 (Ziel `s3qualia`) ist vollständig entfernt: Quelltext (`lgfx_qualia.h`, Displaytyp `TL021_480`, Pinbelegung, Startfolge), `buildAll.bat s3qualia`, Build-Ordner und Release-Paket `uhr4-esp32s3qualia`, `uhr4-s3qualia.bin`, die Abfrage in `flashESP`, die Erkennung von Adafruit-Boards in `port.ps1`/`flashESP.sh`, die README- und Lizenzangaben. Es bleiben vier Ziele: S3, S2, C6 und S3-480.
+
+### Geändert
+- Browser-Tab: Alle Seiten der Weboberfläche haben jetzt den Titel „uhr4 - <Hostname>“ (vorher gab es keinen, der Browser zeigte nur die IP-Adresse).
+- LovyanGFX 1.3.0 (vorher 1.2.36); alle Ziele wurden damit neu gebaut. Der Kommentar in `uhr4.ino` nennt die Version.
+- Kontaktadresse im Quelltext-Kopf und auf der Info-Seite der Weboberfläche: carleaner@gmx.de statt der bisherigen Adresse.
+
 ## 2026-10-30
 
 ### Hinzugefügt
@@ -526,6 +540,20 @@
 ---
 
 # English Version
+
+## 2026-11-06
+
+### Added
+- `buildAll.bat -parallel` builds all chosen chips at the same time (own processes, own cache per chip). Measured on a machine with 16 cores and 15 GB RAM: 10:32 minutes instead of about 59 minutes one after another (S3 10:30, S2 10:03, C6 10:13, S3-480 10:31). With less RAM it can be slower. Without `-parallel` it builds one after another as before. At the end both modes now show the build time per chip and the total time.
+- Onboard LED can be switched off (ESP32-S2 and ESP32-C6, boards with an LED): in the "Clock Setup" tab there is the checkbox "Onboard LED" (on by default) between "Rocrail" and "Enable Logging". Unchecked, the LED stays off completely: not at start (the setting is read before the other settings are loaded), not on web access, not on DCF77 reception and not on WPS. Preferences key `boardLed`.
+
+### Removed
+- The Adafruit Qualia ESP32-S3 (target `s3qualia`) is removed completely: source code (`lgfx_qualia.h`, display type `TL021_480`, pin mapping, start-up sequence), `buildAll.bat s3qualia`, the build folder and the release package `uhr4-esp32s3qualia`, `uhr4-s3qualia.bin`, the question in `flashESP`, the detection of Adafruit boards in `port.ps1`/`flashESP.sh`, the README and license entries. Four targets remain: S3, S2, C6 and S3-480.
+
+### Changed
+- Browser tab: all pages of the web interface now have the title "uhr4 - <hostname>" (there was none before, the browser showed only the IP address).
+- LovyanGFX 1.3.0 (before: 1.2.36); all targets were rebuilt with it. The comment in `uhr4.ino` names the version.
+- Contact address in the source header and on the info page of the web interface: carleaner@gmx.de instead of the previous address.
 
 ## 2026-10-30
 

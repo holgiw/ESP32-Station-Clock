@@ -36,6 +36,8 @@
                                                                  // get the time from open WiFis at boot (default true)
     constexpr const char* PK_DCF_SYNC_LED      = "dcfSyncLed"; // LED blitzt pro DCF77-Impuls waehrend der Sync-Phase (Default true)
                                                                // LED flashes per DCF77 pulse during the sync phase (default true)
+    constexpr const char* PK_BOARD_LED         = "boardLed"; // Onboard-LED ganz abschaltbar, auch Start/HTTP/DCF77/WPS (Default true)
+                                                             // onboard LED switchable off completely, also boot/HTTP/DCF77/WPS (default true)
 
     // Zifferblatt / Darstellung
     // Clock Face / Display

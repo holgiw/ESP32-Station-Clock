@@ -308,6 +308,14 @@
                                     // switchable via checkbox (default: on) - only controls whether loop() executes
                                     // the blink requested via dcfLedTogglePending (see PK_DCF_SYNC_LED)
 
+    // Onboard-LED (blau, LED_BOARD) ganz abschaltbar (Default: an): aus = setLedOn() schaltet nie ein - weder beim
+    // Start, bei HTTP-Zugriffen, beim DCF77-Empfang noch bei WPS (siehe PK_BOARD_LED).
+
+    // Onboard LED (blue, LED_BOARD) switchable off completely (default: on): off = setLedOn() never switches it on -
+    // neither at boot, on HTTP access, on DCF77 reception nor on WPS (see PK_BOARD_LED).
+
+    bool boardLedEnabled = true;
+
     time_t lastDcfSyncTime = 0; // Unix-Zeitstempel der letzten erfolgreichen DCF77-Synchronisation (0 = noch nie)
                                 // Unix timestamp of the last successful DCF77 sync (0 = never)
 

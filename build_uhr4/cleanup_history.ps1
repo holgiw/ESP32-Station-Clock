@@ -14,7 +14,7 @@
 # fetched again (git fetch, git reset --hard origin/master).
 param(
     [switch]$Push,
-    [string[]]$Folder = @('build_uhr4/esp32s2', 'build_uhr4/esp32c6', 'build_uhr4/esp32s3', 'build_uhr4/esp32s3lcd4', 'build_uhr4/esp32s3qualia'),
+    [string[]]$Folder = @('build_uhr4/esp32s2', 'build_uhr4/esp32c6', 'build_uhr4/esp32s3', 'build_uhr4/esp32s3lcd4'),
     [string]$Branch = 'master'
 )
 # Continue statt Stop: Windows PowerShell 5.1 macht aus Textausgaben von git auf stderr sonst Fehler; Rueckgabewerte werden einzeln geprueft
