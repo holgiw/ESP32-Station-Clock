@@ -85,7 +85,6 @@
     bool displayTypeSupported(uint8_t type) {
         bool c6Type = type == DISPLAY_TYPE_ST7789 || type == DISPLAY_TYPE_ST7789_240;
         if (BOARD_WAVESHARE_S3_LCD4) return type == DISPLAY_TYPE_ST7701_480;
-        if (BOARD_QUALIA) return type == DISPLAY_TYPE_TL021_480;
         if (BOARD_WAVESHARE_S3_GC9A01) return type == DISPLAY_TYPE_GC9A01;
         return BOARD_WAVESHARE_C6_ST7789 ? c6Type : type < DISPLAY_TYPE_ST7701_480 && !c6Type;
     }
@@ -95,7 +94,6 @@
 
     const char* supportedDisplayNames() {
         if (BOARD_WAVESHARE_S3_LCD4) return "ST7701_480";
-        if (BOARD_QUALIA) return "TL021_480";
         if (BOARD_WAVESHARE_S3_GC9A01) return "GC9A01, GC9A01_WITH_BACKLIGHT";
         return BOARD_WAVESHARE_C6_ST7789 ? "ST7789, ST7789_240" : "GC9A01, GC9A01_WITH_BACKLIGHT, GC9D01, ILI9341";
     }
@@ -116,7 +114,6 @@
         else if (name == "ST7789") { type = DISPLAY_TYPE_ST7789; backlight = true; }
         else if (name == "ST7789_240") { type = DISPLAY_TYPE_ST7789_240; backlight = true; }
         else if (name == "ST7701_480") { type = DISPLAY_TYPE_ST7701_480; backlight = true; } // PWM ueber den Port-Expander / PWM via the port expander
-        else if (name == "TL021_480") { type = DISPLAY_TYPE_TL021_480; backlight = false; } // Beleuchtung nur an/aus / backlight only on/off
         else return false;
         return displayTypeSupported(type);
     }
@@ -133,7 +130,6 @@
         if (type == DISPLAY_TYPE_ST7789) return "ST7789";
         if (type == DISPLAY_TYPE_ST7789_240) return "ST7789_240";
         if (type == DISPLAY_TYPE_ST7701_480) return "ST7701_480";
-        if (type == DISPLAY_TYPE_TL021_480) return "TL021_480";
         return backlight ? "GC9A01_WITH_BACKLIGHT" : "GC9A01";
     }
 
@@ -8334,11 +8330,11 @@
     }
 
 
-    // Schaltet die LED ein - ohne Board-LED nichts
-    // Turns the LED on - nothing without a board LED
+    // Schaltet die LED ein - ohne Board-LED oder bei abgeschalteter LED (boardLedEnabled) nichts
+    // Turns the LED on - nothing without a board LED or with the LED switched off (boardLedEnabled)
 
     void setLedOn() {
-        if (LED_BOARD < 0) return;
+        if (LED_BOARD < 0 || !boardLedEnabled) return;
         pinMode(LED_BOARD, OUTPUT);
         digitalWrite(LED_BOARD, HIGH);
     }

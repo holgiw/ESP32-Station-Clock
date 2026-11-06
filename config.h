@@ -21,8 +21,7 @@
 #define DISPLAY_TYPE_ST7789  3   // Waveshare ESP32-C6-LCD-1.47 (172x320)
 #define DISPLAY_TYPE_ST7789_240 4 // Waveshare ESP32-C6-LCD-1.3 (240x240)
 #define DISPLAY_TYPE_ST7701_480 5 // Waveshare ESP32-S3-Touch-LCD-4 (480x480, RGB-Bus)
-#define DISPLAY_TYPE_TL021_480 6  // Adafruit Qualia ESP32-S3 mit dem 2,1" runden Display TL021WVC02 (480x480, RGB-Bus)
-#define DISPLAY_TYPE_COUNT   7
+#define DISPLAY_TYPE_COUNT   6
 
     // Board, erkannt am Chip: ESP32-S2 (Lolin S2 Pico) mit wechselbarem Display, Waveshare ESP32-C6-LCD mit
     // fest verbautem ST7789 (1.47 = 172x320 oder 1.3 = 240x240, welches waehlt der Displaytyp) oder Waveshare
@@ -38,8 +37,6 @@
 #if CONFIG_IDF_TARGET_ESP32S3
 #ifdef UHR4_BOARD_S3_LCD4
 #define CHIP_SHORT_NAME "S3-480"
-#elif defined(UHR4_BOARD_QUALIA)
-#define CHIP_SHORT_NAME "S3-QUALIA"
 #else
 #define CHIP_SHORT_NAME "S3"
 #endif
@@ -65,34 +62,24 @@
 #define BOARD_WAVESHARE_C6_ST7789 1
 #define BOARD_WAVESHARE_S3_GC9A01 0
 #define BOARD_WAVESHARE_S3_LCD4 0
-#define BOARD_QUALIA 0
 #define DISPLAY_TYPE_DEFAULT DISPLAY_TYPE_ST7789
 #elif CONFIG_IDF_TARGET_ESP32S3 && defined(UHR4_BOARD_S3_LCD4)
 #define BOARD_WAVESHARE_C6_ST7789 0
 #define BOARD_WAVESHARE_S3_GC9A01 0
 #define BOARD_WAVESHARE_S3_LCD4 1
-#define BOARD_QUALIA 0
 #define DISPLAY_TYPE_DEFAULT DISPLAY_TYPE_ST7701_480
-#elif CONFIG_IDF_TARGET_ESP32S3 && defined(UHR4_BOARD_QUALIA)
-#define BOARD_WAVESHARE_C6_ST7789 0
-#define BOARD_WAVESHARE_S3_GC9A01 0
-#define BOARD_WAVESHARE_S3_LCD4 0
-#define BOARD_QUALIA 1
-#define DISPLAY_TYPE_DEFAULT DISPLAY_TYPE_TL021_480
 #elif CONFIG_IDF_TARGET_ESP32S3
 #define BOARD_WAVESHARE_C6_ST7789 0
 #define BOARD_WAVESHARE_S3_GC9A01 1
 #define BOARD_WAVESHARE_S3_LCD4 0
-#define BOARD_QUALIA 0
 #define DISPLAY_TYPE_DEFAULT DISPLAY_TYPE_GC9A01
 #else
 #define BOARD_WAVESHARE_C6_ST7789 0
 #define BOARD_WAVESHARE_S3_GC9A01 0
 #define BOARD_WAVESHARE_S3_LCD4 0
-#define BOARD_QUALIA 0
 #define DISPLAY_TYPE_DEFAULT DISPLAY_TYPE_GC9A01
 #endif
-#define BOARD_RGB_PANEL (BOARD_WAVESHARE_S3_LCD4 || BOARD_QUALIA) // RGB-Panel am ESP32-S3, gemeinsamer Code / RGB panel on the ESP32-S3, shared code
+#define BOARD_RGB_PANEL BOARD_WAVESHARE_S3_LCD4 // RGB-Panel am ESP32-S3 / RGB panel on the ESP32-S3
 #define BOARD_S3_ANY (BOARD_WAVESHARE_S3_GC9A01 || BOARD_RGB_PANEL)
 
 #if defined(GC9A01) || defined(GC9D01) || defined(GC9A01_WITH_BACKLIGHT) || defined(ILI9341)
@@ -113,8 +100,6 @@
 #define BUILD_DISPLAY_MARKER "UHR4_BUILD_DISPLAY=GC9A01_S3"
 #elif BOARD_WAVESHARE_S3_LCD4
 #define BUILD_DISPLAY_MARKER "UHR4_BUILD_DISPLAY=ST7701_480_S3"
-#elif BOARD_QUALIA
-#define BUILD_DISPLAY_MARKER "UHR4_BUILD_DISPLAY=TL021_480_S3"
 #else
 #define BUILD_DISPLAY_MARKER "UHR4_BUILD_DISPLAY=GC9A01+GC9D01+ILI9341"
 #endif
@@ -274,65 +259,6 @@
 #define DCF77_DATAPIN -1   // kein DCF77-Empfaenger moeglich / no DCF77 receiver possible
 #define TFT_Backlight -1   // Beleuchtung nur an/aus ueber den Expander (EXIO1), kein PWM-Pin
                            // backlight only on/off via the expander (EXIO1), no PWM pin
-
-#elif BOARD_QUALIA
-
-    // Adafruit Qualia ESP32-S3 for RGB666 displays mit dem 2,1" runden Display TL021WVC02 (480x480): RGB-Bus (Pins in
-    // lgfx_config.h), Port-Expander PCA9554A (0x3F) an I2C 8/18 fuer Reset, Beleuchtung, 3-Draht-SPI und zwei Tasten, Touch CST826
-    // (0x15). Das Board nutzt das USB des ESP32-S3 selbst (GPIO 19/20): "USB CDC On Boot: Enabled". Pins nach der Variante
-    // "adafruit_qualia_s3_rgb666" des ESP32-Cores. NICHT AM GERAET GETESTET.
-
-    // Adafruit Qualia ESP32-S3 for RGB666 displays with the 2.1" round display TL021WVC02 (480x480): RGB bus (pins in
-    // lgfx_config.h), port expander PCA9554A (0x3F) on I2C 8/18 for reset, backlight, 3-wire SPI and two buttons, touch CST826
-    // (0x15). The board uses the ESP32-S3's own USB (GPIO 19/20): "USB CDC On Boot: Enabled". Pins per the variant
-    // "adafruit_qualia_s3_rgb666" of the ESP32 core. NOT TESTED ON THE DEVICE.
-
-#if !ARDUINO_USB_CDC_ON_BOOT
-#error "Qualia: Board-Option USB CDC On Boot auf Enabled stellen / set the board option USB CDC On Boot to Enabled"
-#endif
-
-#ifndef ARDUINO_PARTITION_app3M_fat9M_16MB
-#error "Qualia: Flash Size 16MB, Partition Scheme '16M Flash (3MB APP/9.9MB FATFS)' waehlen / choose it"
-#endif
-
-#ifndef BOARD_HAS_PSRAM
-#error "Qualia: PSRAM 'OPI PSRAM' waehlen / choose it"
-#endif
-
-    // Freie Stifte der Stiftleiste als Platzhalter (GPIO 0 ist hier eine RGB-Datenleitung und darf nicht abgefragt werden):
-    // Lichtsensor 5/6/7, Taster 16 (BUTTON1, high-aktiv) und 17 (BOOT_BUTTON, low-aktiv), DCF77 4. Zusaetzlich zaehlen die
-    // Tasten UP/DOWN am Expander (extraButtonDown()). CS_1 liegt auf 15 (nur Platzhalter, der Controller wird ueber den Expander
-    // angesprochen).
-
-    // Free header pins as placeholders (GPIO 0 is an RGB data line here and must not be read): light sensor 5/6/7, button
-    // 16 (BUTTON1, active high) and 17 (BOOT_BUTTON, active low), DCF77 4. In addition the buttons UP/DOWN on the expander count
-    // (extraButtonDown()). CS_1 is on 15 (only a placeholder, the controller is addressed via the expander).
-
-#define LED_BOARD      -1   // keine LED / no LED
-#define LED_BOARD_GPIO -1
-
-#define ADC_3V 5
-#define ADC_PIN 6
-#define ADC_GND 7
-
-#define BUTTON1 16
-#define BOOT_BUTTON 17
-
-#define SDA_PIN 8
-#define SCL_PIN 18
-
-#define TFT_SCLK  -1
-#define TFT_MOSI  -1
-#define TFT_DC    -1
-#define TFT_RST   -1
-
-#define CS_1    15
-#define CS_2    -1
-#define LGFX_CS_PIN CS_1
-
-#define DCF77_DATAPIN 4
-#define TFT_Backlight -1   // Beleuchtung nur an/aus ueber den Expander (Pin 4), kein PWM-Pin
-                           // backlight only on/off via the expander (pin 4), no PWM pin
 
 #elif BOARD_WAVESHARE_S3_GC9A01
 
@@ -523,8 +449,6 @@
 
 #if BOARD_WAVESHARE_S3_LCD4
 #define FW_UPDATE_ASSET "uhr4-s3lcd4"
-#elif BOARD_QUALIA
-#define FW_UPDATE_ASSET "uhr4-s3qualia"
 #else
 #define FW_UPDATE_ASSET "uhr4-s3"
 #endif
@@ -666,11 +590,6 @@ constexpr DisplayGeometry DISPLAY_GEOMETRY[DISPLAY_TYPE_COUNT] = {
     // Backlight only on/off (BL false), software rotation (image in PSRAM), square without a strip.
 
     { "ST7701_480", 480,  42,  51,  50, 262, 200,  240,  4, 12,  true,  true,  480,   480,   false },
-
-    // TL021_480 (Adafruit Qualia mit 2,1" rundem Display): wie ST7701_480, aber rund; Beleuchtung nur an/aus (BL false)
-    // TL021_480 (Adafruit Qualia with the 2.1" round display): like ST7701_480, but round; backlight only on/off (BL false)
-
-    { "TL021_480", 480,  42,  51,  50, 262, 200,  240,  4, 12,  false, true,  480,   480,   true },
 };
 
     // Hoehe eines Zeigers im bisherigen Format (ohne HAND_EXTRA_BELOW) fuer einen beliebigen Displaytyp (Sicherungen)
@@ -702,8 +621,7 @@ static_assert(displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_GC9A01]) &&
               displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_ILI9341]) &&
               displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_ST7789]) &&
               displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_ST7789_240]) &&
-              displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_ST7701_480], 480) &&
-              displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_TL021_480], 480), // nur auf dem ESP32-S3-Touch-LCD-4 nutzbar (CLOCK_MAX 480) / only usable on the ESP32-S3-Touch-LCD-4 (CLOCK_MAX 480)
+              displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_ST7701_480], 480), // nur auf dem ESP32-S3-Touch-LCD-4 nutzbar (CLOCK_MAX 480) / only usable on the ESP32-S3-Touch-LCD-4 (CLOCK_MAX 480)
               "DISPLAY_GEOMETRY: hand pivot/width/clock size inconsistent");
 
     // Diese Namen zeigen auf den zur Laufzeit gewaehlten Typ (displayGeom, globals.h) - daher NICHT in

@@ -15,8 +15,7 @@ param([switch]$DryRun)
 $ErrorActionPreference = 'Stop'
 $boards = @(
     @{ Dir = 'esp32s3';     Asset = 'uhr4-s3' },
-    @{ Dir = 'esp32s3lcd4'; Asset = 'uhr4-s3lcd4' },
-    @{ Dir = 'esp32s3qualia'; Asset = 'uhr4-s3qualia' } # NICHT AM GERAET GETESTET / NOT TESTED ON THE DEVICE
+    @{ Dir = 'esp32s3lcd4'; Asset = 'uhr4-s3lcd4' }
 )
 
 $work = Join-Path ([System.IO.Path]::GetTempPath()) ('uhr4-s3-' + [guid]::NewGuid().ToString('N'))

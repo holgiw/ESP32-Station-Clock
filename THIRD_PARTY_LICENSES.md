@@ -15,7 +15,6 @@ notices and license texts follow below.
 | Arduino core for ESP32 (arduino-esp32) | LGPL-2.1 | https://github.com/espressif/arduino-esp32 |
 | ESP-IDF (Espressif) | Apache-2.0 | https://github.com/espressif/esp-idf |
 | Schrift / font DejaVu Sans (DejaVu18, DejaVu40) | Bitstream Vera License, Public Domain | https://dejavu-fonts.github.io/License.html |
-| Adafruit_CircuitPython_Qualia (nur die Startfolge des Qualia-Displays, `lgfx_qualia.h` / only the start-up sequence of the Qualia display) | MIT | https://github.com/adafruit/Adafruit_CircuitPython_Qualia |
 | Schrift / font FreeSans Bold, FreeSerif Bold (GNU FreeFont) | GPL-3.0 mit Font-Ausnahme / with font exception | https://www.gnu.org/software/freefont/license.html |
 | Schrift / font Orbitron Light (The Orbitron Project Authors) | SIL Open Font License 1.1 | https://github.com/theleagueof/orbitron |
 | esptool (Espressif), nur im Werkzeug-Zip `uhr4_flash.zip` zum Flashen / only in the tools zip `uhr4_flash.zip` for flashing | GPL-2.0-or-later | https://github.com/espressif/esptool |

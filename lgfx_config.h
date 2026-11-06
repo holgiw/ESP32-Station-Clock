@@ -522,10 +522,6 @@ inline void lcd4PanelInit() {
     digitalWrite(CS_1, HIGH);
 }
 
-#else
-
-#include "lgfx_qualia.h" // Adafruit Qualia: Startfolge, Expander, Touch
-
 #endif
 
     // RGB-Bus ueber den ESP-IDF-Treiber (esp_lcd) im Bounce-Betrieb ohne eigenen Bildspeicher des Treibers: Das Bild liegt
@@ -982,29 +978,6 @@ public:
             cfg.pclk_active_neg = 0;
             cfg.pclk_idle_high = 0;
             cfg.de_idle_high = 0;
-#else
-
-            // Adafruit Qualia (Variante adafruit_qualia_s3_rgb666): B1..B5, G0..G5, R1..R5 in der Reihenfolge B0..B4, G0..G5, R0..R4
-            // Adafruit Qualia (variant adafruit_qualia_s3_rgb666): B1..B5, G0..G5, R1..R5 in the order B0..B4, G0..G5, R0..R4
-
-            static const int8_t pins[16] = { 40, 39, 38, 0, 45, 48, 47, 21, 14, 13, 12, 11, 10, 9, 46, 3 };
-            for (int i = 0; i < 16; i++) cfg.pin_data[i] = pins[i];
-            cfg.pin_henable = 2; // DE
-            cfg.pin_vsync = 42;
-            cfg.pin_hsync = 41;
-            cfg.pin_pclk = 1;
-            cfg.freq_write = LCD4_PCLK_HZ;
-            cfg.hsync_polarity = 1;
-            cfg.hsync_front_porch = 40;
-            cfg.hsync_pulse_width = 20;
-            cfg.hsync_back_porch = 40;
-            cfg.vsync_polarity = 1;
-            cfg.vsync_front_porch = 40;
-            cfg.vsync_pulse_width = 10;
-            cfg.vsync_back_porch = 40;
-            cfg.pclk_active_neg = 0;
-            cfg.pclk_idle_high = 0;
-            cfg.de_idle_high = 0;
 #endif
             _bus_rgb.config(cfg);
             _panel_rgb.setBus(&_bus_rgb);
@@ -1172,9 +1145,7 @@ inline void backlightWrite(uint8_t level) {
 }
 
 
-    // Weitere Taster ausser BUTTON1/BOOT_BUTTON (Qualia: UP/DOWN am Port-Expander); sonst nie gedrueckt
-    // Further buttons besides BUTTON1/BOOT_BUTTON (Qualia: UP/DOWN on the port expander); otherwise never pressed
+    // Weitere Taster ausser BUTTON1/BOOT_BUTTON; hier nie gedrueckt
+    // Further buttons besides BUTTON1/BOOT_BUTTON; never pressed here
 
-#if !BOARD_QUALIA
 inline bool extraButtonDown() { return false; }
-#endif
