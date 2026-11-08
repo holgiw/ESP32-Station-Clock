@@ -1721,6 +1721,43 @@
         return sortedIndices;
     }
 
+    // Gehoert das Preset zum gerade angezeigten Stand (Zifferblatt und Zeigersatz gleich)? Fuer die Hervorhebung auf der Seite
+    // "Presets".
+    // Does the preset match the current state (same clock face and hand set)? For the highlight on the "Presets" page.
+
+    bool presetMatchesActive(const Preset& p) {
+        const int q = p.url.indexOf('?');
+        if (q < 0) return false;
+        const String query = p.url.substring(q + 1);
+        String face = queryParamValue(query, "face");
+        if (face.startsWith("/")) face = face.substring(1);
+        const String cur = selectedBackground.startsWith("/") ? selectedBackground.substring(1) : selectedBackground;
+        if (face != cur || queryParamValue(query, "handSet") != preferences.getString(PK_HANDSET, "")) return false;
+
+        // Dazu die Werte, die das Preset sonst noch festlegt (nur die im Preset vorhandenen): Presets mit gleichem Zifferblatt und
+        // Zeigersatz unterscheiden sich oft nur darin
+        // Plus the values the preset also defines (only those present in the preset): presets with the same clock face and hand
+        // set often differ only in these
+
+        auto flag = [&](const char* key, bool value) {
+            bool found = false;
+            const String v = queryParamValue(query, key, &found);
+            return !found || ((v == "1" || v.equalsIgnoreCase("true")) == value);
+        };
+        if (!flag("stationMode", stationMode) || !flag("showSecondHand", showSecondHand) || !flag("smoothMinute", smoothMinute) ||
+            !flag("smoothSecond", smoothSecond)) return false;
+        bool found = false;
+        const String size = queryParamValue(query, "hubSize", &found);
+        if (found && size.toInt() != (int)hubSize) return false;
+        const String color = queryParamValue(query, "hubColor", &found);
+        if (found) {
+            const uint32_t rgb = strtoul(color.c_str(), NULL, 16);
+            const uint16_t c565 = (uint16_t)(((rgb >> 8) & 0xF800) | ((rgb >> 5) & 0x07E0) | ((rgb >> 3) & 0x001F));
+            if (c565 != hubColor) return false;
+        }
+        return true;
+    }
+
 
     // Uebernimmt die Parameter von /api/setMode (Zifferblatt, Zeiger, Modi, Nabe, Zeitzone, Rocrail, Helligkeit ...) -
     // aus der Webanfrage oder, mit modeFromQuery, aus einer Preset-URL. Gemeinsam fuer die Route und das Wischen.
@@ -1927,8 +1964,9 @@
     // end it continues from the start. The active preset is recognized by clock face and hand set (the one chosen
     // last has priority). Without an active preset: the first or last one.
 
+    int presetLastIndex = -1; // zuletzt per Touch gewaehltes Preset (Feld-Index) / preset chosen last by touch (array index)
+
     void switchPreset(int direction) {
-        static int lastIndex = -1;
 
         const std::vector<int> order = sortedPresetIndices();
         const int count = (int)order.size();
@@ -1946,9 +1984,20 @@
             return presetFace == face && queryParamValue(query, "handSet") == handSet;
         };
 
+        // Stelle des aktiven Presets: zuerst das zuletzt per Touch gewaehlte, wenn es noch voll passt, dann das erste, das voll passt
+        // (Zifferblatt, Zeigersatz und die weiteren Werte, presetMatchesActive()), zuletzt nur nach Zifferblatt und Zeigersatz
+        // Position of the active preset: first the one chosen last by touch if it still matches completely, then the first one that
+        // matches completely (clock face, hand set and the further values, presetMatchesActive()), last only by clock face and hand set
+
         int pos = -1; // Stelle in der sortierten Liste / position in the sorted list
         for (int k = 0; k < count && pos < 0; k++) {
-            if (order[k] == lastIndex && matches(order[k])) pos = k;
+            if (order[k] == presetLastIndex && presetMatchesActive(presets[order[k]])) pos = k;
+        }
+        for (int k = 0; k < count && pos < 0; k++) {
+            if (presetMatchesActive(presets[order[k]])) pos = k;
+        }
+        for (int k = 0; k < count && pos < 0; k++) {
+            if (order[k] == presetLastIndex && matches(order[k])) pos = k;
         }
         for (int k = 0; k < count && pos < 0; k++) {
             if (matches(order[k])) pos = k;
@@ -1965,10 +2014,48 @@
         applyModeArguments();
         modeFromQuery = false;
         modeQuery = "";
-        lastIndex = next;
+        presetLastIndex = next;
         DEBUG_PRINTLN("[PRESET] Switched to preset " + String(nextPos + 1) + "/" + String(count) + " (" + presets[next].name + ")");
     }
 
+
+    // Presets fuer die Touch-Auswahl, in der Reihenfolge der Seite "Presets": Anzahl, Angaben zu Stelle pos (Name, Zifferblatt-Datei,
+    // Zeigersatz, ob gerade aktiv) und Anwenden von Stelle pos.
+    // Presets for the touch picker, in the order of the "Presets" page: count, details of position pos (name, face file, hand
+    // set, whether currently active) and applying position pos.
+
+    int presetPickCount() {
+        return (int)sortedPresetIndices().size();
+    }
+
+    bool presetPickInfo(int pos, String& name, String& face, String& handSet, bool& active, uint16_t& hubColor, uint8_t& hubSize, bool& showSecond) {
+        const std::vector<int> order = sortedPresetIndices();
+        if (pos < 0 || pos >= (int)order.size()) return false;
+        const Preset& p = presets[order[pos]];
+        const int q = p.url.indexOf('?');
+        const String query = q < 0 ? String("") : p.url.substring(q + 1);
+        name = p.name;
+        face = queryParamValue(query, "face");
+        if (face.startsWith("/")) face = face.substring(1);
+        handSet = queryParamValue(query, "handSet");
+        active = presetMatchesActive(p);
+        String previewFace, previewHandSet; // nur fuer Nabe und Sekundenzeiger / only for the hub and the second hand
+        parsePresetForPreview(p.url, previewFace, previewHandSet, hubColor, hubSize, showSecond);
+        return true;
+    }
+
+    void presetPickApply(int pos) {
+        const std::vector<int> order = sortedPresetIndices();
+        if (pos < 0 || pos >= (int)order.size()) return;
+        const int next = order[pos];
+        modeQuery = presets[next].url.substring(presets[next].url.indexOf('?') + 1);
+        modeFromQuery = true;
+        applyModeArguments();
+        modeFromQuery = false;
+        modeQuery = "";
+        presetLastIndex = next;
+        DEBUG_PRINTLN("[PRESET] Selected preset " + presets[next].name);
+    }
 
     // HTML-Label fuer einen Rotationswert - "n.a." bei TFT_ROTATION_NA (siehe
     // isDisplayConnected() in display.h), sonst 0/90/180/270 Grad. Gemeinsam
@@ -2560,7 +2647,8 @@
                     // stored XSS.
 
                     String safePresetNameText = escapeHtmlText(presets[i].name);
-                    chunk += "<div style='text-align:center;border:1px solid #ccc;border-radius:6px;padding:8px;width:220px;'>";
+                    const bool presetActive = presetMatchesActive(presets[i]);
+                    chunk += String("<div data-pc='1' style='text-align:center;border:") + (presetActive ? "2px solid var(--accent)" : "1px solid #ccc") + ";border-radius:6px;padding:8px;width:220px;'>";
                     chunk += "<a href='" + displayUrl + "' onclick='return pickPreset(this)'><img class='pv' data-src='/presetpreview?index=" + String(i) + "' style='width:90px;height:auto;'></a>";
                     chunk += "<br><a href='" + displayUrl + "' onclick='return pickPreset(this)'>" + safePresetNameText + "</a>";
                     String presetName = presets[i].name;
@@ -2612,7 +2700,7 @@
             // the message. If the call fails, the browser follows the link as before.
 
             chunk += "<div id='presetMsg' class='msg ok' style='display:none'>" + translate("Preset applied") + "</div>";
-            chunk += "<script>function pickPreset(a){var m=document.getElementById('presetMsg');fetch(a.href+'&ajax=1').then(function(r){if(!r.ok)throw 0;"
+            chunk += "<script>function pickPreset(a){var m=document.getElementById('presetMsg');fetch(a.href+'&ajax=1').then(function(r){if(!r.ok)throw 0;document.querySelectorAll('div[data-pc]').forEach(function(x){x.style.border='1px solid #ccc';});var c=a.closest('div[data-pc]');if(c)c.style.border='2px solid var(--accent)';"
                      "m.style.display='block';clearTimeout(window.presetT);window.presetT=setTimeout(function(){m.style.display='none';},4000);"
                      "}).catch(function(){location.href=a.href;});return false;}</script>";
 
@@ -3112,6 +3200,11 @@
                 preferences.putBool(PK_BOARD_LED, boardLedEnabled);
                 if (!boardLedEnabled) setLedOff();
             }
+
+#if BOARD_WAVESHARE_S3_LCD4
+            touchEnabled = webserver.hasArg("touchOn");
+            preferences.putBool(PK_TOUCH_ENABLED, touchEnabled);
+#endif
 
             bool wasLoggingEnabled = preferences.getBool(PK_LOGGING_ENABLED, false);
             loggingEnabled = webserver.hasArg("loggingEnabled");
@@ -5819,6 +5912,10 @@
             if (LED_BOARD >= 0) {
                 chunk += checkboxRow("boardLed", boardLedEnabled, translate("Onboard LED"), translate("Unchecked, the LED on the board stays off completely: not at start, not on web access, not on DCF77 reception and not on WPS"));
             }
+
+#if BOARD_WAVESHARE_S3_LCD4
+            chunk += checkboxRow("touchOn", touchEnabled, translate("Touch control"), translate("Unchecked, all touch functions of the display are ignored and the hints in the corners are not shown"));
+#endif
 
             chunk += checkboxRow("loggingEnabled", loggingEnabled, translate("Enable Logging"), translate("Writes up to 9 log files to LittleFS for troubleshooting, switches off after 24 hours"));
 

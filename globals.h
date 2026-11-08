@@ -316,6 +316,12 @@
 
     bool boardLedEnabled = true;
 
+    // Touch-Bedienung des Displays (ESP32-S3-Touch-LCD-4) - aus = alle Touch-Funktionen und die Hinweise in den Ecken entfallen
+    // Touch control of the display (ESP32-S3-Touch-LCD-4) - off = all touch functions and the corner hints are disabled
+
+    bool touchEnabled = true;
+    bool cornerHintsActive = false; // Hinweise in den Ecken im Uhrbild zeigen (system_utils.h) / show the corner hints in the clock image (system_utils.h)
+
     time_t lastDcfSyncTime = 0; // Unix-Zeitstempel der letzten erfolgreichen DCF77-Synchronisation (0 = noch nie)
                                 // Unix timestamp of the last successful DCF77 sync (0 = never)
 

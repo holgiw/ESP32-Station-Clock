@@ -2,6 +2,25 @@
 
 *English version below.*
 
+## 2026-11-08
+
+### Hinzugefügt
+- Touch-Bedienung am ESP32-S3-Touch-LCD-4 (480 × 480), jeweils auf das Zifferblatt bezogen, wie du es siehst (die eingestellte Rotation ist eingerechnet):
+  - **Wischen** nach links zeigt das nächste, nach rechts das vorherige Preset (Reihenfolge wie auf der Seite „Presets“). Das Zifferblatt folgt dem Finger, gleitet beim Wisch seitlich heraus, das neue gleitet von der anderen Seite herein; ein zu kurzer Wisch gleitet zurück.
+  - **Tippen oben links** schaltet die Rotation weiter (0 → 90 → 180 → 270 → 0).
+  - **Tippen oben rechts** zeigt 30 Sekunden lang WLAN-Name und IP-Adresse (Status), bis zum nächsten Antippen.
+  - **Tippen unten links** zeigt die gespeicherten WLANs als Liste (das aktive hervorgehoben, 9 je Seite, Wischen blättert). Antippen einer Zeile speichert es als aktives WLAN und startet die Uhr neu, damit sie sich damit verbindet.
+  - **Tippen unten rechts** zeigt einen Hilfetext zur Touch-Bedienung (Deutsch oder Englisch nach der eingestellten Sprache), mit WLAN-Name und IP-Adresse.
+  - **Tippen in der Mitte** (überall außerhalb der Ecken) zeigt alle gespeicherten Presets als Miniaturen (3 × 3 je Seite, Wischen blättert, seitlich herausgeschoben): Zifferblatt mit den Zeigern des Sets (Zeigerstellung 10:10:30, Sekundenzeiger und Nabe wie im Preset, eingeblendete Uhrzeit/Datum/Wochentag nur, wenn das Zifferblatt sie einschaltet), das aktive Set in der Akzentfarbe der Weboberfläche umrandet. Antippen wählt das Set, Antippen daneben oder 30 s ohne Berührung schließt.
+  - Die Ecken zeigen nach dem Start (nach der Startfahrt der Zeiger) und nach dem Drehen per Touch 30 Sekunden lang einen kurzen Hinweis zu ihrer Funktion: Drehen, Info, WLAN, Hilfe. Die Hinweise gehören zum Zifferblatt-Bild und stehen in der eingestellten Rotation.
+  - Ausgelöst wird beim Loslassen; ein Tippen darf sich dabei höchstens 50 Pixel bewegen, ein Wisch beginnt ab 100 Pixel waagerechter Bewegung.
+- Haken „Touch-Bedienung“ im Tab „Uhr Einstellungen“ (nur ESP32-S3-Touch-LCD-4, ab Werk an, Preferences-Schlüssel `touchOn`): Ohne Haken werden alle Touch-Funktionen ignoriert und die Hinweise in den Ecken nicht angezeigt. Die Einstellung wirkt sofort.
+- Seite „Presets“: Das aktive Preset hat einen Rahmen in der Akzentfarbe. Wählst du ein Preset auf der Seite, wandert der Rahmen ohne Neuladen.
+
+### Geändert
+- Aktives Preset: Erkannt wird es jetzt nicht nur am Zifferblatt und Zeigersatz, sondern auch an Bahnhofsmodus, Sekundenzeiger, sanfter Minuten- und Sekundenbewegung, Größe und Farbe der Nabe (soweit das Preset sie enthält). Presets mit gleichem Zifferblatt und Zeigersatz werden so unterschieden; Wischen und Auswahl am Display gehen vom richtigen Preset aus. Das zuletzt per Touch gewählte Preset wird gemerkt.
+- Die frühere Touch-Zone unten links/unten rechts (Preset zurück/weiter) entfällt; dafür gibt es das Wischen. Die Ecke rechts oben zeigt WLAN und IP jetzt 30 Sekunden statt 5.
+
 ## 2026-11-06
 
 ### Hinzugefügt
@@ -540,6 +559,25 @@
 ---
 
 # English Version
+
+## 2026-11-08
+
+### Added
+- Touch control on the ESP32-S3-Touch-LCD-4 (480 × 480), always relative to the clock face as you see it (the set rotation is taken into account):
+  - **Swiping** left shows the next, swiping right the previous preset (order as on the "Presets" page). The clock face follows the finger, slides out sideways on a swipe and the new one slides in from the other side; a swipe that is too short slides back.
+  - **Tap top left** advances the rotation (0 → 90 → 180 → 270 → 0).
+  - **Tap top right** shows the WiFi name and IP address (status) for 30 seconds, or until the next tap.
+  - **Tap bottom left** shows the saved WiFi networks as a list (the active one highlighted, 9 per page, swiping turns pages). Tapping a row stores it as the active WiFi and restarts the clock so it connects to that network.
+  - **Tap bottom right** shows a help text about the touch control (German or English according to the set language), with WiFi name and IP address.
+  - **Tap in the middle** (anywhere outside the corners) shows all saved presets as thumbnails (3 × 3 per page, swiping turns pages, sliding out sideways): clock face with the hands of the set (hands at 10:10:30, second hand and hub as in the preset, time/date/weekday only if the clock face switches them on), the active set framed in the accent colour of the web interface. A tap selects the set, a tap beside it or 30 s without touch closes.
+  - After the start (after the start move of the hands) and after rotating by touch, the corners show a short hint about their function for 30 seconds: Rotate, Info, WiFi, Help. The hints belong to the clock face image and stand in the set rotation.
+  - Triggered on release; a tap may move at most 50 pixels, a swipe starts at 100 pixels of horizontal movement.
+- "Touch control" checkbox in the "Clock Setup" tab (ESP32-S3-Touch-LCD-4 only, on by default, preferences key `touchOn`): unchecked, all touch functions are ignored and the corner hints are not shown. The setting takes effect at once.
+- "Presets" page: the active preset has a frame in the accent colour. If you pick a preset on the page, the frame moves without reloading.
+
+### Changed
+- Active preset: it is now recognised not only by clock face and hand set, but also by station mode, second hand, smooth minute and second movement, hub size and colour (as far as the preset contains them). Presets with the same clock face and hand set are told apart this way; swiping and the picker on the display start from the right preset. The preset chosen last by touch is remembered.
+- The former touch zones bottom left/bottom right (previous/next preset) are gone; swiping replaces them. The top right corner now shows WiFi and IP for 30 seconds instead of 5.
 
 ## 2026-11-06
 

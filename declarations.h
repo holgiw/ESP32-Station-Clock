@@ -419,6 +419,9 @@
     String beginPage() ;
     void updateNtpServersFromRequest() ;
     void switchPreset(int direction) ;
+    int presetPickCount() ; // Presets fuer die Touch-Auswahl / presets for the touch picker
+    bool presetPickInfo(int pos, String& name, String& face, String& handSet, bool& active, uint16_t& hubColor, uint8_t& hubSize, bool& showSecond) ;
+    void presetPickApply(int pos) ;
 #if BOARD_WAVESHARE_S3_LCD4
     String lcd4TouchDebug() ;
 #endif

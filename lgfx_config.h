@@ -624,6 +624,16 @@ inline void lcd4StaticText(const String& line1, const String& line2, bool rot180
     if (pct > 0) lcd4Banner.fillRect(0, LCD4_TILE_H - 4, 480 * min(pct, 100) / 100, 4, 1);
 }
 
+    // Verschiebung des ausgegebenen Bildes in Bildpunkten (Wischen: das Zifferblatt gleitet heraus oder herein). Gilt in Panel-
+    // Koordinaten; die freigewordene Flaeche ist schwarz. Der Wert wird am Bildanfang uebernommen, damit ein Bild nicht
+    // zerreisst.
+
+    // Shift of the output picture in pixels (swipe: the clock face slides out or in). In panel coordinates; the freed
+    // area is black. The value is latched at the start of a frame so a frame is not torn.
+
+inline volatile int16_t lcd4ShiftX = 0, lcd4ShiftY = 0;
+inline int lcd4FrameShiftX = 0, lcd4FrameShiftY = 0;
+
     // Bounce-Puffer aus dem eigenen Bildspeicher fuellen (laeuft in der Display-Unterbrechung). Die Pause ums Bildende (Austastung,
     // rund 2,7 ms) ist normal und zaehlt nicht. Kommt die Unterbrechung
     // spaeter als 2 Pufferzeiten nach der vorigen, wurde ein Pufferwechsel verpasst: Der Treiber zaehlt dann falsch und das
@@ -711,8 +721,27 @@ inline bool lcd4BounceEmpty(esp_lcd_panel_handle_t, void* buf, int posPx, int le
             lcd4Swaps++;
         }
         lcd4FrameFb = lcd4Fb;
+        lcd4FrameShiftX = lcd4ShiftX;
+        lcd4FrameShiftY = lcd4ShiftY;
     }
-    memcpy(buf, (lcd4FrameFb ? lcd4FrameFb : lcd4Fb) + (size_t)posPx * 2, lenBytes);
+    const uint8_t* src = lcd4FrameFb ? lcd4FrameFb : lcd4Fb;
+    if (lcd4FrameShiftX == 0 && lcd4FrameShiftY == 0) {
+        memcpy(buf, src + (size_t)posPx * 2, lenBytes);
+        return false;
+    }
+
+    // Verschoben: zeilenweise kopieren, freie Flaeche schwarz / shifted: copy line by line, free area black
+
+    const int sx = lcd4FrameShiftX, sy = lcd4FrameShiftY;
+    uint8_t* d = (uint8_t*)buf;
+    for (int l = 0, rows = lenBytes / 960; l < rows; l++, d += 960) {
+        const int sRow = posPx / 480 + l - sy;
+        if (sRow < 0 || sRow > 479 || sx >= 480 || sx <= -480) { memset(d, 0, 960); continue; }
+        const uint8_t* s = src + (size_t)sRow * 960;
+        if (sx > 0) { memset(d, 0, (size_t)sx * 2); memcpy(d + sx * 2, s, (size_t)(480 - sx) * 2); }
+        else if (sx < 0) { memcpy(d, s - sx * 2, (size_t)(480 + sx) * 2); memset(d + (480 + sx) * 2, 0, (size_t)(-sx) * 2); }
+        else memcpy(d, s, 960);
+    }
     return false;
 }
 

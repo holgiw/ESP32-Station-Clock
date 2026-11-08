@@ -675,6 +675,7 @@ void setup() {
 
         dcfSyncLedEnabled = preferences.getBool(PK_DCF_SYNC_LED, true);
         boardLedEnabled = preferences.getBool(PK_BOARD_LED, true);
+        touchEnabled = preferences.getBool(PK_TOUCH_ENABLED, true);
         if (!boardLedEnabled) setLedOff();
 
         DEBUG_PRINTLN("[SETUP] Initializing..");

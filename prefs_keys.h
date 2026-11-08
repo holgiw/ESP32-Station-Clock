@@ -38,6 +38,8 @@
                                                                // LED flashes per DCF77 pulse during the sync phase (default true)
     constexpr const char* PK_BOARD_LED         = "boardLed"; // Onboard-LED ganz abschaltbar, auch Start/HTTP/DCF77/WPS (Default true)
                                                              // onboard LED switchable off completely, also boot/HTTP/DCF77/WPS (default true)
+    constexpr const char* PK_TOUCH_ENABLED     = "touchOn"; // Touch-Bedienung (nur ESP32-S3-Touch-LCD-4) ein/aus (Default true)
+                                                            // touch control (ESP32-S3-Touch-LCD-4 only) on/off (default true)
 
     // Zifferblatt / Darstellung
     // Clock Face / Display

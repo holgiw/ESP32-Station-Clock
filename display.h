@@ -3074,6 +3074,52 @@
         return now - firstAsk > TIME_TRUST_WAIT_MS;
     }
 
+    // Hinweise in den vier Ecken (Touch-Bedienung, 30 s nach dem Start) ins volle Bild zeichnen. Nur ESP32-S3-Touch-LCD-4;
+    // cornerHintsActive setzt system_utils.h.
+
+    // Draw the hints in the four corners (touch control, 30 s after the start) into the full frame. ESP32-S3-Touch-LCD-4 only;
+    // system_utils.h sets cornerHintsActive.
+
+    void drawCornerHints(LGFX_Sprite& s) {
+#if BOARD_WAVESHARE_S3_LCD4
+        if (!cornerHintsActive || !touchEnabled) return;
+
+        // Das Bild liegt in der Lage des Panels, die Hinweise muessen zur eingestellten Rotation passen: je Hinweis ein kleines Sprite
+        // mit dem Text, um rotation x 90 Grad gedreht an die umgerechnete Stelle (wie touchToScreen(), umgekehrt)
+        // The image is in the orientation of the panel, the hints have to match the set rotation: per hint a small sprite with the
+        // text, rotated by rotation x 90 degrees to the converted position (like touchToScreen(), the other way round)
+
+        const bool de = currentLanguage == "de";
+        const uint16_t fg = setPixelBrightness(TFT_WHITE), bg = setPixelBrightness(TFT_BLACK);
+        const char* const texts[4] = { de ? "Drehen" : "Rotate", "Info", "WLAN", de ? "Hilfe" : "Help" };
+        const int corner[4][2] = { { 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 } }; // links/rechts, oben/unten / left/right, top/bottom
+        const int rot = tftRotation1 & 3;
+        for (int i = 0; i < 4; i++) {
+            LGFX_Sprite t(&s);
+            t.setColorDepth(16);
+            t.setFont(&fonts::DejaVu18);
+            t.setTextSize(1);
+            const int w = t.textWidth(texts[i]) + 8, h = t.fontHeight() + 2;
+            if (!t.createSprite(w, h)) continue;
+            t.setFont(&fonts::DejaVu18);
+            t.setTextColor(fg, bg);
+            t.fillSprite(bg);
+            t.setTextDatum(lgfx::middle_center);
+            t.drawString(texts[i], w / 2, h / 2);
+            const float ux = corner[i][0] ? CLOCK_WIDTH - 4 - w / 2.0f : 4 + w / 2.0f;
+            const float uy = corner[i][1] ? CLOCK_HEIGHT - 4 - h / 2.0f : 4 + h / 2.0f;
+            float px = ux, py = uy;
+            switch (rot) {
+                case 1:  px = CLOCK_WIDTH - 1 - uy; py = ux; break;
+                case 2:  px = CLOCK_WIDTH - 1 - ux; py = CLOCK_HEIGHT - 1 - uy; break;
+                case 3:  px = uy; py = CLOCK_HEIGHT - 1 - ux; break;
+                default: break;
+            }
+            t.pushRotateZoom(&s, px, py, rot * 90.0f, 1.0f, 1.0f);
+        }
+#endif
+    }
+
     bool renderClockFrame(uint8_t displayNum, uint8_t rotation, float& lastHourAngleRef, float& lastMinuteAngleRef, float& lastSecondAngleRef, bool& firstRunRef) {
 
         ensureFaceSettings();
@@ -4105,6 +4151,7 @@
         else {
             int ox, oy;
             clockOrigin(displayNum, ox, oy);
+            drawCornerHints(backgroundSprite); // Hinweise in den Ecken, solange aktiv / hints in the corners while active
             backgroundSprite.pushSprite(ox, oy);
         }
         if (!partial) break;

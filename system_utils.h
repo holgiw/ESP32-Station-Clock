@@ -346,6 +346,601 @@
     // Touching the display: like a short button press show the WiFi info (name, IP address) for 5 seconds, then back to
     // the clock. Polled every 25 ms; the touch chip per board in lcd4TouchPressed() (system_utils.h).
 
+#if BOARD_WAVESHARE_S3_LCD4
+
+    // Wischen: Das Zifferblatt folgt dem Finger (Verschiebung des ausgegebenen Bildes, lcd4ShiftX/Y) und gleitet bei einem
+    // Wisch ganz heraus; dann wird das Preset gewechselt und das neue gleitet von der anderen Seite herein. Ohne Wisch gleitet
+    // das Bild zurueck. Phasen: 1 heraus, 2 warten auf das neu gezeichnete Bild, 3 herein, 4 zurueck.
+
+    // Swipe: the clock face follows the finger (shift of the output picture, lcd4ShiftX/Y) and slides out completely on a
+    // swipe; then the preset is changed and the new one slides in from the other side. Without a swipe the picture slides
+    // back. Phases: 1 out, 2 waiting for the redrawn picture, 3 in, 4 back.
+
+    inline int slideCur = 0, slideFrom = 0, slideTo = 0;
+    inline uint8_t slidePhase = 0;
+    inline unsigned long slideT0 = 0, slideDur = 0;
+    inline uint32_t slideSwaps0 = 0;
+
+    // Verschiebung dx in Zifferblatt-Richtung (links/rechts wie der Nutzer sie sieht) in Panel-Koordinaten umrechnen, passend zu
+    // touchToScreen()
+
+    // Convert the shift dx in clock face direction (left/right as the user sees it) to panel coordinates, matching
+    // touchToScreen()
+
+    void setSlide(int dx) {
+        dx = constrain(dx, -480, 480);
+        slideCur = dx;
+        int px = 0, py = 0;
+        switch (tftRotation1) {
+            case 1:  py = dx;  break;
+            case 2:  px = -dx; break;
+            case 3:  py = -dx; break;
+            default: px = dx;  break;
+        }
+        lcd4ShiftX = (int16_t)px;
+        lcd4ShiftY = (int16_t)py;
+    }
+
+    void startSlide(uint8_t phase, int from, int to, unsigned long dur) {
+        slidePhase = phase;
+        slideFrom = from;
+        slideTo = to;
+        slideT0 = millis();
+        slideDur = dur;
+    }
+
+    bool slideStep() {
+        if (slidePhase == 0) return false;
+        if (slidePhase == 2) {
+            const unsigned long waited = millis() - slideT0;
+            if ((lcd4Swaps != slideSwaps0 && waited >= 80) || waited > 700) startSlide(3, slideFrom, 0, 180);
+            return true;
+        }
+        float t = (float)(millis() - slideT0) / (float)slideDur;
+        if (t > 1.0f) t = 1.0f;
+        const float ease = (slidePhase == 3) ? 1.0f - (1.0f - t) * (1.0f - t) : t * t; // herein: bremsen, heraus: beschleunigen / in: decelerate, out: accelerate
+        setSlide(slideFrom + (int)((slideTo - slideFrom) * ease));
+        if (t < 1.0f) return true;
+        if (slidePhase == 1) {
+            switchPreset(slideTo < 0 ? 1 : -1);
+            firstRun = true;
+            slideSwaps0 = lcd4Swaps;
+            slideFrom = -slideTo; // das neue Zifferblatt kommt von der Gegenseite / the new face comes from the opposite side
+            slidePhase = 2;
+            slideT0 = millis();
+            return true;
+        }
+        slidePhase = 0;
+        return false;
+    }
+
+
+    // Blockierendes Gleiten des Bildes von 'from' nach 'to' (Bildpunkte, Richtung des Zifferblatts) in dur ms - fuer die Auswahlen
+    // Blocking slide of the picture from 'from' to 'to' (pixels, clock face direction) in dur ms - for the pickers
+
+    void slideAnimate(int from, int to, unsigned long dur) {
+        if (from == to) { setSlide(to); return; }
+        const unsigned long t0 = millis();
+        for (;;) {
+            float t = (float)(millis() - t0) / (float)dur;
+            if (t > 1.0f) t = 1.0f;
+            setSlide(from + (int)((to - from) * (1.0f - (1.0f - t) * (1.0f - t))));
+            if (t >= 1.0f) break;
+            delay(4);
+        }
+    }
+
+    // Set-Auswahl: alle gespeicherten Presets (Zifferblatt mit Zeigern) als Miniaturen (3 x 3 je Seite, Wischen blaettert),
+    // Antippen waehlt, Antippen neben einer Miniatur oder 30 s ohne Beruehrung schliesst. Das aktive Preset hat einen Rahmen in der Akzentfarbe
+    // der Weboberflaeche. Die Miniaturen (Zeiger auf 10:10:30) werden einzeln geladen und im PSRAM gehalten.
+
+    // Set picker: all saved presets (clock face with hands) as thumbnails (3 x 3 per page, swiping turns pages), a tap
+    // selects, a tap beside a thumbnail or 30 s without touch closes. The active preset has a frame in the accent colour. The thumbnails
+    // (hands at 10:10:30) are loaded one at a time and kept in PSRAM.
+
+    const int FM_T = 136, FM_G = 14, FM_M = 22, FM_MAX = 36;
+    const uint16_t FM_ACCENT = 0xF524; // Akzentfarbe der Weboberflaeche (#f5a623) als RGB565 / accent colour of the web interface (#f5a623) as RGB565
+
+    void faceMenuCellPos(int i, int& x, int& y) {
+        x = FM_M + (i % 3) * (FM_T + FM_G);
+        y = FM_M + (i / 3) * (FM_T + FM_G);
+    }
+
+    // Angaben zur eingeblendeten Zeit eines Zifferblatts (aus ihrer stripcfg-Datei, ohne Datei: aus)
+    // Information on the time shown on a clock face (from its stripcfg file, without a file: off)
+
+    struct FmInfo {
+        bool time = false, date = false, wday = false; // ab Werk aus (Zifferblatt ohne Streifen) / off by default (clock face without strip)
+        uint16_t fg = 0xFFFF;
+    };
+
+    uint16_t faceMenuRgb565(uint32_t rgb) {
+        return (uint16_t)(((rgb >> 8) & 0xF800) | ((rgb >> 5) & 0x07E0) | ((rgb >> 3) & 0x001F));
+    }
+
+    FmInfo faceMenuInfo(const String& face) {
+        FmInfo fi;
+        const String path = stripConfigPath("/" + face);
+        if (!path.length() || !LittleFS.exists(path)) return fi;
+        File f = LittleFS.open(path, "r");
+        if (!f) return fi;
+        const String text = f.size() < 2048 ? f.readString() : String("");
+        f.close();
+        auto value = [&](const char* key) -> String {
+            const int p = text.indexOf(String(key) + "=");
+            if (p < 0) return "";
+            const int s = p + strlen(key) + 1;
+            const int e = text.indexOf('&', s);
+            return e < 0 ? text.substring(s) : text.substring(s, e);
+        };
+        if (value("stripShowT").length()) fi.time = value("stripShowT") != "0";
+        if (value("stripShowD").length()) fi.date = value("stripShowD") != "0";
+        if (value("stripShowW").length()) fi.wday = value("stripShowW") != "0";
+        if (value("stripFg").length()) fi.fg = faceMenuRgb565(strtoul(value("stripFg").c_str(), nullptr, 16));
+        return fi;
+    }
+
+    void faceMenuDrawCell(lgfx::LovyanGFX& g, int i, const uint16_t* thumb, bool current, const String& label, const FmInfo& fi) {
+        int x, y;
+        faceMenuCellPos(i, x, y);
+        g.fillRect(x - 5, y - 5, FM_T + 10, FM_T + 10, TFT_BLACK);
+        if (current) {
+            g.drawRect(x - 4, y - 4, FM_T + 8, FM_T + 8, FM_ACCENT);
+            g.drawRect(x - 3, y - 3, FM_T + 6, FM_T + 6, FM_ACCENT);
+        }
+        if (thumb) {
+            g.setSwapBytes(true);
+            g.pushImage(x, y, FM_T, FM_T, thumb);
+            g.setSwapBytes(false);
+        }
+        else {
+            g.fillRect(x, y, FM_T, FM_T, 0x2104); // noch nicht geladen / not loaded yet
+        }
+
+        // Eingeblendete Zeit, Wochentag und Datum direkt auf dem Zifferblatt, wie die Uhr sie im unteren Teil zeigt (Schriftfarbe der
+        // Einstellung, Beispielwerte); ab Werk aus
+        // Time, weekday and date directly on the clock face, as the clock shows them in the lower part (text colour of the
+        // setting, sample values); off by default
+
+        if (thumb && (fi.time || fi.date || fi.wday)) {
+            g.setFont(&fonts::Font0);
+            g.setTextSize(1);
+            g.setTextColor(fi.fg);
+            g.setTextDatum(lgfx::top_center);
+            int ty = y + FM_T * 60 / 100;
+            if (fi.time) { g.drawString("10:10", x + FM_T / 2, ty); ty += 12; }
+            if (fi.wday) { g.drawString("Sa", x + FM_T / 2, ty); ty += 12; }
+            if (fi.date) g.drawString("08.11.", x + FM_T / 2, ty);
+        }
+        String text = tftText(label);
+        if (text.length() > 22) text = text.substring(0, 21) + ".";
+        g.fillRect(x, y + FM_T - 11, FM_T, 11, TFT_BLACK);
+        g.setFont(&fonts::Font0);
+        g.setTextColor(TFT_WHITE, TFT_BLACK);
+        g.setTextDatum(lgfx::top_left);
+        g.drawString(text, x + 2, y + FM_T - 9);
+    }
+
+    void faceMenuDrawDots(lgfx::LovyanGFX& g, int page, int pages) {
+        g.fillRect(0, 462, 480, 18, TFT_BLACK);
+        for (int p = 0; p < pages && pages > 1; p++) {
+            g.fillCircle(240 + (int)((p - (pages - 1) * 0.5f) * 18), 471, 4, p == page ? TFT_WHITE : TFT_DARKGREY);
+        }
+    }
+
+    // Miniatur eines Presets: Zifferblatt (Mittelwert aus 3 x 3 Pixeln), darauf die Zeiger auf 10:10:30 (Rueckwaertsabbildung der
+    // Zeigerbitmaps, 0xFFFF = durchsichtig)
+
+    // Thumbnail of a preset: clock face (average of 3 x 3 pixels) with the hands at 10:10:30 on top (reverse mapping of the hand
+    // bitmaps, 0xFFFF = transparent)
+
+    bool faceMenuMakeThumb(const String& face, const String& handSet, bool showSecond, uint16_t hubColor, uint8_t hubSize, uint16_t* t, uint16_t* tmp, uint16_t* hand) {
+        const String path = face.length() ? "/" + face : String("/face_default.bmp");
+        if (!loadFaceBmpInto(path, tmp, CLOCK_WIDTH, CLOCK_HEIGHT)) {
+            if (!ensureDefaultFace() || !loadFaceBmpInto("/face_default.bmp", tmp, CLOCK_WIDTH, CLOCK_HEIGHT)) return false;
+        }
+        for (int ty = 0; ty < FM_T; ty++) {
+            const int y0 = ty * CLOCK_HEIGHT / FM_T;
+            for (int tx = 0; tx < FM_T; tx++) {
+                const int x0 = tx * CLOCK_WIDTH / FM_T;
+                int r = 0, g = 0, b = 0;
+                for (int dy = 0; dy < 3; dy++) {
+                    for (int dx = 0; dx < 3; dx++) {
+                        const uint16_t p = tmp[(y0 + dy) * CLOCK_WIDTH + x0 + dx];
+                        r += (p >> 11) & 0x1F;
+                        g += (p >> 5) & 0x3F;
+                        b += p & 0x1F;
+                    }
+                }
+                t[ty * FM_T + tx] = (uint16_t)(((r / 9) << 11) | ((g / 9) << 5) | (b / 9));
+            }
+        }
+        static const char* parts[3] = { "hour", "minute", "second" };
+        static const float angles[3] = { 305.0f, 60.0f, 180.0f };
+        const float scale = (float)CLOCK_WIDTH / FM_T; // Quellpixel je Miniaturpixel / source pixels per thumbnail pixel
+
+        // Drehpunkte des Zifferblatts (Sekundenfeld: Sekundenzeiger eigener Drehpunkt, liegt unter den anderen), wie renderClockFrame()
+        // Pivots of the clock face (seconds subdial: second hand has its own pivot and lies below the others), like renderClockFrame()
+
+        FacePivots facePiv;
+        readFacePivots(path, facePiv);
+        const HandPlan plan = makeHandPlanFrom(facePiv, showSecond);
+        const int order[3] = { plan.secUnder ? 2 : 0, plan.secUnder ? 0 : 1, plan.secUnder ? 1 : 2 };
+        for (int n = 0; n < 3; n++) {
+            const int h = order[n];
+            loadHandOrDefault(handSet, parts[h], hand);
+            const bool isSec = h == 2;
+            if (isSec && !showSecond) continue; // Set ohne Sekundenzeiger / set without second hand
+            const bool moved = isSec ? (plan.secOwn || plan.hmCustom) : plan.hmCustom;
+            const float cX = moved ? (isSec ? plan.secX : plan.hmX) + 0.5f : CLOCK_WIDTH / 2.0f;
+            const float cY = moved ? (isSec ? plan.secY : plan.hmY) + 0.5f : CLOCK_HEIGHT / 2.0f;
+            const float a = angles[h] * 0.0174532925f;
+            const float sn = sinf(a), cs = cosf(a);
+            const float pivX = (HAND_WIDTH - 1) / 2.0f;
+            for (int ty = 0; ty < FM_T; ty++) {
+                for (int tx = 0; tx < FM_T; tx++) {
+                    const float ox = (tx + 0.5f) * scale - cX, oy = (ty + 0.5f) * scale - cY;
+                    const int hx = (int)floorf(pivX + ox * cs + oy * sn + 0.5f);        // quer zum Zeiger / across the hand
+                    const int hy = (int)floorf(HAND_PIVOT_Y - ox * sn + oy * cs + 0.5f); // entlang des Zeigers / along the hand
+                    if (hx < 0 || hx >= HAND_WIDTH || hy < 0 || hy >= HAND_HEIGHT) continue;
+                    const uint16_t p = hand[hy * HAND_WIDTH + hx];
+                    if (p != 0xFFFF && p != TRANSPARENT_COLOR) t[ty * FM_T + tx] = p;
+                }
+            }
+        }
+
+        // Nabe (Mittelpunkt) in der Farbe und Groesse des Presets, am Drehpunkt von Stunde/Minute
+        // Hub in the colour and size of the preset, at the pivot of hour/minute
+
+        {
+            const float hx = (plan.hmCustom ? plan.hmX + 0.5f : CLOCK_WIDTH / 2.0f) / scale;
+            const float hy = (plan.hmCustom ? plan.hmY + 0.5f : CLOCK_HEIGHT / 2.0f) / scale;
+            const float r = max(1.0f, hubSize / scale);
+            for (int ty = 0; ty < FM_T; ty++) {
+                for (int tx = 0; tx < FM_T; tx++) {
+                    const float dx = tx + 0.5f - hx, dy = ty + 0.5f - hy;
+                    if (dx * dx + dy * dy <= r * r) t[ty * FM_T + tx] = hubColor;
+                }
+            }
+        }
+        return true;
+    }
+
+    void faceMenu() {
+        const int count = min(presetPickCount(), FM_MAX);
+        if (count == 0) {
+            DEBUG_PRINTLN("[TOUCH] No presets saved");
+            return;
+        }
+        const int pages = (count + 8) / 9;
+
+        uint16_t* tmp = (uint16_t*)ps_malloc((size_t)CLOCK_WIDTH * CLOCK_HEIGHT * 2);
+        uint16_t* hand = (uint16_t*)ps_malloc((size_t)HAND_WIDTH * HAND_HEIGHT * 2);
+        uint16_t* thumbs = (uint16_t*)ps_malloc((size_t)count * FM_T * FM_T * 2);
+        if (!tmp || !hand || !thumbs) {
+            DEBUG_PRINTLN("[PRESETS] No PSRAM for the thumbnails");
+            if (tmp) free(tmp);
+            if (hand) free(hand);
+            if (thumbs) free(thumbs);
+            return;
+        }
+        std::vector<uint8_t> state(count, 0); // 0 offen, 1 geladen, 2 Fehler / 0 pending, 1 loaded, 2 failed
+        std::vector<String> names(count), faces(count), handSets(count);
+        std::vector<uint8_t> active(count, 0);
+        std::vector<FmInfo> infos(count);
+        std::vector<uint16_t> hubColors(count, 0xF800);
+        std::vector<uint8_t> hubSizes(count, 6);
+        std::vector<uint8_t> showSecs(count, 1);
+        int page = 0;
+        for (int i = 0; i < count; i++) {
+            bool a = false;
+            bool sec = true;
+            presetPickInfo(i, names[i], faces[i], handSets[i], a, hubColors[i], hubSizes[i], sec);
+            showSecs[i] = sec;
+            infos[i] = faceMenuInfo(faces[i]);
+            active[i] = a;
+            if (a) page = i / 9;
+        }
+
+        auto drawPage = [&]() {
+            DRAW_ON_BOTH_DISPLAYS(
+                tft.fillScreen(TFT_BLACK);
+                for (int k = 0; k < 9 && page * 9 + k < count; k++) {
+                    const int i = page * 9 + k;
+                    faceMenuDrawCell(tft, k, state[i] == 1 ? thumbs + (size_t)i * FM_T * FM_T : nullptr, active[i], names[i], infos[i]);
+                }
+                faceMenuDrawDots(tft, page, pages);
+            );
+        };
+        drawPage();
+
+        bool touching = false, choose = false;
+        int sx0 = 0, sy0 = 0, lx = 0, ly = 0, picked = -1;
+        unsigned long idle = millis(), last = 0, openedAt = millis();
+        while (!choose && millis() - idle < 30000) {
+            if (backgroundWorkAllowed()) webserver.handleClient();
+
+            // Eine fehlende Miniatur der Seite laden und gleich zeichnen / load one missing thumbnail of the page and draw it right away
+
+            for (int k = 0; k < 9 && page * 9 + k < count; k++) {
+                const int i = page * 9 + k;
+                if (state[i] != 0) continue;
+                uint16_t* t = thumbs + (size_t)i * FM_T * FM_T;
+                if (faceMenuMakeThumb(faces[i], handSets[i], showSecs[i], hubColors[i], hubSizes[i], t, tmp, hand)) {
+                    state[i] = 1;
+                    DRAW_ON_BOTH_DISPLAYS(faceMenuDrawCell(tft, k, t, active[i], names[i], infos[i]););
+                }
+                else {
+                    state[i] = 2;
+                }
+                break;
+            }
+
+            int x = 0, y = 0;
+            const int st = lcd4TouchRead(x, y);
+            if (st == 1) {
+                idle = millis();
+                last = millis();
+                touchToScreen(x, y, lx, ly);
+                if (!touching) { touching = true; sx0 = lx; sy0 = ly; }
+                const int mx = lx - sx0, my = ly - sy0;
+                if (pages > 1 && abs(mx) > 30 && abs(mx) > 2 * abs(my)) setSlide(mx > 0 ? mx - 30 : mx + 30);
+                else if (slideCur != 0) setSlide(0);
+            }
+            else if (touching && (st == 2 || millis() - last >= 200)) {
+                touching = false;
+                const int dx = lx - sx0, dy = ly - sy0;
+                if (millis() - openedAt < 400) {
+                    // gleich nach dem Oeffnen ignorieren / ignore right after opening
+                }
+                else if (abs(dx) >= 100 && abs(dx) > 2 * abs(dy)) {
+                    const int np = constrain(page + (dx < 0 ? 1 : -1), 0, pages - 1);
+                    if (np != page) {
+                        slideAnimate(slideCur, dx < 0 ? -480 : 480, 140);
+                        page = np;
+                        drawPage();
+                        slideAnimate(dx < 0 ? 480 : -480, 0, 180);
+                    }
+                    else slideAnimate(slideCur, 0, 150);
+                }
+                else if (abs(dx) < 50 && abs(dy) < 50) {
+                    int hit = -1;
+                    for (int k = 0; k < 9 && page * 9 + k < count; k++) {
+                        int cx, cy;
+                        faceMenuCellPos(k, cx, cy);
+                        if (sx0 >= cx - 6 && sx0 < cx + FM_T + 6 && sy0 >= cy - 6 && sy0 < cy + FM_T + 6) hit = page * 9 + k;
+                    }
+                    picked = hit;
+                    choose = true;
+                }
+            }
+            if (!touching && slideCur != 0) slideAnimate(slideCur, 0, 150); // nicht ausgeloester Wisch: zurueck / swipe without effect: back
+            delay(5);
+        }
+        setSlide(0);
+        free(tmp);
+        free(hand);
+        free(thumbs);
+        lcd4TouchDone();
+        if (picked >= 0 && !active[picked]) {
+            DEBUG_PRINTLN("[TOUCH] Set picker: " + names[picked]);
+            presetPickApply(picked);
+        }
+        firstRun = true;
+    }
+
+    // WLAN-Auswahl: Liste der gespeicherten WLANs (eine Zeile je Platz, das aktive gruen). Antippen einer Zeile merkt sie als
+    // aktives WLAN (PK_LAST_WLAN) und startet neu - die Uhr verbindet sich dann mit diesem Netz, wie "Verbinden" in der Weboberflaeche.
+    // Antippen daneben oder 30 s ohne Beruehrung schliesst.
+
+    // WiFi picker: list of the saved WiFi networks (one row per slot, the active one green). Tapping a row stores it as the
+    // active WiFi (PK_LAST_WLAN) and restarts - the clock then connects to that network, like "Connect" in the web interface.
+    // Tapping beside it or 30 s without touch closes.
+
+    void wifiMenu() {
+        int slots[MAX_WLAN], n = 0;
+        for (int i = 0; i < MAX_WLAN; i++) {
+            if (preferences.getString(pkSsid(i).c_str(), "") != "") slots[n++] = i;
+        }
+        const int active = preferences.getInt(PK_LAST_WLAN, -1);
+        const int ROW_H = 48, ROW_BOX = 40, TOP = 44, PER_PAGE = 9; // grosse Zeilen mit Abstand zum sicheren Tippen / large rows with gaps for safe tapping
+        const int pages = (n + PER_PAGE - 1) / PER_PAGE;
+        int page = 0;
+        if (n == 0) {
+            DEBUG_PRINTLN("[TOUCH] No saved WiFi networks");
+            return;
+        }
+        for (int k = 0; k < n; k++) if (slots[k] == active) page = k / PER_PAGE;
+        // DejaVu hat keine Umlaute: ae, oe, ue, ss statt ä, ö, ü, ß (UTF-8-Folgen ersetzen)
+        // DejaVu has no umlauts: ae, oe, ue, ss instead of ä, ö, ü, ß (replace the UTF-8 sequences)
+
+        auto plain = [](String s) {
+            s.replace("\xC3\xA4", "ae"); s.replace("\xC3\xB6", "oe"); s.replace("\xC3\xBC", "ue");
+            s.replace("\xC3\x84", "Ae"); s.replace("\xC3\x96", "Oe"); s.replace("\xC3\x9C", "Ue");
+            s.replace("\xC3\x9F", "ss");
+            return s;
+        };
+        auto drawPage = [&]() {
+            DRAW_ON_BOTH_DISPLAYS(
+                tft.fillScreen(TFT_BLACK);
+                tft.setFont(&fonts::DejaVu18);
+                tft.setTextSize(1);
+                tft.setTextDatum(lgfx::top_left);
+                tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+                tft.drawString(pages > 1 ? "WiFi  " + String(page + 1) + "/" + String(pages) : String("WiFi"), 20, 12);
+                for (int r = 0; r < PER_PAGE && page * PER_PAGE + r < n; r++) {
+                    const int k = page * PER_PAGE + r;
+                    String ssid = plain(preferences.getString(pkSsid(slots[k]).c_str(), ""));
+                    if (ssid.length() > 28) ssid = ssid.substring(0, 26) + "..";
+                    const bool isActive = slots[k] == active;
+                    const uint16_t bg = isActive ? 0x0320 : 0x2104;
+                    tft.fillRect(10, TOP + r * ROW_H, 460, ROW_BOX, bg);
+                    tft.setTextColor(TFT_WHITE, bg);
+                    tft.drawString(String(slots[k] + 1) + "  " + ssid, 20, TOP + r * ROW_H + 9);
+                }
+                tft.setTextSize(1);
+            );
+        };
+        drawPage();
+
+        bool touching = false, choose = false;
+        int sx0 = 0, sy0 = 0, lx = 0, ly = 0;
+        unsigned long idle = millis(), last = 0, openedAt = millis();
+        while (!choose && millis() - idle < 30000) {
+            if (backgroundWorkAllowed()) webserver.handleClient();
+            int x = 0, y = 0;
+            const int st = lcd4TouchRead(x, y);
+            if (st == 1) {
+                idle = millis();
+                last = millis();
+                touchToScreen(x, y, lx, ly);
+                if (!touching) { touching = true; sx0 = lx; sy0 = ly; }
+            }
+            else if (touching && (st == 2 || millis() - last >= 200)) {
+                touching = false;
+                if (millis() - openedAt < 400) continue;
+                const int dx = lx - sx0, dy = ly - sy0;
+                if (abs(dx) >= 100 && abs(dx) > 2 * abs(dy)) {
+                    const int np = constrain(page + (dx < 0 ? 1 : -1), 0, pages - 1);
+                    if (np != page) { page = np; drawPage(); }
+                }
+                else if (abs(dx) < 50 && abs(dy) < 50) {
+                    const int rel = sy0 - TOP;
+                    const int r = rel / ROW_H;
+                    const int k = page * PER_PAGE + r;
+                    if (rel >= 0 && rel % ROW_H < ROW_BOX && r < PER_PAGE && k < n && sx0 >= 10 && sx0 < 470) {
+                        lcd4TouchDone();
+                        const int slot = slots[k];
+                        if (slot != active || WiFi.status() != WL_CONNECTED) {
+                            DEBUG_PRINTLN("[TOUCH] WiFi picker: slot " + String(slot + 1) + " - restarting");
+                            preferences.putInt(PK_LAST_WLAN, slot);
+                            delay(WAIT_1s);
+                            espReboot();
+                        }
+                    }
+                    choose = true;
+                }
+            }
+            delay(5);
+        }
+        lcd4TouchDone();
+        firstRun = true;
+    }
+
+    // Hilfetext (Tippen rechts oben): erklaert die Touch-Bedienung, darunter WLAN-Name und IP-Adresse. Jedes weitere Antippen oder
+    // 30 s ohne Beruehrung schliesst.
+
+    // Help text (tap top right): explains the touch controls, below it the WiFi name and IP address. Any further tap or 30 s
+    // without touch closes it.
+
+    void touchHelp() {
+        const bool de = currentLanguage == "de";
+        const char* const lines[] = {
+            de ? "Touch-Bedienung" : "Touch controls",
+            de ? "Oben links: Anzeige drehen" : "Top left: rotate display",
+            de ? "Oben rechts: WLAN-Daten zeigen" : "Top right: show WiFi info",
+            de ? "Unten links: WLAN waehlen" : "Bottom left: choose WiFi",
+            de ? "Mitte: Set waehlen" : "Centre: choose set",
+            de ? "Wischen: naechstes / voriges Set" : "Swipe: next / previous set",
+            de ? "Unten rechts: diese Hilfe" : "Bottom right: this help"
+        };
+        const String wifi = WiFi.status() == WL_CONNECTED ? tftText(WiFi.SSID()) : String("-");
+        const String ip = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : String("-");
+        DRAW_ON_BOTH_DISPLAYS(
+            tft.fillScreen(TFT_BLACK);
+            tft.setFont(&fonts::DejaVu18);
+            tft.setTextSize(1);
+            tft.setTextDatum(lgfx::top_left);
+            for (int i = 0; i < 7; i++) {
+                tft.setTextColor(i == 0 ? TFT_GREEN : TFT_WHITE, TFT_BLACK);
+                tft.drawString(tftText(lines[i]), 24, 50 + i * 40);
+            }
+            tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+            tft.drawString(wifi.substring(0, 30), 24, 360);
+            tft.drawString(ip, 24, 390);
+            tft.setTextSize(1);
+        );
+
+        bool touching = false;
+        unsigned long idle = millis(), last = 0, openedAt = millis();
+        while (millis() - idle < 30000) {
+            if (backgroundWorkAllowed()) webserver.handleClient();
+            int x = 0, y = 0;
+            const int st = lcd4TouchRead(x, y);
+            if (st == 1) {
+                last = millis();
+                touching = true;
+            }
+            else if (touching && (st == 2 || millis() - last >= 200)) {
+                touching = false;
+                if (millis() - openedAt >= 400) break;
+            }
+            delay(5);
+        }
+        lcd4TouchDone();
+        firstRun = true;
+    }
+
+    // WLAN-Daten (Tippen rechts oben): 30 s lang zeigen oder bis zum naechsten Antippen
+    // WiFi credentials (tap top right): show for 30 s or until the next tap
+
+    void wifiInfoTouch() {
+        clearTFT();
+        showWlanCredentials(WiFi.SSID());
+        bool touching = false;
+        unsigned long idle = millis(), last = 0, openedAt = millis();
+        while (millis() - idle < 30000) {
+            if (backgroundWorkAllowed()) webserver.handleClient();
+            int x = 0, y = 0;
+            const int st = lcd4TouchRead(x, y);
+            if (st == 1) {
+                last = millis();
+                touching = true;
+            }
+            else if (touching && (st == 2 || millis() - last >= 200)) {
+                touching = false;
+                if (millis() - openedAt >= 400) break;
+            }
+            delay(5);
+        }
+        lcd4TouchDone();
+        firstRun = true;
+    }
+
+    // Kurze Hinweise in den vier Ecken, 30 s nach dem Start und nach dem Drehen per Touch. Gezeichnet werden sie nicht hier, sondern
+    // von der Uhr selbst in jedes volle Bild (drawCornerHints() in display.h) - so bleibt der Bildspeicher in Ordnung. Hier laeuft nur
+    // die Zeit; beim Ein- und Ausschalten wird ein volles Bild erzwungen.
+
+    // Short hints in the four corners, for 30 s after the start and after rotating by touch. They are not drawn here but by the
+    // clock itself into every full frame (drawCornerHints() in display.h) - so the frame buffer stays consistent. Only the time runs
+    // here; a full frame is forced when they switch on and off.
+
+    inline unsigned long cornerHintsStart = 0; // 0 = beim naechsten Aufruf starten / 0 = start at the next call
+    inline bool cornerHintsFinished = false;
+
+    // Hinweise 30 s lang neu anzeigen (nach dem Drehen per Touch)
+    // Show the hints for 30 s again (after rotating by touch)
+
+    void cornerHintsRestart() {
+        cornerHintsStart = 0;
+        cornerHintsFinished = false;
+    }
+
+    void cornerHintsTick() {
+        const bool want = touchEnabled && !cornerHintsFinished && tftInitialized && !lcd4StaticOn;
+        static unsigned long validSince = 0; // Zeit gueltig seit / time valid since
+        if (!validSince && timeinfo.tm_year >= 100) validSince = millis();
+        const bool animationDone = validSince != 0 && millis() - validSince > 2000 && !handsAnimating; // erst nach der Startfahrt der Zeiger / only after the start move of the hands
+        if (want && !cornerHintsStart && animationDone) cornerHintsStart = millis();
+        const bool on = want && cornerHintsStart != 0 && millis() - cornerHintsStart < 30000;
+        if (want && cornerHintsStart != 0 && !on) cornerHintsFinished = true;
+        if (on != cornerHintsActive) {
+            cornerHintsActive = on;
+            clockFrameDirty[0] = true; // volles Bild mit bzw. ohne Hinweise / full frame with or without the hints
+        }
+    }
+#endif
+
     void checkTouch() {
         static unsigned long lastPoll = 0, lastReinit = 0, lastExpander = 0;
 
@@ -377,74 +972,120 @@
             lastReinit = millis();
             lcd4Reinit();
         }
+#if BOARD_WAVESHARE_S3_LCD4
+        if (!touchEnabled) {
+            if (slideCur != 0) setSlide(0);
+            slidePhase = 0;
+            if (cornerHintsActive) { cornerHintsActive = false; clockFrameDirty[0] = true; } // Hinweise sofort entfernen / remove the hints right away
+            return; // Touch-Bedienung aus: alles ignorieren / touch control off: ignore everything
+        }
+        if (slideStep()) return; // Wisch-Animation laeuft / swipe animation running
+        cornerHintsTick();
+#endif
         if (millis() - lastPoll < 25) return;
         lastPoll = millis();
 
 #if BOARD_WAVESHARE_S3_LCD4
 
-        // Touch-Zonen (Ecken, je ZONE_PX gross): rechts oben die WLAN-Anzeige (Status), links unten das vorherige und
-        // rechts unten das naechste Preset. Entprellt: Die Beruehrung muss DEBOUNCE_MS in derselben Zone bleiben,
-        // je Aufsetzen wird nur einmal ausgeloest (bis zum Loslassen oder 200 ms ohne neue Position), und nach dem
-        // Loslassen oder einer Aktion sind RELEASE_MS lang keine neuen Beruehrungen erlaubt.
+        // Touch-Zonen (Ecken, je ZONE_PX gross): rechts oben die WLAN-Anzeige (Status), links oben die naechste Rotation
+        // (0-90-180-270-0); Wischen waagerecht wechselt das Preset. Ausgeloest wird beim Loslassen
+        // (oder 200 ms ohne neue Position), danach sind RELEASE_MS lang keine neuen Beruehrungen erlaubt.
 
-        // Touch zones (corners, ZONE_PX each): top right the WiFi info (status), bottom left the previous and bottom
-        // right the next preset. Debounced: the touch has to stay in the same zone for DEBOUNCE_MS, only one action
-        // per touch-down (until release or 200 ms without a new position), and after a release or an action new
-        // touches are ignored for RELEASE_MS.
+        // Touch zones (corners, ZONE_PX each): top right the WiFi info (status), top left the next rotation
+        // (0-90-180-270-0); a horizontal swipe changes the preset. Triggered on release (or 200 ms without a
+        // new position), after that new touches are ignored for RELEASE_MS.
 
-        static bool touching = false, acted = false, logged = false;
-        static int zoneCandidate = 0;
-        static unsigned long touchLast = 0, zoneSince = 0, blockedUntil = 0;
-        const int ZONE_PX = 160;
+        static bool touching = false, logged = false;
+        static int startSx = 0, startSy = 0, lastSx = 0, lastSy = 0, startZone = 0;
+        static unsigned long touchLast = 0, touchStart = 0, blockedUntil = 0;
+        const int ZONE_PX = 160, SWIPE_PX = 100, MOVE_PX = 50;
         const unsigned long DEBOUNCE_MS = 50, RELEASE_MS = 400;
+
+        // Ausgewertet wird beim Loslassen: Wisch waagerecht ab SWIPE_PX (links = naechstes, rechts = vorheriges
+        // Preset), Tippen bleibt unter MOVE_PX.
+        // Evaluated on release: horizontal swipe from SWIPE_PX (left = next, right = previous preset), a tap
+        // stays below MOVE_PX.
 
         int x = 0, y = 0;
         const int state = lcd4TouchRead(x, y);
         if (state != 1) {
-            if (touching && (state == 2 || millis() - touchLast >= 200)) {
-                touching = false;
-                acted = false;
-                logged = false;
-                zoneCandidate = 0;
-                blockedUntil = millis() + RELEASE_MS;
-            }
-            return;
-        }
-
-        touchLast = millis();
-        if ((long)(blockedUntil - millis()) > 0) return;
-        if (!touching) {
-            touching = true;
-            acted = false;
-            zoneCandidate = 0;
-        }
-        if (acted) return;
-
-        int sx = 0, sy = 0;
-        touchToScreen(x, y, sx, sy);
-        int zone = 0; // 1 Status, 2 vorheriges, 3 naechstes Preset / 1 status, 2 previous, 3 next preset
-        if (sy < ZONE_PX && sx >= 480 - ZONE_PX) zone = 1;
-        else if (sy >= 480 - ZONE_PX && sx < ZONE_PX) zone = 2;
-        else if (sy >= 480 - ZONE_PX && sx >= 480 - ZONE_PX) zone = 3;
-        if (zone != zoneCandidate) {
-            zoneCandidate = zone;
-            zoneSince = millis();
-        }
-        if (!logged) {
-            logged = true;
-            lcd4TouchLog[lcd4TouchLogCount % 8][0] = x;
-            lcd4TouchLog[lcd4TouchLogCount % 8][1] = y;
-            lcd4TouchLog[lcd4TouchLogCount % 8][2] = sx;
-            lcd4TouchLog[lcd4TouchLogCount % 8][3] = sy;
-            lcd4TouchLogCount++;
-            DEBUG_PRINTLN("[TOUCH] Touch at x=" + String(x) + " y=" + String(y) + " -> screen " + String(sx) + "," + String(sy) + ", zone " + String(zone));
-        }
-        if (zone == 0 || millis() - zoneSince < DEBOUNCE_MS) return;
-
-        acted = true;
-        if (zone == 2 || zone == 3) {
-            switchPreset(zone == 3 ? 1 : -1);
+            if (!touching || !(state == 2 || millis() - touchLast >= 200)) return;
+            touching = false;
+            logged = false;
             blockedUntil = millis() + RELEASE_MS;
+            const int dx = lastSx - startSx, dy = lastSy - startSy;
+            if (abs(dx) >= SWIPE_PX && abs(dx) > 2 * abs(dy)) {
+                DEBUG_PRINTLN("[TOUCH] Swipe " + String(dx < 0 ? "left" : "right") + " -> preset");
+                startSlide(1, slideCur, dx < 0 ? -480 : 480, 160); // wechselt das Preset, wenn das Bild draussen ist / changes the preset when the picture is out
+                return;
+            }
+            if (slideCur != 0) startSlide(4, slideCur, 0, 150);
+            if (startZone == 0 || abs(dx) >= MOVE_PX || abs(dy) >= MOVE_PX || touchLast - touchStart < DEBOUNCE_MS) return;
+            if (startZone == 3) {
+                DEBUG_PRINTLN("[TOUCH] Tap in the middle - set picker");
+                faceMenu();
+                blockedUntil = millis() + RELEASE_MS;
+                return;
+            }
+            if (startZone == 1) {
+                DEBUG_PRINTLN("[TOUCH] Tap top right - WiFi credentials");
+                wifiInfoTouch();
+                blockedUntil = millis() + RELEASE_MS;
+                return;
+            }
+            if (startZone == 5) {
+                DEBUG_PRINTLN("[TOUCH] Tap bottom right - help text");
+                touchHelp();
+                blockedUntil = millis() + RELEASE_MS;
+                return;
+            }
+            if (startZone == 4) {
+                DEBUG_PRINTLN("[TOUCH] Tap bottom left - WiFi picker");
+                wifiMenu();
+                blockedUntil = millis() + RELEASE_MS;
+                return;
+            }
+            if (startZone == 2) {
+                DEBUG_PRINTLN("[TOUCH] Tap top left - next rotation");
+                applyDisplayRotation(1, (tftRotation1 + 1) % 4);
+                freeClockFaceBuffer();
+                loadClockFace();
+                loadHandSprites();
+                cornerHintsRestart(); // Hinweise in den Ecken wieder 30 s zeigen / show the corner hints again for 30 s
+                return;
+            }
+        }
+        else {
+            touchLast = millis();
+            if ((long)(blockedUntil - millis()) > 0) return;
+            int sx = 0, sy = 0;
+            touchToScreen(x, y, sx, sy);
+            if (!touching) {
+                touching = true;
+                touchStart = millis();
+                startSx = sx;
+                startSy = sy;
+                startZone = 0; // 1 Status, 2 Rotation, 3 Set-Auswahl, 4 WLAN-Auswahl, 5 Hilfe / 1 status, 2 rotation, 3 set picker, 4 WiFi picker, 5 help
+                if (sy < ZONE_PX && sx >= 480 - ZONE_PX) startZone = 1;
+                else if (sy < ZONE_PX && sx < ZONE_PX) startZone = 2;
+                else if (sy >= 480 - ZONE_PX && sx < ZONE_PX) startZone = 4;
+                else if (sy >= 480 - ZONE_PX && sx >= 480 - ZONE_PX) startZone = 5;
+                else startZone = 3;
+            }
+            lastSx = sx;
+            lastSy = sy;
+            const int mx = sx - startSx, my = sy - startSy;
+            if (abs(mx) > 30 && abs(mx) > 2 * abs(my)) setSlide(mx > 0 ? mx - 30 : mx + 30);
+            else if (slideCur != 0) setSlide(0);
+            if (!logged) {
+                logged = true;
+                lcd4TouchLog[lcd4TouchLogCount % 8][0] = x;
+                lcd4TouchLog[lcd4TouchLogCount % 8][1] = y;
+                lcd4TouchLog[lcd4TouchLogCount % 8][2] = sx;
+                lcd4TouchLog[lcd4TouchLogCount % 8][3] = sy;
+                lcd4TouchLogCount++;
+                DEBUG_PRINTLN("[TOUCH] Touch at x=" + String(x) + " y=" + String(y) + " -> screen " + String(sx) + "," + String(sy) + ", zone " + String(startZone));
+            }
             return;
         }
 
