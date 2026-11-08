@@ -30,7 +30,7 @@
 # ESP32-C6: 1/ST7789 (1,47"), 2/ST7789_240 (1,3")). Ohne Parameter: zuerst die Uhr
 # suchen, eine laufende Uhr nach ihrem Displaytyp fragen (Vorwahl), dann
 # Displaytyp und WLAN abfragen, danach flashen und beides per USB an die Uhr senden (siehe
-# handleSerialCommands() in display.h), zuletzt die Uhrzeit des PCs. Das
+# handleSerialCommands() in display.cpp), zuletzt die Uhrzeit des PCs. Das
 # WLAN-Passwort wird verdeckt eingegeben und nirgends gespeichert.
 #
 # Nur die Uhrzeit des PCs an die laufende Uhr senden (ohne Flashen):
@@ -66,7 +66,7 @@
 # ESP32-C6: 1/ST7789 (1.47"), 2/ST7789_240 (1.3")). Without a parameter: first
 # find the clock, ask a running clock for its display type (preselection),
 # then ask for display type and WiFi, afterwards flash and send both to the clock via USB (see handleSerialCommands() in
-# display.h), finally the PC's time. The WiFi password is entered hidden and
+# display.cpp), finally the PC's time. The WiFi password is entered hidden and
 # stored nowhere.
 #
 # Only send the PC's time to the running clock (without flashing):
@@ -463,10 +463,10 @@ display_name() {
 }
 
 # Fragt eine laufende Uhr VOR dem Flashen nach ihrem Displaytyp ("UHR4 INFO",
-# siehe handleSerialInfo() in display.h). Setzt CLOCK_NAME/CLOCK_SET, leer
+# siehe handleSerialInfo() in display.cpp). Setzt CLOCK_NAME/CLOCK_SET, leer
 # wenn keine laufende Uhr da ist oder sie nicht antwortet (uhr3, aeltere uhr4).
 # Asks a running clock BEFORE flashing for its display type ("UHR4 INFO", see
-# handleSerialInfo() in display.h). Sets CLOCK_NAME/CLOCK_SET, empty if there
+# handleSerialInfo() in display.cpp). Sets CLOCK_NAME/CLOCK_SET, empty if there
 # is no running clock or it does not reply (uhr3, older uhr4).
 CLOCK_NAME=""
 CLOCK_SET=""

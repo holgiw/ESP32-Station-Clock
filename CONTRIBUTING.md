@@ -13,8 +13,9 @@ Pull Requests deshalb fokussiert und möglichst klein, dann lassen sie sich viel
 - Board: **LOLIN S2 PICO** (esp32-Arduino-Core, gebaut mit 3.3.12), Partition Scheme
   **„No OTA (2MB APP/2MB SPIFFS)“**, USB CDC On Boot „Enabled“. PSRAM ist bei diesem Board immer an
   (`BOARD_HAS_PSRAM` in der Board-Definition, kein Menüpunkt).
-- Der Compiler-Schalter `-mtext-section-literals` ist nötig: uhr4 ist eine einzige große Übersetzungseinheit, ohne
-  ihn bricht der Linker mit „dangerous relocation: l32r: literal target out of range“ ab. Visual Micro liest ihn aus
+- Der Compiler-Schalter `-mtext-section-literals` ist nötig: Funktion und Literal sollen auch in den großen
+  Quelldateien (`display.cpp`, `webserver_routes.cpp`) nebeneinander liegen, sonst bricht der Linker mit „dangerous
+  relocation: l32r: literal target out of range“ ab. Visual Micro liest ihn aus
   `board.txt` im Projektordner; für Arduino IDE/arduino-cli `platform.local.txt` aus dem Projektordner neben die
   `platform.txt` des ESP32-Cores kopieren – unter Windows
   `%LOCALAPPDATA%\Arduino15\packages\esp32\hardware\esp32\3.3.12\` (Pfade für Linux/macOS stehen in der Datei) – und
@@ -27,7 +28,7 @@ Pull Requests deshalb fokussiert und möglichst klein, dann lassen sie sich viel
   Typ ist eine Einstellung in der Weboberfläche (Tab „Uhr Einstellungen“, wirkt nach einem Neustart). Die Maße je Typ
   stehen in `DISPLAY_GEOMETRY` (`config.h`); `CLOCK_WIDTH`, `HAND_WIDTH` usw. lesen den aktiven Typ zur Laufzeit,
   deshalb nie in Array-Größen, `static_assert` oder `#if` verwenden. `TFT_WIDTH`/`TFT_HEIGHT` sind die Panelgröße, die
-  nur beim ILI9341 größer als die Uhr ist (`drawInfoStrips()` in `display.h`).
+  nur beim ILI9341 größer als die Uhr ist (`drawInfoStrips()` in `display.cpp`).
 - Grafikbibliothek: **LovyanGFX** (getestet mit 1.2.31), unverändert aus dem Bibliotheksverwalter installiert – Bus,
   Panel und Init-Sequenz stehen in `lgfx_config.h`.
 - Weitere Bibliotheken aus dem Bibliotheksverwalter: **RTClib** 2.1.4 (Adafruit) mit ihrer Abhängigkeit **Adafruit
@@ -36,46 +37,60 @@ Pull Requests deshalb fokussiert und möglichst klein, dann lassen sie sich viel
 
 ## Projektaufbau
 
-Die Firmware besteht aus `uhr4.ino` und mehreren Headern mit jeweils klarer Aufgabe:
+Die Firmware besteht aus einem dünnen Sketch (`uhr4.ino`) und je einer `.cpp` pro Aufgabe. Der zugehörige Header
+enthält nur Deklarationen (Prototypen, `extern`-Variablen, Typen, Makros); die Funktionen und Variablen selbst stehen
+in der `.cpp`. Jede `.cpp` beginnt mit `#include "uhr4.h"`.
 
 | Datei | Aufgabe |
 |---|---|
-| `config.h` | Display-Geometrie je Typ, Hardware-Pins, Konstanten |
-| `lgfx_config.h` | LovyanGFX-Gerät: SPI-Bus, GC9A01- und GC9D01-Panel (eigene Init-Sequenzen), ILI9341 (Standardtreiber von LovyanGFX) |
-| `globals.h` | Globale Variablen und gemeinsamer Zustand |
-| `declarations.h` | Vorwärtsdeklarationen aller Funktionen (siehe unten) |
-| `translation.h` | Übersetzungen der Oberfläche (DE) |
-| `wifi_manager.h` | WLAN-Verbindung, AP-Modus, Scan, WPS |
-| `time_sync.h` | Zeitabgleich per NTP und DCF77 |
-| `display.h` | Zeichnen, BMP-Verarbeitung, RLE-Kompression, Einrichtungsbefehle über USB |
-| `presets_manager.h` | Presets speichern und laden |
-| `backup.h` | Komplettsicherung/-wiederherstellung (TAR), WLAN-Verschlüsselung |
-| `webserver_routes.h` | Alle HTTP-Routen und das erzeugte HTML |
-| `face_designer_html.h` | Zifferblatt-Designer (Browserseite) – **erzeugt**, siehe unten |
-| `hand_designer_html.h` | Zeiger-Designer (Browserseite) – **erzeugt**, siehe unten |
-| `designer_common_js.h` | Gemeinsame Funktionen beider Designer – **erzeugt**, siehe unten |
-| `web/` | Quellen beider Designer (`*.css`, `*.html`, `*.js`, gemeinsam `designer_common.js`) und der Generator `build_web.py` |
-| `rocrail_client.h` | Verbindung für die Rocrail-Modellzeit |
-| `system_utils.h` | Heap-Überwachung, sonstige Hilfsfunktionen |
+| `uhr4.ino` | Sketch-Einstieg (Arduino und Visual Micro verlangen eine `.ino`): Kopfkommentar mit Bibliotheken und Board-Einstellungen, bindet `uhr4.h` ein |
+| `main.cpp` | `setup()`, `loop()` und der WLAN-Aufbau beim Start (`connectWiFiAtBoot()`) |
+| `uhr4.h` | Sammelheader: bindet `globals.h` und die Header aller Module ein |
+| `build_info.cpp` | Build-Zeit der Firmware (`__DATE__`, `__TIME__`): `buildAll.bat` löscht vor jedem Lauf ihre Objektdatei, damit die Zeit zum jeweiligen Build passt |
+| `config.h` | Display-Geometrie je Typ, Hardware-Pins, Konstanten, Board-Auswahl (nur Makros und Konstanten) |
+| `lgfx_config.h` | LovyanGFX-Gerät: SPI-Bus, GC9A01- und GC9D01-Panel (eigene Init-Sequenzen), ILI9341 (Standardtreiber von LovyanGFX); bleibt Header, da die Klassen im Header stehen müssen |
 | `prefs_keys.h` | Konstanten für die Schlüsselnamen in `Preferences` (NVS) |
+| `fs_cache.h` | Zwischenspeicher für LittleFS-Abfragen (Klasse `CachedFs`) |
+| `globals.h`, `globals.cpp` | Globale Variablen und gemeinsamer Zustand: `extern`-Deklarationen und Typen im Header, Definitionen mit Startwerten in der `.cpp` |
+| `translation.cpp`, `.h` | Übersetzungen der Oberfläche (DE) |
+| `wifi_manager.cpp`, `.h` | WLAN-Verbindung, AP-Modus, Scan, WPS |
+| `time_sync.cpp`, `.h` | Zeitabgleich per NTP und DCF77 |
+| `open_wifi_time.cpp`, `.h` | Uhrzeit aus offenen WLANs beim Start |
+| `display.cpp`, `.h` | Zeichnen, BMP-Verarbeitung, RLE-Kompression, Einrichtungsbefehle über USB |
+| `presets_manager.cpp`, `.h` | Presets speichern und laden |
+| `backup.cpp`, `.h` | Komplettsicherung/-wiederherstellung (TAR), WLAN-Verschlüsselung |
+| `webserver_routes.cpp`, `.h` | Alle HTTP-Routen und das erzeugte HTML |
+| `face_designer_html.cpp`, `.h` | Zifferblatt-Designer (Browserseite) – **erzeugt**, siehe unten |
+| `hand_designer_html.cpp`, `.h` | Zeiger-Designer (Browserseite) – **erzeugt**, siehe unten |
+| `designer_common_js.cpp`, `.h` | Gemeinsame Funktionen beider Designer – **erzeugt**, siehe unten |
+| `web/` | Quellen beider Designer (`*.css`, `*.html`, `*.js`, gemeinsam `designer_common.js`) und der Generator `build_web.py` |
+| `rocrail_client.cpp`, `.h` | Verbindung für die Rocrail-Modellzeit |
+| `ota_update.cpp`, `.h` | Firmware-Update über WLAN (nur ESP32-S3) |
+| `imu_rotation.cpp`, `.h` | Automatische Rotation per Lagesensor (nur ESP32-S3-LCD-1.28) |
+| `mqtt_status.cpp`, `.h` | MQTT-Meldung des Status (z. B. für openHAB) |
+| `system_utils.cpp`, `.h` | Tasten, Touch, Logging, Reset, Neustart, Heap-Überwachung, sonstige Hilfsfunktionen |
 
-**Jede neue Funktion braucht eine passende Vorwärtsdeklaration in `declarations.h`** – das Projekt verlässt sich
-darauf, statt die `#include`s umzusortieren.
+**Neue Funktionen und Variablen:** Eine Funktion, die eine andere Datei aufruft, braucht einen Prototyp im Header ihres
+Moduls (`display.h` usw.); Standardwerte von Parametern stehen nur dort, nicht in der Definition. Variablen, die mehrere
+Dateien nutzen, stehen als `extern` im Header und mit Definition in der `.cpp` (die globalen in `globals.h` und
+`globals.cpp`). Eine neue `.cpp` bekommt einen Header, den `uhr4.h` einbindet, und wird in der Projektdatei von Visual
+Micro (`uhr4.vcxproj`) ergänzt; Arduino IDE und `arduino-cli` finden sie von selbst.
 
 ### Designer-Seiten (`web/`)
 
 Zifferblatt- und Zeiger-Designer werden in `web/face_designer.*` und `web/hand_designer.*` bearbeitet, Funktionen für
-beide (BMP lesen, Zeigerwinkel, Farbhilfen) in `web/designer_common.js` – nie in den erzeugten Headern. Nach einer
+beide (BMP lesen, Zeigerwinkel, Farbhilfen) in `web/designer_common.js` – nie in den erzeugten Dateien. Nach einer
 Änderung aus dem Projektordner aufrufen:
 
 ```bash
 python web/build_web.py
 ```
 
-Das Skript schreibt `face_designer_html.h`, `hand_designer_html.h` und `designer_common_js.h`: das Markup bleibt Text,
+Das Skript schreibt `face_designer_html`, `hand_designer_html` und `designer_common_js` (je eine `.h` mit den
+`extern`-Deklarationen und eine `.cpp` mit den Daten): das Markup bleibt Text,
 CSS und Skripte werden ohne Kommentarzeilen gzip-komprimiert abgelegt (ausgeliefert unter `/facedesigner.css|.js`,
 `/handdesigner.css|.js` und `/designer.js`, der Browser entpackt). Das spart rund 90 KB Flash. Die neu erzeugten
-Header zusammen mit den Quellen in `web/` committen – zum Bauen der Firmware selbst ist kein zusätzlicher Schritt
+Dateien zusammen mit den Quellen in `web/` committen – zum Bauen der Firmware selbst ist kein zusätzlicher Schritt
 nötig.
 
 ## Code-Stil
@@ -86,7 +101,7 @@ nötig.
 - Zusammengehörende Logik beieinander lassen und kurz kommentieren, *warum* etwas so ist, nicht nur *was* – vor allem
   bei allem, was nicht offensichtlich ist (Timing, Speicheraufteilung, Eigenheiten der Hardware).
 
-## Übersetzungen (`translation.h`)
+## Übersetzungen (`translation.cpp`)
 
 - Die Übersetzungen liegen in einem Array im Flash, `static const TranslationEntry translationTable[]` (ein einfaches
   Array, kein `std::map`) – das ist Absicht, siehe „Speichergrenzen“ unten. Neue Einträge als
@@ -100,7 +115,7 @@ nötig.
   unschönen Umbruch bewahrt, z. B. bei schmalen Menüpunkten.)
 - **Jeder `translate("...")`-Aufruf braucht einen deutschen Eintrag – außer der deutsche Text ist gleich** (z. B.
   „Status“, „Log“, „Version“): `translate()` gibt ohne Eintrag den Schlüssel zurück, gleiche Einträge werden deshalb
-  bewusst weggelassen. Vor einem PR prüfen, dass keine Übersetzung fehlt (alle in den `.ino`/`.h`-Dateien verwendeten
+  bewusst weggelassen. Vor einem PR prüfen, dass keine Übersetzung fehlt (alle in den `.ino`/`.cpp`/`.h`-Dateien verwendeten
   `translate("...")`-Schlüssel sammeln und sicherstellen, dass jeder in `translationTable` steht oder auf Deutsch
   gleich lautet), und Einträge entfernen, deren Schlüssel nirgends mehr verwendet wird.
 - Der Schlüssel selbst bleibt Englisch und entspricht dem Text, der bei englischer Oberfläche angezeigt wird.
@@ -128,9 +143,9 @@ Bitte prüfen:
 
 - [ ] Geschweifte Klammern `{`/`}` sind in jeder geänderten Datei ausgeglichen
 - [ ] Präprozessor-Direktiven (`#if`/`#ifdef`/`#ifndef`/`#endif`) sind ausgeglichen
-- [ ] Jeder `translate("...")`-Aufruf hat einen deutschen Eintrag in `translation.h` (außer der deutsche Text ist
+- [ ] Jeder `translate("...")`-Aufruf hat einen deutschen Eintrag in `translation.cpp` (außer der deutsche Text ist
       gleich)
-- [ ] In `translation.h` sind keine rohen Nicht-ASCII-Zeichen hinzugekommen (HTML-Entities verwenden – siehe oben)
+- [ ] In `translation.cpp` sind keine rohen Nicht-ASCII-Zeichen hinzugekommen (HTML-Entities verwenden – siehe oben)
 - [ ] Der Sketch lässt sich für das oben beschriebene ESP32-S2-Board und Partitionsschema weiterhin kompilieren
 - [ ] Neue Routen, die Zustand senden oder ändern, verwenden `HTTP_POST` (nicht `HTTP_GET`), wenn sie Nebenwirkungen
       haben, und lassen zerstörende Aktionen vorher im Browser bestätigen (`onclick="return confirm(...)"`), wie die
@@ -159,8 +174,9 @@ that makes them much easier to review and merge.
 - Board: **LOLIN S2 PICO** (esp32 Arduino core, built with 3.3.12), partition
   scheme: **"No OTA (2MB APP/2MB SPIFFS)"**, USB CDC On Boot "Enabled". PSRAM is always on for this
   board (`BOARD_HAS_PSRAM` in the board definition, no menu option).
-- Compiler flag `-mtext-section-literals` is required: uhr4 is one large translation unit, without it the
-  linker fails with "dangerous relocation: l32r: literal target out of range". Visual Micro picks it up from
+- Compiler flag `-mtext-section-literals` is required: function and literal should lie next to each other even in the
+  large source files (`display.cpp`, `webserver_routes.cpp`), otherwise the linker fails with "dangerous relocation:
+  l32r: literal target out of range". Visual Micro picks it up from
   `board.txt` in the project folder; for Arduino IDE/arduino-cli copy `platform.local.txt` from the project
   folder next to the ESP32 core's `platform.txt` - on Windows
   `%LOCALAPPDATA%\Arduino15\packages\esp32\hardware\esp32\3.3.12\` (Linux/macOS paths are in the file) - and
@@ -174,7 +190,7 @@ that makes them much easier to review and merge.
   Dimensions per type live in `DISPLAY_GEOMETRY` (`config.h`); `CLOCK_WIDTH`,
   `HAND_WIDTH` etc. read the active type at runtime, so never use them in array
   sizes, `static_assert` or `#if`. `TFT_WIDTH`/`TFT_HEIGHT` are the panel size, which is only larger
-  than the clock on the ILI9341 (`drawInfoStrips()` in `display.h`).
+  than the clock on the ILI9341 (`drawInfoStrips()` in `display.cpp`).
 - Graphics library: **LovyanGFX** (tested with 1.2.31), installed unchanged from
   the Library Manager - bus, panel and init sequence live in `lgfx_config.h`
 - Other libraries from the Library Manager: **RTClib** 2.1.4 (Adafruit) with its dependency **Adafruit BusIO**
@@ -183,47 +199,59 @@ that makes them much easier to review and merge.
 
 ## Project Structure
 
-The firmware is split into `uhr4.ino` plus several headers, each with a
-clear responsibility:
+The firmware is a thin sketch (`uhr4.ino`) plus one `.cpp` per responsibility. The matching header only holds
+declarations (prototypes, `extern` variables, types, macros); the functions and variables themselves live in the
+`.cpp`. Every `.cpp` starts with `#include "uhr4.h"`.
 
 | File | Responsibility |
 |---|---|
-| `config.h` | Display geometry per type, hardware pins, constants |
-| `lgfx_config.h` | LovyanGFX device: SPI bus, GC9A01 and GC9D01 panels (own init sequences), ILI9341 (LovyanGFX default driver) |
-| `globals.h` | Global variables and shared state |
-| `declarations.h` | Forward declarations for every function (see below) |
-| `translation.h` | UI translations (DE) |
-| `wifi_manager.h` | WiFi connection, AP mode, scanning, WPS |
-| `time_sync.h` | NTP and DCF77 time synchronization |
-| `display.h` | Rendering, BMP handling, RLE compression, USB setup commands |
-| `presets_manager.h` | Preset storage/retrieval logic |
-| `backup.h` | Full backup/restore (TAR), WiFi encryption |
-| `webserver_routes.h` | All HTTP routes and generated HTML |
-| `face_designer_html.h` | Clock face designer (browser page) - **generated**, see below |
-| `hand_designer_html.h` | Hand designer (browser page) - **generated**, see below |
-| `designer_common_js.h` | Functions shared by both designers - **generated**, see below |
-| `web/` | Sources of both designers (`*.css`, `*.html`, `*.js`, shared `designer_common.js`) and the generator `build_web.py` |
-| `rocrail_client.h` | Rocrail model time connection |
-| `system_utils.h` | Heap monitoring, misc helpers |
+| `uhr4.ino` | Sketch entry (Arduino and Visual Micro require an `.ino`): header comment with libraries and board settings, includes `uhr4.h` |
+| `main.cpp` | `setup()`, `loop()` and the WiFi connection at boot (`connectWiFiAtBoot()`) |
+| `uhr4.h` | Umbrella header: includes `globals.h` and the headers of all modules |
+| `build_info.cpp` | Build time of the firmware (`__DATE__`, `__TIME__`): `buildAll.bat` deletes its object file before every run so that the time matches the build |
+| `config.h` | Display geometry per type, hardware pins, constants, board selection (macros and constants only) |
+| `lgfx_config.h` | LovyanGFX device: SPI bus, GC9A01 and GC9D01 panels (own init sequences), ILI9341 (LovyanGFX default driver); stays a header because the classes have to be in a header |
 | `prefs_keys.h` | `Preferences` (NVS) key name constants |
+| `fs_cache.h` | Cache for LittleFS queries (class `CachedFs`) |
+| `globals.h`, `globals.cpp` | Global variables and shared state: `extern` declarations and types in the header, definitions with initial values in the `.cpp` |
+| `translation.cpp`, `.h` | UI translations (DE) |
+| `wifi_manager.cpp`, `.h` | WiFi connection, AP mode, scanning, WPS |
+| `time_sync.cpp`, `.h` | NTP and DCF77 time synchronization |
+| `open_wifi_time.cpp`, `.h` | Time from open WiFis at boot |
+| `display.cpp`, `.h` | Rendering, BMP handling, RLE compression, USB setup commands |
+| `presets_manager.cpp`, `.h` | Preset storage/retrieval logic |
+| `backup.cpp`, `.h` | Full backup/restore (TAR), WiFi encryption |
+| `webserver_routes.cpp`, `.h` | All HTTP routes and generated HTML |
+| `face_designer_html.cpp`, `.h` | Clock face designer (browser page) - **generated**, see below |
+| `hand_designer_html.cpp`, `.h` | Hand designer (browser page) - **generated**, see below |
+| `designer_common_js.cpp`, `.h` | Functions shared by both designers - **generated**, see below |
+| `web/` | Sources of both designers (`*.css`, `*.html`, `*.js`, shared `designer_common.js`) and the generator `build_web.py` |
+| `rocrail_client.cpp`, `.h` | Rocrail model time connection |
+| `ota_update.cpp`, `.h` | Firmware update over WiFi (ESP32-S3 only) |
+| `imu_rotation.cpp`, `.h` | Automatic rotation via the motion sensor (ESP32-S3-LCD-1.28 only) |
+| `mqtt_status.cpp`, `.h` | MQTT status report (e.g. for openHAB) |
+| `system_utils.cpp`, `.h` | Buttons, touch, logging, reset, restart, heap monitoring, misc helpers |
 
-**Any new function needs a matching forward declaration in
-`declarations.h`** - the project relies on this instead of reordering
-`#include`s.
+**New functions and variables:** a function that another file calls needs a prototype in its module's header
+(`display.h` etc.); default values of parameters live only there, not in the definition. Variables used by several files
+are `extern` in the header and defined in the `.cpp` (the global ones in `globals.h` and `globals.cpp`). A new `.cpp`
+gets a header that `uhr4.h` includes and is added to the Visual Micro project file (`uhr4.vcxproj`); the Arduino IDE
+and `arduino-cli` find it on their own.
 
 ### Designer pages (`web/`)
 
 The clock face and hand designers are edited in `web/face_designer.*` and `web/hand_designer.*`, functions used by
-both (BMP reading, hand angles, colour helpers) in `web/designer_common.js` - never in the generated headers. After a
+both (BMP reading, hand angles, colour helpers) in `web/designer_common.js` - never in the generated files. After a
 change, run from the project folder:
 
 ```bash
 python web/build_web.py
 ```
 
-It writes `face_designer_html.h`, `hand_designer_html.h` and `designer_common_js.h`: the markup stays text, CSS and
+It writes `face_designer_html`, `hand_designer_html` and `designer_common_js` (each a `.h` with the `extern`
+declarations and a `.cpp` with the data): the markup stays text, CSS and
 scripts are stored gzip-compressed without comment lines (served at `/facedesigner.css|.js`, `/handdesigner.css|.js`
-and `/designer.js`, unpacked by the browser). This saves ~90 KB of flash. Commit the regenerated headers
+and `/designer.js`, unpacked by the browser). This saves ~90 KB of flash. Commit the regenerated files
 together with the `web/` sources - building the firmware itself needs no extra step.
 
 ## Code Style
@@ -236,7 +264,7 @@ together with the `web/` sources - building the firmware itself needs no extra s
   not just *what*, especially for anything non-obvious (timing, memory
   layout, hardware quirks).
 
-## Translations (`translation.h`)
+## Translations (`translation.cpp`)
 
 - Translations live in a flash-resident `static const TranslationEntry
   translationTable[]` (a plain array, not `std::map`) - this is
@@ -257,7 +285,7 @@ together with the `web/` sources - building the firmware itself needs no extra s
   text is identical** (e.g. "Status", "Log", "Version"): `translate()` returns
   the key when there is no entry, so identical entries are deliberately left
   out. Before submitting a PR, verify there are no missing translations
-  (extract every `translate("...")` key used across the `.ino`/`.h` files and
+  (extract every `translate("...")` key used across the `.ino`/`.cpp`/`.h` files and
   confirm each exists in `translationTable` or reads the same in German), and
   remove entries whose key is no longer used anywhere.
 - Keep the key itself in English, matching the fallback text shown when
@@ -293,8 +321,8 @@ Please check:
 - [ ] Braces `{`/`}` balance in every file you touched
 - [ ] Preprocessor directives (`#if`/`#ifdef`/`#ifndef`/`#endif`) balance
 - [ ] Every `translate("...")` call has a matching German entry in
-      `translation.h` (unless the German text is identical)
-- [ ] No raw non-ASCII characters were introduced into `translation.h`
+      `translation.cpp` (unless the German text is identical)
+- [ ] No raw non-ASCII characters were introduced into `translation.cpp`
       (use HTML entities - see above)
 - [ ] The sketch still compiles for the ESP32-S2 board/partition scheme
       described above

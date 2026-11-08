@@ -14,7 +14,7 @@
 #        Nur die Uhrzeit des PCs an eine laufende Uhr senden (setTime.bat).
 # Gesendet wird "UHR4 WIFI <Name-Hex> <Passwort-Hex>", "UHR4 DISPLAY <Name>",
 # bei Bedarf "UHR4 RESTART", danach "UHR4 TIME <Unix-Sekunden>" (siehe
-# handleSerialCommands() in display.h).
+# handleSerialCommands() in display.cpp).
 # Displaytyp ESP32-S2: 1/GC9A01, 2/GC9A01_WITH_BACKLIGHT, 3/GC9D01, 4/ILI9341;
 # ESP32-C6 (Waveshare): 1/ST7789 (1,47"), 2/ST7789_240 (1,3"); ESP32-S3
 # (Waveshare ESP32-S3-LCD-1.28): fest GC9A01, keine Abfrage; 0 = unveraendert.
@@ -53,7 +53,7 @@
 #        No effect any more (the monitor is off by default); accepted for old calls.
 # Sent are "UHR4 WIFI <name hex> <password hex>", "UHR4 DISPLAY <name>",
 # "UHR4 RESTART" if needed, then "UHR4 TIME <unix seconds>" (see
-# handleSerialCommands() in display.h).
+# handleSerialCommands() in display.cpp).
 # Display type ESP32-S2: 1/GC9A01, 2/GC9A01_WITH_BACKLIGHT, 3/GC9D01, 4/ILI9341;
 # ESP32-C6 (Waveshare): 1/ST7789 (1.47"), 2/ST7789_240 (1.3"); ESP32-S3
 # (Waveshare ESP32-S3-LCD-1.28): fixed GC9A01, no question; 0 = unchanged.
@@ -507,10 +507,10 @@ function Send-Command($sp, [string]$cmd) {
 
 
 # Fragt eine laufende Uhr VOR dem Flashen nach ihrem Displaytyp ("UHR4 INFO",
-# siehe handleSerialInfo() in display.h). $null, wenn keine laufende Uhr da ist
+# siehe handleSerialInfo() in display.cpp). $null, wenn keine laufende Uhr da ist
 # oder sie nicht antwortet (uhr3, aeltere uhr4-Firmware).
 # Asks a running clock BEFORE flashing for its display type ("UHR4 INFO", see
-# handleSerialInfo() in display.h). $null if there is no running clock or it
+# handleSerialInfo() in display.cpp). $null if there is no running clock or it
 # does not reply (uhr3, older uhr4 firmware).
 function Get-ClockInfo([int]$num = 0) {
     if (-not $num) { $num = Get-RunningClockPort }

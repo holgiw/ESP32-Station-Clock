@@ -154,6 +154,9 @@ if not defined FQBN (
     exit /b 1
 )
 
+rem Build-Zeit neu setzen: build_info.cpp (enthaelt __DATE__ und __TIME__) muss in jedem Lauf neu uebersetzt werden, auch wenn nur eine andere .cpp geaendert wurde
+rem Re-stamp the build time: build_info.cpp (contains __DATE__ and __TIME__) has to be compiled in every run, even if only another .cpp changed
+if exist "%OUT%\%CHIP%\sketch\build_info.cpp.o" del "%OUT%\%CHIP%\sketch\build_info.cpp.o"
 echo.
 echo [%TIME:~0,8%] Baue / building %CHIP% ... ^(Protokoll / log: %OUT%\%CHIP%.log^)
 "%CLI%" compile --config-file "%CFG%" --fqbn "%FQBN%" %PROP% --build-property compiler.c.extra_flags=-ffile-prefix-map=%USERPROFILE%= %CACHE% --build-path "%OUT%\%CHIP%" . > "%OUT%\%CHIP%.log" 2>&1

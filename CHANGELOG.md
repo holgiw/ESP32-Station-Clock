@@ -20,6 +20,7 @@
 ### Geändert
 - Aktives Preset: Erkannt wird es jetzt nicht nur am Zifferblatt und Zeigersatz, sondern auch an Bahnhofsmodus, Sekundenzeiger, sanfter Minuten- und Sekundenbewegung, Größe und Farbe der Nabe (soweit das Preset sie enthält). Presets mit gleichem Zifferblatt und Zeigersatz werden so unterschieden; Wischen und Auswahl am Display gehen vom richtigen Preset aus. Das zuletzt per Touch gewählte Preset wird gemerkt.
 - Die frühere Touch-Zone unten links/unten rechts (Preset zurück/weiter) entfällt; dafür gibt es das Wischen. Die Ecke rechts oben zeigt WLAN und IP jetzt 30 Sekunden statt 5.
+- Quelltext in `.cpp`-Dateien aufgeteilt: Statt großer Header mit Funktions- und Variablendefinitionen (alles in einer Übersetzungseinheit) gibt es je Aufgabe eine `.cpp` (`display.cpp`, `webserver_routes.cpp`, `time_sync.cpp`, `wifi_manager.cpp`, `backup.cpp`, `system_utils.cpp` und weitere) mit einem Header, der nur Deklarationen enthält. `uhr4.ino` ist ein dünner Sketch-Einstieg, `setup()` und `loop()` stehen in `main.cpp`. Die globalen Variablen sind in `globals.h` als `extern` deklariert und in `globals.cpp` definiert; `declarations.h` entfällt, die Prototypen stehen in den Headern der Module, `uhr4.h` bindet alles ein. `web/build_web.py` erzeugt die Designer-Seiten jetzt als `.h` (Deklarationen) und `.cpp` (Daten). Die Build-Zeit steht in `build_info.cpp`; `buildAll.bat` übersetzt diese Datei in jedem Lauf neu, damit die Zeit auch nach einer Änderung nur in einer anderen `.cpp` stimmt. Die Firmware verhält sich unverändert.
 
 ## 2026-11-06
 
@@ -578,6 +579,7 @@
 ### Changed
 - Active preset: it is now recognised not only by clock face and hand set, but also by station mode, second hand, smooth minute and second movement, hub size and colour (as far as the preset contains them). Presets with the same clock face and hand set are told apart this way; swiping and the picker on the display start from the right preset. The preset chosen last by touch is remembered.
 - The former touch zones bottom left/bottom right (previous/next preset) are gone; swiping replaces them. The top right corner now shows WiFi and IP for 30 seconds instead of 5.
+- Source code split into `.cpp` files: instead of large headers with function and variable definitions (everything in one translation unit) there is one `.cpp` per responsibility (`display.cpp`, `webserver_routes.cpp`, `time_sync.cpp`, `wifi_manager.cpp`, `backup.cpp`, `system_utils.cpp` and more) with a header that only holds declarations. `uhr4.ino` is a thin sketch entry, `setup()` and `loop()` are in `main.cpp`. The global variables are declared `extern` in `globals.h` and defined in `globals.cpp`; `declarations.h` is gone, the prototypes are in the modules' headers, `uhr4.h` includes everything. `web/build_web.py` now generates the designer pages as `.h` (declarations) and `.cpp` (data). The build time is in `build_info.cpp`; `buildAll.bat` compiles this file anew in every run, so the time is right even after a change in another `.cpp` only. The firmware behaves the same.
 
 ## 2026-11-06
 

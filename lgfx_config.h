@@ -167,10 +167,10 @@ protected:
 };
 
 
-    // Ein Geraet fuer BEIDE Displays: CS wird manuell umgeschaltet (setCS1()/setCS2() in display.h), daher
+    // Ein Geraet fuer BEIDE Displays: CS wird manuell umgeschaltet (setCS1()/setCS2() in display.cpp), daher
     // pin_cs = -1. Fuenf Panel-Treiber, gewaehlt nach dem Displaytyp per selectPanel() VOR tft.init() (setup()).
 
-    // One device for BOTH displays: CS is switched manually (setCS1()/setCS2() in display.h), hence
+    // One device for BOTH displays: CS is switched manually (setCS1()/setCS2() in display.cpp), hence
     // pin_cs = -1. Five panel drivers, chosen by the display type via selectPanel() BEFORE tft.init() (setup()).
 
 #if BOARD_RGB_PANEL
@@ -1058,11 +1058,11 @@ class UhrLGFX : public lgfx::LGFX_Device {
 
         // Kein Reset durch LovyanGFX (nur 8 ms Puls, 64 ms Wartezeit). Den
         // Reset macht setup() selbst mit laengeren Zeiten (resetPanels() in
-        // display.h).
+        // display.cpp).
 
         // No reset by LovyanGFX (only an 8 ms pulse, 64 ms wait). setup()
         // does the reset itself with longer timing (resetPanels() in
-        // display.h).
+        // display.cpp).
 
         cfg.pin_rst = -1;
         cfg.pin_busy = -1;

@@ -15,10 +15,10 @@
 # Copy it again after a core update (new version folder), then restart the IDE. It then applies to all ESP32
 # sketches, but does them no harm. Visual Micro does not need the file (reads board.txt).
 #
-# -mtext-section-literals: Literale direkt neben jede Funktion legen - ohne meldet der Linker bei der grossen
-# Uebersetzungseinheit "dangerous relocation: l32r: literal target out of range".
+# -mtext-section-literals: Literale direkt neben jede Funktion legen - ohne meldet der Linker bei den grossen
+# Quelldateien "dangerous relocation: l32r: literal target out of range".
 # -mtext-section-literals: place literals right next to each function - without it the linker reports
-# "dangerous relocation: l32r: literal target out of range" for the large translation unit.
+# "dangerous relocation: l32r: literal target out of range" for the large source files.
 
 # Nur ESP32-S2 und -S3 (Xtensa) kennen den Schalter, der ESP32-C6 (RISC-V) bricht damit ab - {build.mcu}
 # waehlt den passenden Eintrag (wie build.extra_flags.<mcu> in der platform.txt des Cores).

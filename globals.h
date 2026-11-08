@@ -1,10 +1,58 @@
 #pragma once
 
-    // Globale Objekte/Variablen, nach Modul sortiert - echte Definitionen statt extern, da nur uhr4.ino sie
-    // einbindet. Semaphoren-Header explizit fuer logBufferMutex (kommt nicht sicher transitiv mit).
+#include <WiFi.h>
+#include <WebServer.h>
 
-    // Global objects/variables, sorted by module - real definitions instead of extern, since only uhr4.ino
-    // includes them. Semaphore header explicitly for logBufferMutex (not reliably included transitively).
+#include "prefs_keys.h"
+
+#include "config.h"        // Board-/Display-Auswahl, Pins, Timing-Makros
+                           // board/display selection, pins, timing macros
+#include "lgfx_config.h"   // LovyanGFX: Bus, Panel, Init-Sequenz (Pins aus config.h)
+                           // LovyanGFX: bus, panel, init sequence (pins from config.h)
+#include <Preferences.h>
+#include <LittleFS.h>
+#include "fs_cache.h"   // Zwischenspeicher fuer LittleFS-Abfragen, ersetzt LittleFS per Makro / cache for LittleFS queries, replaces LittleFS via macro
+#include <set>
+#include "nvs_flash.h"
+#include <DNSServer.h>
+#include <ESPmDNS.h>
+#include <map>
+#include <esp_wps.h>
+#include <esp_wifi.h>
+
+// ESP_ARDUINO_VERSION_STR: arduino-esp32-Core-Version, mit der kompiliert
+// wurde (Anzeige im Status, siehe webserver_routes.cpp).
+
+// ESP_ARDUINO_VERSION_STR: arduino-esp32 core version this was compiled
+// with (shown in Status, see webserver_routes.cpp).
+
+#include <esp_arduino_version.h>
+
+// Fuer esp_reset_reason() - Grund des letzten Neustarts (Power-On, Watchdog,
+// Panic, Brownout, ...), Anzeige im Status (siehe webserver_routes.cpp).
+
+// For esp_reset_reason() - reason for the last restart (power-on, watchdog,
+// panic, brownout, ...), shown in Status (see webserver_routes.cpp).
+
+#include <esp_system.h>
+#include <esp_mac.h> // esp_read_mac()
+#include <Wire.h>
+#include <RTClib.h>
+#include <WiFiUdp.h>
+
+// Fuer sntp_set_sync_mode()/sntp_set_sync_interval() - siehe setup() und
+// den Kommentar dort zum Sekundenzeiger-Ruecksprung-Fix.
+
+// For sntp_set_sync_mode()/sntp_set_sync_interval() - see setup() and the
+// comment there about the second-hand jump-back fix.
+
+#include <esp_sntp.h>
+
+    // Globale Objekte/Variablen, nach Modul sortiert - als extern deklariert, definiert in globals.cpp.
+    // Semaphoren-Header explizit fuer logBufferMutex (kommt nicht sicher transitiv mit).
+
+    // Global objects/variables, sorted by module - declared extern, defined in globals.cpp.
+    // Semaphore header explicitly for logBufferMutex (not reliably included transitively).
 
 #include <freertos/semphr.h>
 
@@ -14,80 +62,84 @@
     // Active display type (index into DISPLAY_GEOMETRY) - CLOCK_WIDTH, HAND_WIDTH etc. read via displayGeom.
     // loadDisplayType() sets it at the very start of setup(), before anything that needs dimensions.
 
-    uint8_t displayType = DISPLAY_TYPE_DEFAULT;
-    const DisplayGeometry* displayGeom = &DISPLAY_GEOMETRY[DISPLAY_TYPE_DEFAULT];
+    extern uint8_t displayType;
+    extern const DisplayGeometry* displayGeom;
 
     // System / Allgemein
     // System / General
 
-    String currentLanguage = "de"; // Standardmäßig Deutsch
+    extern String currentLanguage; // Standardmäßig Deutsch
                                    // Default: German
 
-    char version[20]; // Build-Version ("YYYY-MM-DD HH:MM:SS" = 19 Zeichen + Nullterminator)
+    extern char version[20]; // Build-Version ("YYYY-MM-DD HH:MM:SS" = 19 Zeichen + Nullterminator)
                       // Build version ("YYYY-MM-DD HH:MM:SS" = 19 chars + null terminator)
 
-    bool loggingEnabled = false;
+    extern bool loggingEnabled;
 
-    // Laufendes Firmware-Update (ota_update.h): loop() pausiert, WLAN-Scans unterbleiben. Bleibt auf
+    // Laufendes Firmware-Update (ota_update.cpp): loop() pausiert, WLAN-Scans unterbleiben. Bleibt auf
     // S2/C6 (ohne OTA) immer false.
 
-    // Running firmware update (ota_update.h): loop() pauses, WiFi scans are skipped. Always stays false on
+    // Running firmware update (ota_update.cpp): loop() pauses, WiFi scans are skipped. Always stays false on
     // S2/C6 (without OTA).
 
-    bool otaInProgress = false;
-    unsigned long otaStartMillis = 0;
-    String otaUploadError = ""; // Fehler beim Hochladen ueber die Weboberflaeche, leer = ok
+    extern bool otaInProgress;
+    extern unsigned long otaStartMillis;
+    extern String otaUploadError; // Fehler beim Hochladen ueber die Weboberflaeche, leer = ok
                                 // error while uploading via the web interface, empty = ok
 
     // Kennung der Build-Zeit in der .bin (wie version, nur als Text "Oct  1 2026 12:00:00"): publish_s3_update.ps1
     // und checkClocks.ps1 lesen sie aus der Datei. Alle Chips; sie wird beim Start ins Log geschrieben (sonst wirft
-    // der Linker sie weg).
+    // der Linker sie weg). Datum und Uhrzeit des Builds einzeln: fwBuildDate ("Oct  1 2026"), fwBuildTime. Alle drei
+    // stehen in build_info.cpp.
 
     // Marker of the build time in the .bin (like version, only as text "Oct  1 2026 12:00:00"): publish_s3_update.ps1
     // and checkClocks.ps1 read it from the file. All chips; it is written to the log at start (otherwise the linker
-    // drops it).
+    // drops it). Date and time of the build separately: fwBuildDate ("Oct  1 2026"), fwBuildTime. All three are in
+    // build_info.cpp.
 
-    const char fwBuildMarker[] __attribute__((used)) = "UHR4_FW_BUILD=" __DATE__ " " __TIME__;
+    extern const char fwBuildMarker[];
+    extern const char fwBuildDate[];
+    extern const char fwBuildTime[];
 
-    // Zeiger fahren auf ihre Position (animateHand() in display.h, Start und Zeitkorrektur, 3 bis 10 s): in dieser Zeit
+    // Zeiger fahren auf ihre Position (animateHand() in display.cpp, Start und Zeitkorrektur, 3 bis 10 s): in dieser Zeit
     // ruht alle Hintergrundarbeit, die den Takt stoeren koennte (Log in den Flash schreiben, Webserver, NTP-Antworten,
     // Rocrail). Die Pause dauert so lange wie die Fahrt plus 1 s (handsDeferMs), mindestens HANDS_ANIMATION_MAX_DEFER_MS,
     // damit auch die lange Startfahrt ungestoert bleibt und nie etwas haengen bleibt.
 
-    // Hands moving to their position (animateHand() in display.h, start and time correction, 3 to 10 s): during that
+    // Hands moving to their position (animateHand() in display.cpp, start and time correction, 3 to 10 s): during that
     // time all background work that could disturb the rhythm rests (writing the log to flash, web server, NTP replies,
     // Rocrail). The pause lasts as long as the move plus 1 s (handsDeferMs), at least HANDS_ANIMATION_MAX_DEFER_MS, so
     // the long start move stays undisturbed too and nothing ever hangs.
 
     // Nach einem Neustart (OTA, Browser, WPS) behaelt der Chip seine Systemzeit - sie kann falsch sein (hier 28 Minuten).
     // Ohne RTC/DCF77/NTP/manuell gesetzte Zeit bleiben die Zeiger deshalb bis zu TIME_TRUST_WAIT_MS auf 12, statt
-    // erst zu dieser Zeit und dann nochmal zur richtigen zu fahren (timeTrusted() in display.h).
+    // erst zu dieser Zeit und dann nochmal zur richtigen zu fahren (timeTrusted() in display.cpp).
 
     // After a restart (OTA, browser, WPS) the chip keeps its system time - it may be wrong (here 28 minutes). Without
     // RTC/DCF77/NTP/manually set time the hands therefore stay at 12 for up to TIME_TRUST_WAIT_MS, instead of first
-    // moving to that time and then again to the right one (timeTrusted() in display.h).
+    // moving to that time and then again to the right one (timeTrusted() in display.cpp).
 
 #define TIME_TRUST_WAIT_MS 15000
-    bool timeSetByUser = false; // setClockTime() erfolgreich / setClockTime() succeeded
+    extern bool timeSetByUser; // setClockTime() erfolgreich / setClockTime() succeeded
 
 #define HANDS_ANIMATION_MAX_DEFER_MS 5000
-    bool handsAnimating = false;
-    unsigned long handsAnimatingSinceMillis = 0;
-    unsigned long handsDeferMs = HANDS_ANIMATION_MAX_DEFER_MS; // gilt fuer die laufende Fahrt, siehe renderClockFrame() / for the running move, see renderClockFrame()
+    extern bool handsAnimating;
+    extern unsigned long handsAnimatingSinceMillis;
+    extern unsigned long handsDeferMs; // gilt fuer die laufende Fahrt, siehe renderClockFrame() / for the running move, see renderClockFrame()
 
     inline bool backgroundWorkAllowed() {
         return !handsAnimating || millis() - handsAnimatingSinceMillis > handsDeferMs;
     }
 
-    // Ergebnis der letzten Update-Pruefung auf GitHub (ota_update.h): Build-Zeit des Releases (leer = unbekannt) und
+    // Ergebnis der letzten Update-Pruefung auf GitHub (ota_update.cpp): Build-Zeit des Releases (leer = unbekannt) und
     // Fehlertext (leer = ok); fwLastCheckMillis = Zeitpunkt des Versuchs
 
-    // Result of the last update check on GitHub (ota_update.h): build time of the release (empty = unknown) and
+    // Result of the last update check on GitHub (ota_update.cpp): build time of the release (empty = unknown) and
     // error text (empty = ok); fwLastCheckMillis = time of the attempt
 
-    String fwRemoteBuild = "";
-    String fwCheckError = "";
-    unsigned long fwLastCheckMillis = 0;
+    extern String fwRemoteBuild;
+    extern String fwCheckError;
+    extern unsigned long fwLastCheckMillis;
 
     // Log-Zeilen werden gesammelt statt einzeln auf Flash geschrieben - jeder Flash-Zugriff haelt kurz alles
     // an (auch die Displayuebertragung). logBufferMutex schuetzt logLineBuffer, da auch NTP-/Rocrail-Tasks
@@ -97,84 +149,84 @@
     // everything (including the display transfer). logBufferMutex protects logLineBuffer, since NTP/Rocrail
     // tasks write into it too.
 
-    String logLineBuffer = "";
-    SemaphoreHandle_t logBufferMutex = nullptr; // erzeugt in setup() via xSemaphoreCreateMutex()
+    extern String logLineBuffer;
+    extern SemaphoreHandle_t logBufferMutex; // erzeugt in setup() via xSemaphoreCreateMutex()
                                                 // created in setup() via xSemaphoreCreateMutex()
-    unsigned long lastLogFlushMillis = 0;
+    extern unsigned long lastLogFlushMillis;
 #define LOG_FLUSH_INTERVAL_MS 3000 // spaetestens nach dieser Zeit leeren, auch bei nur einer Zeile
                                   // flush at the latest after this long, even for just one line
 #define LOG_FLUSH_MAX_BUFFER_BYTES 1024 // frueher leeren, wenn der Puffer waechst, statt RAM zu verschwenden
                                         // flush earlier if the buffer grows, instead of wasting RAM
 
-    bool initial = true;
+    extern bool initial;
 
-    String ipAddress = "";
+    extern String ipAddress;
 
 
     // Kern-Hardwareobjekte (TFT, Webserver, Preferences, RTC, ...)
     // Core hardware objects (TFT, web server, preferences, RTC, ...)
 
-    UhrLGFX tft; // ein Geraet fuer beide Displays, siehe lgfx_config.h
+    extern UhrLGFX tft; // ein Geraet fuer beide Displays, siehe lgfx_config.h
                  // one device for both displays, see lgfx_config.h
 
     // false bis tft.init() gelaufen ist - vorher duerfen setCS1()/setCS2()
-    // (display.h) noch keine Rotation an den Chip senden.
+    // (display.cpp) noch keine Rotation an den Chip senden.
 
     // false until tft.init() has run - before that setCS1()/setCS2()
-    // (display.h) must not send a rotation to the chip yet.
+    // (display.cpp) must not send a rotation to the chip yet.
 
-    bool tftInitialized = false;
-    WebServer webserver(80);
-    Preferences preferences;
-    DNSServer dnsServer;
-    WiFiUDP udp;
+    extern bool tftInitialized;
+    extern WebServer webserver;
+    extern Preferences preferences;
+    extern DNSServer dnsServer;
+    extern WiFiUDP udp;
 
     // Eigene WiFiUDP-Instanz fuer die R2RNet-Multicast-Diagnose - unabhaengig von 'udp' (eigener NTP-Server).
     // Separate WiFiUDP instance for the R2RNet multicast diagnostics - independent of 'udp' (own NTP server).
 
-    WiFiUDP r2rnetDebugUdp;
-    uint8_t r2rnetDebugLogCount = 0; // geloggte R2RNet-Pakete seit dem letzten Beitritt (siehe R2RNET_DEBUG_LOG_LIMIT)
+    extern WiFiUDP r2rnetDebugUdp;
+    extern uint8_t r2rnetDebugLogCount; // geloggte R2RNet-Pakete seit dem letzten Beitritt (siehe R2RNET_DEBUG_LOG_LIMIT)
                                      // R2RNet packets logged since the last join (see R2RNET_DEBUG_LOG_LIMIT)
-    bool r2rnetDebugListening = false; // true, sobald der Multicast-Gruppe erfolgreich beigetreten wurde
+    extern bool r2rnetDebugListening; // true, sobald der Multicast-Gruppe erfolgreich beigetreten wurde
                                        // true once the multicast group has been joined successfully
 
-    RTC_DS3231 rtc;
+    extern RTC_DS3231 rtc;
 
     // WLAN
     // WiFi
 
 #define MAX_WLAN 15
-    String wifiSsid[MAX_WLAN];
-    String wifiPass[MAX_WLAN];
+    extern String wifiSsid[MAX_WLAN];
+    extern String wifiPass[MAX_WLAN];
 
 #define NOT_CONNECTED 0
 #define CONNECTED 1
 
-    bool wifiActive = true;
+    extern bool wifiActive;
 
     // Zustand fuer eine per Web-Button ausgeloeste WPS-Anfrage (siehe loop() in
-    // uhr4.ino, /api/startWPS in webserver_routes.h) - laeuft asynchron und
+    // main.cpp, /api/startWPS in webserver_routes.cpp) - laeuft asynchron und
     // event-basiert ueber WiFi.onEvent(), um den Webserver nicht zu blockieren.
 
-    // State for a web-button-triggered WPS request (see loop() in uhr4.ino,
-    // /api/startWPS in webserver_routes.h) - runs asynchronously and event-based
+    // State for a web-button-triggered WPS request (see loop() in main.cpp,
+    // /api/startWPS in webserver_routes.cpp) - runs asynchronously and event-based
     // via WiFi.onEvent(), so the web server isn't blocked.
 
-    bool wpsPending = false;
-    unsigned long wpsStartMillis = 0;
-    String wpsPreviousSsid = ""; // Verbindung vor dem WPS-Start, um danach ggf. dorthin zurueckzuwechseln
+    extern bool wpsPending;
+    extern unsigned long wpsStartMillis;
+    extern String wpsPreviousSsid; // Verbindung vor dem WPS-Start, um danach ggf. dorthin zurueckzuwechseln
                                  // Connection before the WPS start, to switch back to it afterward if needed
-    volatile bool wpsSuccessEvent = false; // wird im WiFi-Event-Callback gesetzt (anderer Kontext!)
+    extern volatile bool wpsSuccessEvent; // wird im WiFi-Event-Callback gesetzt (anderer Kontext!)
                                            // set in the WiFi event callback (different context!)
 #ifdef WIFI_TX_AUTO
-    volatile int8_t wifiTxPowerCurrent = WIFI_TX_FIRST; // gerade gewaehlte Sendeleistung (wifiTxPowerCurrent wird im Start-Ereignis angewendet)
+    extern volatile int8_t wifiTxPowerCurrent; // gerade gewaehlte Sendeleistung (wifiTxPowerCurrent wird im Start-Ereignis angewendet)
                                                             // currently chosen transmit power (applied in the start event)
 #endif
-    volatile int lastTxPowerResult = -1; // Ergebnis von esp_wifi_set_max_tx_power() im Start-Ereignis (-1 = nie aufgerufen)
+    extern volatile int lastTxPowerResult; // Ergebnis von esp_wifi_set_max_tx_power() im Start-Ereignis (-1 = nie aufgerufen)
                                          // result of esp_wifi_set_max_tx_power() in the start event (-1 = never called)
-    volatile uint8_t lastWifiDisconnectReason = 0; // Grund des letzten Verbindungsabbruchs (WiFi-Event, anderer Kontext!)
+    extern volatile uint8_t lastWifiDisconnectReason; // Grund des letzten Verbindungsabbruchs (WiFi-Event, anderer Kontext!)
                                                    // reason of the last disconnect (WiFi event, other context!)
-    volatile bool wpsFailedEvent = false;
+    extern volatile bool wpsFailedEvent;
 
     // Verzoegerter WPS-Start: der HTTP-Handler darf nicht per delay()
     // blockieren, sonst kann der Webserver die Folge-Anfrage fuer die
@@ -184,29 +236,29 @@
     // otherwise the web server can't accept the redirect target page's
     // follow-up request - loop() starts WPS on a timer a bit later instead.
 
-    bool wpsStartRequested = false;
-    unsigned long wpsStartRequestedAtMillis = 0;
+    extern bool wpsStartRequested;
+    extern unsigned long wpsStartRequestedAtMillis;
 
     // MAC Adresse
     // MAC address
 
-    uint8_t mac[6];
-    char hostname[32];
+    extern uint8_t mac[6];
+    extern char hostname[32];
 
     // Zur Laufzeit erzeugtes AP-Passwort (aus MAC-Bytes, siehe startAP() in
-    // wifi_manager.h) - als Puffer, damit Display und Web-UI-Statuszeile es
+    // wifi_manager.cpp) - als Puffer, damit Display und Web-UI-Statuszeile es
     // beide anzeigen koennen. Leer, solange der AP nie lief.
 
     // AP password generated at runtime (from MAC bytes, see startAP() in
-    // wifi_manager.h) - as a buffer so both the display and web UI status line
+    // wifi_manager.cpp) - as a buffer so both the display and web UI status line
     // can show it. Empty as long as the AP has never run.
 
-    char apPassword[64] = ""; // AP_PASSWORD (config.h), max. 63 Zeichen + NUL / max. 63 chars + NUL
-    bool pingHostname = false;
+    extern char apPassword[64]; // AP_PASSWORD (config.h), max. 63 Zeichen + NUL / max. 63 chars + NUL
+    extern bool pingHostname;
 
-    bool softAPIP = false;  // Flag für SoftAP IP
+    extern bool softAPIP; // Flag für SoftAP IP
                             // Flag for SoftAP IP
-    long softAPIPstart = 0;  // Startzeit für SoftAP IP
+    extern long softAPIPstart; // Startzeit für SoftAP IP
                              // Start time for SoftAP IP
 
     // Bestaetigungscode fuer Werksreset-Aktionen und Aenderungen am AKTUELL VERBUNDENEN WLAN: "" = nichts
@@ -217,14 +269,14 @@
     // requested, otherwise the 3-digit code shown on the display - prevents such actions remotely without
     // access to the clock. Other WiFi networks stay changeable without a code.
 
-    String factoryResetCode = "";
-    unsigned long factoryResetCodeStartMillis = 0;
-    bool factoryResetCodeShown = false; // wurde der Code schon gezeichnet? (nur einmal, nicht jeden Frame)
+    extern String factoryResetCode;
+    extern unsigned long factoryResetCodeStartMillis;
+    extern bool factoryResetCodeShown; // wurde der Code schon gezeichnet? (nur einmal, nicht jeden Frame)
                                        // has the code already been drawn? (only once, not every frame)
-    String factoryResetPendingAction = ""; // welche Aktion nach Code-Bestaetigung ausgefuehrt wird:
+    extern String factoryResetPendingAction; // welche Aktion nach Code-Bestaetigung ausgefuehrt wird:
                                            // "all"/"wifi"/"faces"/"hands"/"presets"/"wlanDeleteActive"/
                                            // "wlanOverwriteActive" (siehe /factoryReset/confirm)
-    uint8_t factoryResetCodeAttempts = 0; // Fehlversuche fuer den AKTUELLEN Code (siehe
+    extern uint8_t factoryResetCodeAttempts; // Fehlversuche fuer den AKTUELLEN Code (siehe
                                          // FACTORY_RESET_MAX_ATTEMPTS in config.h) - ohne diese Bremse waere
                                          // der Code per Brute-Force erratbar, da 3 Stellen nur 900
                                          // Kombinationen sind und sonst beliebig oft geraten werden koennte.
@@ -244,18 +296,18 @@
     // pendingWifiChangeIndex = slot to delete ("wlanDeleteActive"), pendingWifiSsid[]/pendingWifiPass[] = new
     // WiFi list from the form ("wlanOverwriteActive").
 
-    int pendingWifiChangeIndex = -1;
-    String pendingWifiSsid[MAX_WLAN];
-    String pendingWifiPass[MAX_WLAN];
+    extern int pendingWifiChangeIndex;
+    extern String pendingWifiSsid[MAX_WLAN];
+    extern String pendingWifiPass[MAX_WLAN];
 
     struct WifiNetwork {
         String ssid;
         int rssi;
         int enc;
     };
-    WifiNetwork availableNetworks[MAX_WLAN];
-    int foundNetworkCount = 0;
-    bool isScanning = false;
+    extern WifiNetwork availableNetworks[MAX_WLAN];
+    extern int foundNetworkCount;
+    extern bool isScanning;
 
     // Zeit, NTP, DCF77, RTC
     // Time, NTP, DCF77, RTC
@@ -269,7 +321,7 @@
     // NTP packet size
 
     const int NTP_PACKET_SIZE = 48;
-    byte ntpPacket[NTP_PACKET_SIZE];
+    extern byte ntpPacket[NTP_PACKET_SIZE];
 
 
     // Interrupt auf CHANGE; processDcf77Bits() wertet nur die Dauer zwischen zwei Flanken aus - der Pegel
@@ -278,10 +330,10 @@
     // Interrupt on CHANGE; processDcf77Bits() only evaluates the duration between two edges - the level is
     // never read.
 
-    volatile uint16_t dcf77Count = 0; // Anzahl der empfangenen DCF77-Signale (wird in der ISR verändert)
+    extern volatile uint16_t dcf77Count; // Anzahl der empfangenen DCF77-Signale (wird in der ISR verändert)
                                       // Number of received DCF77 signals (modified in the ISR)
 
-    volatile bool dcfTimeFound = false; // wird in loop()/updateDcf77Status() gesetzt, nicht mehr in der ISR gelesen
+    extern volatile bool dcfTimeFound; // wird in loop()/updateDcf77Status() gesetzt, nicht mehr in der ISR gelesen
                                         // set in loop()/updateDcf77Status(), no longer read in the ISR
 
     // Gesetzt in processDcf77Bits(), nicht in der ISR: setLedOn/Off() liegen im Flash (Panic-Risiko bei
@@ -291,7 +343,7 @@
     // Set in processDcf77Bits(), not the ISR: setLedOn/Off() live in flash (panic risk with the flash cache
     // disabled), and only processDcf77Bits() knows via dcf77Confirmed whether DCF77 was actually recognized.
 
-    volatile bool dcfLedTogglePending = false;
+    extern volatile bool dcfLedTogglePending;
 
     // Zeitpunkt (millis()), zu dem der aktuelle Einmal-Blitz der LED wieder
     // ausgeschaltet werden soll; 0 = kein Blitz aktiv (siehe
@@ -301,9 +353,9 @@
     // switched off again; 0 = no flash active (see DCF77_LED_BLINK_MS in
     // config.h and the handling in loop()).
 
-    unsigned long dcfLedOffAtMillis = 0;
+    extern unsigned long dcfLedOffAtMillis;
 
-    bool dcfSyncLedEnabled = true; // per Checkbox abschaltbar (Default: an) - steuert nur, ob loop() das per
+    extern bool dcfSyncLedEnabled; // per Checkbox abschaltbar (Default: an) - steuert nur, ob loop() das per
                                     // dcfLedTogglePending angeforderte Blinken ausfuehrt (siehe PK_DCF_SYNC_LED)
                                     // switchable via checkbox (default: on) - only controls whether loop() executes
                                     // the blink requested via dcfLedTogglePending (see PK_DCF_SYNC_LED)
@@ -314,28 +366,28 @@
     // Onboard LED (blue, LED_BOARD) switchable off completely (default: on): off = setLedOn() never switches it on -
     // neither at boot, on HTTP access, on DCF77 reception nor on WPS (see PK_BOARD_LED).
 
-    bool boardLedEnabled = true;
+    extern bool boardLedEnabled;
 
     // Touch-Bedienung des Displays (ESP32-S3-Touch-LCD-4) - aus = alle Touch-Funktionen und die Hinweise in den Ecken entfallen
     // Touch control of the display (ESP32-S3-Touch-LCD-4) - off = all touch functions and the corner hints are disabled
 
-    bool touchEnabled = true;
-    bool cornerHintsActive = false; // Hinweise in den Ecken im Uhrbild zeigen (system_utils.h) / show the corner hints in the clock image (system_utils.h)
+    extern bool touchEnabled;
+    extern bool cornerHintsActive; // Hinweise in den Ecken im Uhrbild zeigen (system_utils.cpp) / show the corner hints in the clock image (system_utils.cpp)
 
-    time_t lastDcfSyncTime = 0; // Unix-Zeitstempel der letzten erfolgreichen DCF77-Synchronisation (0 = noch nie)
+    extern time_t lastDcfSyncTime; // Unix-Zeitstempel der letzten erfolgreichen DCF77-Synchronisation (0 = noch nie)
                                 // Unix timestamp of the last successful DCF77 sync (0 = never)
 
-    unsigned long lastDcf77PulseChangeMillis = 0; // millis()-Zeitpunkt der letzten beobachteten Aenderung von dcf77Count (siehe checkDcf77Health() in time_sync.h) -
+    extern unsigned long lastDcf77PulseChangeMillis; // millis()-Zeitpunkt der letzten beobachteten Aenderung von dcf77Count (siehe checkDcf77Health() in time_sync.cpp) -
                                                    // erkennt einen kompletten Empfangsausfall waehrend des Betriebs, da dcf77Count selbst nie auf 0 zurueckgesetzt wird
-                                                   // millis() timestamp of the last observed change in dcf77Count (see checkDcf77Health() in time_sync.h) -
+                                                   // millis() timestamp of the last observed change in dcf77Count (see checkDcf77Health() in time_sync.cpp) -
                                                    // detects a complete reception failure during operation, since dcf77Count itself is never reset to 0
 
-    uint8_t dcf77PlausiblePulseStreak = 0; // Zahl aufeinanderfolgender dcf77Count-Aenderungen mit plausiblem Abstand
+    extern uint8_t dcf77PlausiblePulseStreak; // Zahl aufeinanderfolgender dcf77Count-Aenderungen mit plausiblem Abstand
                                             // (siehe DCF77_PRESENCE_MAX_GAP_MS, checkDcf77Health()) - filtert Rauschen
                                             // number of consecutive dcf77Count changes with a plausible gap (see
                                             // DCF77_PRESENCE_MAX_GAP_MS, checkDcf77Health()) - filters out noise
 
-    bool dcf77Confirmed = false; // wird einmalig true bei DCF77_PRESENCE_MIN_STREAK (config.h) - bestimmt, ob der
+    extern bool dcf77Confirmed; // wird einmalig true bei DCF77_PRESENCE_MIN_STREAK (config.h) - bestimmt, ob der
                                  // DCF77-Eintrag in der Topbar angezeigt wird; danach nie zurueckgesetzt
                                  // becomes true exactly once at DCF77_PRESENCE_MIN_STREAK (config.h) - decides
                                  // whether the DCF77 topbar entry is shown; never reset afterwards
@@ -348,13 +400,13 @@
     // decoding happens in loop(). 64 slots (256 bytes) also bridge longer stalls from NTP/web/LittleFS.
 
 #define DCF77_EDGE_BUFFER_SIZE 64
-    volatile unsigned long dcf77EdgeMillis[DCF77_EDGE_BUFFER_SIZE];
+    extern volatile unsigned long dcf77EdgeMillis[DCF77_EDGE_BUFFER_SIZE];
 
-    volatile uint8_t dcf77EdgeHead = 0; // naechster freier Schreibindex - NUR von der ISR veraendert
+    extern volatile uint8_t dcf77EdgeHead; // naechster freier Schreibindex - NUR von der ISR veraendert
                                         // next free write index - ONLY changed by the ISR
-    volatile uint32_t dcf77EdgeDropped = 0; // Anzahl verworfener Flanken bei vollem Puffer - uint32_t, da uint8_t nach 256 ueberlaufen wuerde (Diagnose).
+    extern volatile uint32_t dcf77EdgeDropped; // Anzahl verworfener Flanken bei vollem Puffer - uint32_t, da uint8_t nach 256 ueberlaufen wuerde (Diagnose).
                                             // number of edges dropped when the buffer was full - uint32_t, since uint8_t would wrap after 256 (diagnostic).
-    uint8_t dcf77EdgeTail = 0; // naechster zu lesende Index - NUR im Hauptthread (loop()) veraendert
+    extern uint8_t dcf77EdgeTail; // naechster zu lesende Index - NUR im Hauptthread (loop()) veraendert
                                // next index to read - ONLY changed on the main thread (loop())
 
 #define DCF77_TELEGRAM_BITS 59
@@ -368,14 +420,14 @@
     // marker is found, otherwise the /dcf77 page would stay empty until then.
 
 #define DCF77_GRID_SLOTS 60
-    int8_t dcf77Bits[DCF77_GRID_SLOTS]; // 0/1 je Rasterposition der laufenden Minute, -1 = (noch) unbekannt - NUR Hauptthread
+    extern int8_t dcf77Bits[DCF77_GRID_SLOTS]; // 0/1 je Rasterposition der laufenden Minute, -1 = (noch) unbekannt - NUR Hauptthread
                                         // 0/1 per grid position of the running minute, -1 = unknown (yet) - main thread only
-    uint8_t dcf77BitIndex = 0; // Position (Sekunde) des naechsten erwarteten Impulses - bei einer verlorenen Sekunde
+    extern uint8_t dcf77BitIndex; // Position (Sekunde) des naechsten erwarteten Impulses - bei einer verlorenen Sekunde
                                // bleibt dort eine Luecke (-1), der Index zeigt trotzdem korrekt weiter (siehe processDcf77Bits())
                                // position (second) of the next expected pulse - a lost second leaves a hole (-1)
                                // there, the index still points correctly onward (see processDcf77Bits())
 
-    bool dcf77Synced = false;  // true, sobald Minutenmarke erkannt und seither jeder Abstand ins Sekundenraster passte;
+    extern bool dcf77Synced; // true, sobald Minutenmarke erkannt und seither jeder Abstand ins Sekundenraster passte;
                                // Impulse werden nur dann als Bits abgelegt. Faellt bei Rasterbruch oder unmoeglichem
                                // Telegramm (Bit 0/20, siehe decodeDcf77Telegram()) wieder auf false zurueck.
 
@@ -389,20 +441,20 @@
     // dcf77Phase is a free-running grid position 0..59. The minute marker is detected statistically (the only
     // position where a pulse is ALWAYS missing) - robust even with interference causing frequent 2s gaps.
 
-    uint8_t dcf77Phase = 0;
+    extern uint8_t dcf77Phase;
 
-    uint8_t dcf77MarkerMiss[60] = { 0 }; // wie oft an dieser Rasterposition ein Impuls fehlte
+    extern uint8_t dcf77MarkerMiss[60]; // wie oft an dieser Rasterposition ein Impuls fehlte
                                          // how often a pulse was missing at this grid position
-    uint8_t dcf77MarkerHit[60] = { 0 };  // wie oft an dieser Rasterposition ein Impuls ankam
+    extern uint8_t dcf77MarkerHit[60]; // wie oft an dieser Rasterposition ein Impuls ankam
                                          // how often a pulse arrived at this grid position
 
-    int8_t dcf77MarkerPos = -1; // erkannte Rasterposition der Minutenmarke, -1 = noch unbekannt
+    extern int8_t dcf77MarkerPos; // erkannte Rasterposition der Minutenmarke, -1 = noch unbekannt
                                 // detected grid position of the minute marker, -1 = not known yet
 
-    int8_t dcf77LastSecond = -1; // zuletzt belegte Sekunde der Minute, fuer die Erkennung des Minutenwechsels
+    extern int8_t dcf77LastSecond; // zuletzt belegte Sekunde der Minute, fuer die Erkennung des Minutenwechsels
                                  // last second of the minute filled in, used to detect the minute change
 
-    uint8_t dcf77StructFails = 0; // aufeinanderfolgende Telegramme mit unmoeglichen Festbits (Bit 0 / Bit 20) -
+    extern uint8_t dcf77StructFails; // aufeinanderfolgende Telegramme mit unmoeglichen Festbits (Bit 0 / Bit 20) -
                                   // ab DCF77_STRUCT_FAIL_LIMIT gilt die erkannte Marke als falsch und wird verworfen
                                   // consecutive telegrams with impossible fixed bits (bit 0 / bit 20) - from
                                   // DCF77_STRUCT_FAIL_LIMIT on, the detected marker counts as wrong and is discarded
@@ -415,15 +467,15 @@
     // actually delivers - without an oscilloscope there's no other way to
     // tell whether the decoder computes wrongly or no usable pulses arrive.
 
-    uint32_t dcf77PulsesSeen = 0;    // erkannte Impulse seit dem Start / pulses detected since start
-    uint32_t dcf77PulsesMissed = 0;  // uebersprungene Rasterpositionen / grid positions skipped
-    uint32_t dcf77PhaseBreaks = 0;   // wie oft das Sekundenraster verlorenging / how often the second grid was lost
+    extern uint32_t dcf77PulsesSeen; // erkannte Impulse seit dem Start / pulses detected since start
+    extern uint32_t dcf77PulsesMissed; // uebersprungene Rasterpositionen / grid positions skipped
+    extern uint32_t dcf77PhaseBreaks; // wie oft das Sekundenraster verlorenging / how often the second grid was lost
 
 #define DCF77_DIAG_SLOTS 12
-    uint16_t dcf77DiagWidth[DCF77_DIAG_SLOTS] = { 0 }; // Impulsdauer in ms / pulse width in ms
-    uint16_t dcf77DiagGap[DCF77_DIAG_SLOTS] = { 0 };   // Abstand zum vorigen Impulsanfang in ms / distance to the previous pulse start in ms
-    uint8_t dcf77DiagIdx = 0;
-    uint8_t dcf77DiagCount = 0;
+    extern uint16_t dcf77DiagWidth[DCF77_DIAG_SLOTS]; // Impulsdauer in ms / pulse width in ms
+    extern uint16_t dcf77DiagGap[DCF77_DIAG_SLOTS]; // Abstand zum vorigen Impulsanfang in ms / distance to the previous pulse start in ms
+    extern uint8_t dcf77DiagIdx;
+    extern uint8_t dcf77DiagCount;
 
     // Ergebnis der letzten vollstaendig dekodierten Minute - bleibt bei
     // Paritaetsfehler erhalten (valid=false statt verwerfen), damit die
@@ -448,7 +500,7 @@
         unsigned long decodedAtMillis = 0; // millis() beim Minutenanfang dieses Telegramms, 0 = noch nie
                                            // millis() at this telegram's minute start, 0 = never
     };
-    Dcf77Decoded dcf77LastDecoded;
+    extern Dcf77Decoded dcf77LastDecoded;
 
     // Letzte bestaetigte Dekodierung als Referenz: mit aus der Paritaet ergaenzten Bits muss die Zeit exakt
     // zur vorherigen plus verstrichenen Minuten passen - ein vollstaendiges Telegramm braucht das nicht.
@@ -456,19 +508,19 @@
     // Last confirmed decoding as a reference: with bits filled from parity, the time must exactly match the
     // previous one plus elapsed minutes - a complete telegram does not need this.
 
-    time_t dcf77PrevEpoch = 0;
-    unsigned long dcf77PrevAtMillis = 0;
+    extern time_t dcf77PrevEpoch;
+    extern unsigned long dcf77PrevAtMillis;
 
 
-    // Ist der eigene NTP-Server (siehe startNtpServer() in time_sync.h) an
+    // Ist der eigene NTP-Server (siehe startNtpServer() in time_sync.cpp) an
     // Port 123 gebunden - fuer korrektes Logging/Statusanzeige, statt den
     // Erfolg von udp.begin() blind anzunehmen.
 
-    // Is the own NTP server (see startNtpServer() in time_sync.h) bound to
+    // Is the own NTP server (see startNtpServer() in time_sync.cpp) bound to
     // port 123 - for correct logging/status display, instead of blindly
     // assuming udp.begin() succeeded.
 
-    bool ntpServerRunning = false;
+    extern bool ntpServerRunning;
 
     // Diagnosezaehler fuer den eigenen NTP-Server (siehe /status): unterscheiden,
     // ob Anfragen ankommen (Netz/Firewall) oder nur unbeantwortet bleiben
@@ -478,20 +530,20 @@
     // whether requests arrive at all (network/firewall) or just go unanswered
     // (no valid system time).
 
-    uint32_t ntpRequestsReceived = 0;
-    uint32_t ntpRepliesSent = 0;
+    extern uint32_t ntpRequestsReceived;
+    extern uint32_t ntpRepliesSent;
 
-    unsigned long lastNTPUpdate = 0; // Zeitpunkt des letzten RTC-Updates
+    extern unsigned long lastNTPUpdate; // Zeitpunkt des letzten RTC-Updates
                                      // Timestamp of the last RTC update
-    unsigned long lastDCFUpdate = 0; // Wartezeit nach DCF77-Update, bevor RTC aktualisiert wird (ms)
+    extern unsigned long lastDCFUpdate; // Wartezeit nach DCF77-Update, bevor RTC aktualisiert wird (ms)
                                      // Wait time after a DCF77 update before the RTC is updated (ms)
-    unsigned long lastRTCUpdate = 0; // Zeitpunkt des letzten RTC-Updates
+    extern unsigned long lastRTCUpdate; // Zeitpunkt des letzten RTC-Updates
                                      // Timestamp of the last RTC update
-    bool serialTimeSet = false;      // Uhrzeit per USB gesetzt (handleSerialTime()) - beendet das Warten auf DCF77 beim Start
+    extern bool serialTimeSet; // Uhrzeit per USB gesetzt (handleSerialTime()) - beendet das Warten auf DCF77 beim Start
                                      // time set via USB (handleSerialTime()) - ends the wait for DCF77 at boot
-    volatile unsigned long lastNtpSuccessMillis = 0; // Zeitpunkt (millis()) der letzten erfolgreichen NTP-Sync (0 = nie) -
+    extern volatile unsigned long lastNtpSuccessMillis; // Zeitpunkt (millis()) der letzten erfolgreichen NTP-Sync (0 = nie) -
                                             // unterscheidet echten Erfolg vom irrefuehrenden true-Rueckgabewert von
-                                            // setupNTP() ohne WLAN; bleibt er unveraendert, springt DCF77 ein (time_sync.h).
+                                            // setupNTP() ohne WLAN; bleibt er unveraendert, springt DCF77 ein (time_sync.cpp).
                                             // volatile seit der Async-Umstellung (startNtpSyncTask()): wird jetzt aus der
                                             // Sync-Task heraus geschrieben und von pollNtpSyncTask() auf dem Hauptthread gelesen.
 
@@ -503,42 +555,42 @@
     // sync runs in its own short-lived task, so its DNS/UDP wait times block neither loop() nor the web
     // server.
 
-    TaskHandle_t ntpSyncTaskHandle = NULL;
-    volatile bool ntpSyncTaskRunning = false; // Task laeuft gerade
+    extern TaskHandle_t ntpSyncTaskHandle;
+    extern volatile bool ntpSyncTaskRunning; // Task laeuft gerade
                                               // task currently running
-    volatile bool ntpSyncTaskDone = false;    // Task fertig, Ergebnis in ntpSyncTaskResult
+    extern volatile bool ntpSyncTaskDone; // Task fertig, Ergebnis in ntpSyncTaskResult
                                               // task finished, result in ntpSyncTaskResult
-    volatile bool ntpSyncTaskResult = false;  // Rueckgabewert von setupNTP() des letzten Laufs (siehe Hinweis oben: bei
+    extern volatile bool ntpSyncTaskResult; // Rueckgabewert von setupNTP() des letzten Laufs (siehe Hinweis oben: bei
                                               // fehlendem WLAN irrefuehrend true - pollNtpSyncTask() prueft daher zusaetzlich lastNtpSuccessMillis)
                                               // return value of the last setupNTP() run (see note above: misleadingly
                                               // true without WiFi - pollNtpSyncTask() therefore also checks lastNtpSuccessMillis)
-    unsigned long ntpSyncCheckBeforeMillis = 0; // millis() unmittelbar VOR dem Start der laufenden Sync-Task -
+    extern unsigned long ntpSyncCheckBeforeMillis; // millis() unmittelbar VOR dem Start der laufenden Sync-Task -
                                                 // Referenzwert fuer den lastNtpSuccessMillis-Vergleich in pollNtpSyncTask()
                                                 // millis() immediately BEFORE starting the current sync task -
                                                 // reference value for the lastNtpSuccessMillis comparison in pollNtpSyncTask()
-    String ntpSyncCheckLabel = ""; // Label fuer die Logausgabe ("Initial sync"/"Periodic sync"/"Manual sync"), von pollNtpSyncTask() ausgewertet
+    extern String ntpSyncCheckLabel; // Label fuer die Logausgabe ("Initial sync"/"Periodic sync"/"Manual sync"), von pollNtpSyncTask() ausgewertet
                                    // label for the log output ("Initial sync"/"Periodic sync"/"Manual sync"), evaluated by pollNtpSyncTask()
 
-    struct tm timeinfo;
+    extern struct tm timeinfo;
 
-    // Rocrail-Modellzeit (siehe rocrail_client.h): eigenstaendige,
+    // Rocrail-Modellzeit (siehe rocrail_client.cpp): eigenstaendige,
     // ggf. beschleunigte Zeitstruktur, komplett getrennt von "timeinfo"
     // oben. renderClockFrame() liest je nach rocrailEnabled aus der einen oder anderen Struktur.
 
-    // Rocrail model time (see rocrail_client.h): an independent, possibly
+    // Rocrail model time (see rocrail_client.cpp): an independent, possibly
     // accelerated time struct, fully separate from "timeinfo" above.
     // renderClockFrame() reads from whichever struct applies, depending on rocrailEnabled.
 
-    struct tm rocrailTimeinfo;
-    bool rocrailEnabled = false;    // per Tab-Schalter/Preferences aktiviert
+    extern struct tm rocrailTimeinfo;
+    extern bool rocrailEnabled; // per Tab-Schalter/Preferences aktiviert
                                     // enabled via the tab switch/preferences
-    bool rocrailConnected = false;  // TCP-Verbindung zum Server aktuell offen
+    extern bool rocrailConnected; // TCP-Verbindung zum Server aktuell offen
                                     // TCP connection to the server currently open
-    String rocrailServerHost = "";  // aktuell aktiver Server - siehe rocrailServerList[] unten;
+    extern String rocrailServerHost; // aktuell aktiver Server - siehe rocrailServerList[] unten;
                                     // wird beim Speichern aus dem angehakten Listeneintrag uebernommen.
                                     // currently active server - see rocrailServerList[] below;
                                     // taken over from the checked list entry when saving.
-    uint16_t rocrailServerPort = ROCRAIL_DEFAULT_PORT;
+    extern uint16_t rocrailServerPort;
 
     // Kopie von rocrailServerHost/-Port fuer die Connect-Task: ein Arduino String ist nicht thread-sicher,
     // und die Einstellungsseite kann ihn jederzeit neu setzen, waehrend die Task gerade verbindet.
@@ -546,12 +598,12 @@
     // Copy of rocrailServerHost/-port for the connect task: an Arduino String is not thread-safe, and the
     // settings page can reassign it at any time while the task is connecting.
 
-    char rocrailServerHostSnapshot[64];
-    uint16_t rocrailServerPortSnapshot = ROCRAIL_DEFAULT_PORT;
+    extern char rocrailServerHostSnapshot[64];
+    extern uint16_t rocrailServerPortSnapshot;
 
-    char rocrailServerList[MAX_WLAN][64];        // Hostname/IP je Listenplatz (siehe pkRocrailServerHost())
+    extern char rocrailServerList[MAX_WLAN][64]; // Hostname/IP je Listenplatz (siehe pkRocrailServerHost())
                                                  // hostname/IP per list slot (see pkRocrailServerHost())
-    uint16_t rocrailServerPortList[MAX_WLAN];    // Port je Listenplatz (siehe pkRocrailServerPort())
+    extern uint16_t rocrailServerPortList[MAX_WLAN]; // Port je Listenplatz (siehe pkRocrailServerPort())
                                                  // port per list slot (see pkRocrailServerPort())
 
     // Anlagenname je Listenplatz - rein manuell, vom Nutzer frei editierbar
@@ -562,39 +614,39 @@
     // user for their own reference (e.g. with several servers). RCP does
     // not report a layout name, so there is no automatic takeover.
 
-    char rocrailServerNameList[MAX_WLAN][40];
+    extern char rocrailServerNameList[MAX_WLAN][40];
 
-    int rocrailActiveServerIndex = -1;           // 0-basierter Index des per Haekchen ausgewaehlten
+    extern int rocrailActiveServerIndex; // 0-basierter Index des per Haekchen ausgewaehlten
                                                  // Listenplatzes, -1 = keiner ausgewaehlt
                                                  // 0-based index of the list slot selected via the
                                                  // checkmark, -1 = none selected
-    uint8_t rocrailDivider = 1;     // Modellzeit-Beschleunigungsfaktor vom Server
+    extern uint8_t rocrailDivider; // Modellzeit-Beschleunigungsfaktor vom Server
                                     // model-time acceleration factor from the server
-    bool rocrailFrozen = false;     // per <clock state="freeze"/> angehalten (siehe processRocrailClockPayload())
+    extern bool rocrailFrozen; // per <clock state="freeze"/> angehalten (siehe processRocrailClockPayload())
                                     // paused via <clock state="freeze"/> (see processRocrailClockPayload())
-    uint8_t rocrailBrightness = 255;    // zuletzt vom Server per <clock bri="..."/> gemeldeter
+    extern uint8_t rocrailBrightness; // zuletzt vom Server per <clock bri="..."/> gemeldeter
                                         // Helligkeitswert (0-255, siehe processRocrailClockPayload())
-    bool rocrailBrightnessKnown = false; // true, sobald einmal ein bri-Wert empfangen wurde - erst
+    extern bool rocrailBrightnessKnown; // true, sobald einmal ein bri-Wert empfangen wurde - erst
                                          // dann uebernimmt updateBrightness() ihn; sendet der Server
                                          // nie bri, bleibt die lokale Helligkeitssteuerung dauerhaft aktiv.
 
                                         // true once a bri value has been received - only then does
                                         // updateBrightness() take it over; if the server never sends
                                         // bri, local brightness control stays active permanently.
-    WiFiClient rocrailClient;
-    String rocrailRxBuffer;         // Empfangspuffer fuer XML-Tag-Bruchstuecke
+    extern WiFiClient rocrailClient;
+    extern String rocrailRxBuffer; // Empfangspuffer fuer XML-Tag-Bruchstuecke
                                     // receive buffer for XML tag fragments
-    uint8_t rocrailLogChunkCount = 0; // Zaehler fuer die Diagnose-Logeintraege der ersten
+    extern uint8_t rocrailLogChunkCount; // Zaehler fuer die Diagnose-Logeintraege der ersten
                                       // 5 empfangenen RCP-Rohdaten-Haeppchen (siehe pollRocrailClient())
                                       // counter for the diagnostic log entries of the first 5
                                       // received RCP raw data chunks (see pollRocrailClient())
-    uint8_t rocrailClockLogCount = 0; // Zaehler fuer die routinemaessige "[ROCRAIL] clock ..."-Zeile
+    extern uint8_t rocrailClockLogCount; // Zaehler fuer die routinemaessige "[ROCRAIL] clock ..."-Zeile
                                       // (siehe processRocrailClockPayload()) - nur die ersten 2 Updates,
                                       // danach nur noch bei Divider-/Pause-Wechsel
                                       // counter for the routine "[ROCRAIL] clock ..." line (see
                                       // processRocrailClockPayload()) - only the first 2 updates,
                                       // afterwards only on divider/pause changes
-    uint8_t rocrailConnectFailLogCount = 0; // Zaehler fuer "Connecting to.."/"did not respond"
+    extern uint8_t rocrailConnectFailLogCount; // Zaehler fuer "Connecting to.."/"did not respond"
                                             // (siehe connectRocrailClient()/pollRocrailConnectTask()) -
                                             // nur die ersten 2 Fehlschlaege einer Ausfall-Serie loggen,
                                             // die Versuche selbst laufen unabhaengig davon stumm weiter;
@@ -604,43 +656,43 @@
                                             // log the first 2 failures of a failure streak, the actual
                                             // attempts keep running silently regardless; reset on a
                                             // successful connection
-    unsigned long rocrailLastClockMillis = 0;  // millis() beim letzten <clock>-Update (0 = noch keins)
+    extern unsigned long rocrailLastClockMillis; // millis() beim letzten <clock>-Update (0 = noch keins)
                                                // millis() at the last <clock> update (0 = none yet)
-    float rocrailDisplaySeconds = 0.0f;        // aktuell angezeigte Modellzeit in Sekunden seit
+    extern float rocrailDisplaySeconds; // aktuell angezeigte Modellzeit in Sekunden seit
                                                // Mitternacht (fliessend, siehe advanceRocrailTime())
                                                // currently displayed model time in seconds since
                                                // midnight (continuous, see advanceRocrailTime())
-    unsigned long rocrailLastAdvanceMillis = 0; // millis() beim letzten Fortschreiben (advanceRocrailTime())
+    extern unsigned long rocrailLastAdvanceMillis; // millis() beim letzten Fortschreiben (advanceRocrailTime())
                                                 // millis() at the last advance step (advanceRocrailTime())
-    float rocrailDriftSeconds = 0.0f;          // verbleibende, sanft auszugleichende Abweichung zur
+    extern float rocrailDriftSeconds; // verbleibende, sanft auszugleichende Abweichung zur
                                                // zuletzt gemeldeten Server-Zeit (siehe advanceRocrailTime()/
                                                // processRocrailClockPayload()) - 0 = keine Korrektur noetig
 
                                                // remaining deviation to the last reported server time,
                                                // eased in smoothly (see advanceRocrailTime()/
                                                // processRocrailClockPayload()) - 0 = no correction needed
-    float rocrailSecFrac = 0.0f;               // Sekunde mit Nachkommastellen (0.0-59.999) fuer die
+    extern float rocrailSecFrac; // Sekunde mit Nachkommastellen (0.0-59.999) fuer die
                                                // glatte, nicht tickende Zeigerbewegung im Rocrail-
                                                // Modus (siehe advanceRocrailTime()/renderClockFrame())
 
                                                // second with a fractional part (0.0-59.999) for the
                                                // smooth, non-ticking hand motion in Rocrail mode (see
                                                // advanceRocrailTime()/renderClockFrame())
-    unsigned long rocrailLastConnectAttemptMillis = 0;
-    TaskHandle_t rocrailConnectTaskHandle = NULL; // eigene, kurzlebige Task fuer den
+    extern unsigned long rocrailLastConnectAttemptMillis;
+    extern TaskHandle_t rocrailConnectTaskHandle; // eigene, kurzlebige Task fuer den
                                                   // (blockierenden) Connect-Versuch, damit
-                                                  // loop() dabei nicht blockiert (siehe rocrail_client.h)
+                                                  // loop() dabei nicht blockiert (siehe rocrail_client.cpp)
 
                                                   // own short-lived task for the (blocking) connect
-                                                  // attempt, so loop() doesn't block during it (see rocrail_client.h)
-    volatile bool rocrailConnectTaskRunning = false; // Task laeuft gerade
+                                                  // attempt, so loop() doesn't block during it (see rocrail_client.cpp)
+    extern volatile bool rocrailConnectTaskRunning; // Task laeuft gerade
                                                      // task is currently running
-    volatile bool rocrailConnectTaskDone = false;    // Task fertig, Ergebnis in rocrailConnectTaskResult
+    extern volatile bool rocrailConnectTaskDone; // Task fertig, Ergebnis in rocrailConnectTaskResult
                                                      // task finished, result in rocrailConnectTaskResult
-    volatile bool rocrailConnectTaskResult = false;  // Ergebnis des letzten Connect-Versuchs
+    extern volatile bool rocrailConnectTaskResult; // Ergebnis des letzten Connect-Versuchs
                                                      // result of the last connect attempt
 
-    String timezone = TIMEZONE_DEFAULT;
+    extern String timezone;
 
     // Kopie von timezone fuer die NTP-Sync-Task: der String wird auch von Web-Handlern geschrieben und ist
     // nicht thread-sicher - die Task liest nur diese auf dem Hauptthread angelegte Kopie.
@@ -648,9 +700,9 @@
     // Copy of timezone for the NTP sync task: the String is also written by web handlers and is not
     // thread-safe - the task only reads this copy created on the main thread.
 
-    char timezoneSnapshot[64];
+    extern char timezoneSnapshot[64];
 
-    char ntpServers[MAX_WLAN][64];
+    extern char ntpServers[MAX_WLAN][64];
 
     // Kopie von ntpServers[] fuer die NTP-Sync-Task, auf dem Hauptthread angelegt - die Weboberflaeche
     // koennte das Array sonst gleichzeitig beschreiben.
@@ -658,25 +710,25 @@
     // Copy of ntpServers[] for the NTP sync task, created on the main thread - the web UI could otherwise
     // write to the array at the same time.
 
-    char ntpServersSnapshot[MAX_WLAN][64];
+    extern char ntpServersSnapshot[MAX_WLAN][64];
 
 #define RTC_NOT_AVAILABLE 0
 #define RTC_AVAILABLE 1
 #define RTC_AVAILABLE_BUT_INVALID 2
 
-    int rtcOk = RTC_NOT_AVAILABLE;
+    extern int rtcOk;
 
-    String i2cAddr = "";
+    extern String i2cAddr;
 
     // Zifferblatt / Display
     // Clock face / Display
 
-    String tftType = "UNKNOWN";
+    extern String tftType;
 
-    LGFX_Sprite backgroundSprite(&tft);
-    LGFX_Sprite hourHandSprite(&tft);
-    LGFX_Sprite minuteHandSprite(&tft);
-    LGFX_Sprite secondHandSprite(&tft);
+    extern LGFX_Sprite backgroundSprite;
+    extern LGFX_Sprite hourHandSprite;
+    extern LGFX_Sprite minuteHandSprite;
+    extern LGFX_Sprite secondHandSprite;
 
     // Sprites fuer Status-/Boot-Text, nur fuer den GC9D01-Software-Rotations-
     // Workaround noetig (dort wird die HW-Rotation uebersprungen) - auf
@@ -686,35 +738,35 @@
     // rotation workaround (there, HW rotation is skipped) - unused on other
     // boards. Created lazily on first use (avoids wasting (P)SRAM).
 
-    LGFX_Sprite statusSprite1(&tft);
-    LGFX_Sprite statusSprite2(&tft);
-    bool statusSprite1Created = false;
-    bool statusSprite2Created = false;
+    extern LGFX_Sprite statusSprite1;
+    extern LGFX_Sprite statusSprite2;
+    extern bool statusSprite1Created;
+    extern bool statusSprite2Created;
 
-    String selectedBackground = "/face_default.bmp";
+    extern String selectedBackground;
 
-    bool stationMode; // "wartet auf 12": Sekundenzeiger eilt in komprimierter Zeit voraus und pausiert oben (siehe display.h)
-                      // "waits at 12": second hand races ahead in compressed time and pauses at the top (see display.h)
-    bool smoothMinute;
-    bool smoothSecond; // Darstellungsstil des Sekundenzeigers: schwingend (true) oder tickend (false) -
-                       // unabhaengig von stationMode (siehe renderClockFrame() in display.h)
+    extern bool stationMode; // "wartet auf 12": Sekundenzeiger eilt in komprimierter Zeit voraus und pausiert oben (siehe display.cpp)
+                      // "waits at 12": second hand races ahead in compressed time and pauses at the top (see display.cpp)
+    extern bool smoothMinute;
+    extern bool smoothSecond; // Darstellungsstil des Sekundenzeigers: schwingend (true) oder tickend (false) -
+                       // unabhaengig von stationMode (siehe renderClockFrame() in display.cpp)
                        // second hand rendering style: smooth/swinging (true) or ticking (false) -
-                       // independent of stationMode (see renderClockFrame() in display.h)
-    bool showSecondHand;
+                       // independent of stationMode (see renderClockFrame() in display.cpp)
+    extern bool showSecondHand;
 
-    int hourHandWidth = HAND_WIDTH;
-    int minuteHandWidth = HAND_WIDTH;
-    int secondHandWidth = HAND_WIDTH;
+    extern int hourHandWidth;
+    extern int minuteHandWidth;
+    extern int secondHandWidth;
 
     // nabe
     // hub
 
-    uint16_t hubColor = 0;
-    uint8_t hubSize = 0;
+    extern uint16_t hubColor;
+    extern uint8_t hubSize;
 
-    bool firstRun = true;
-    bool firstRun2 = true; // wie firstRun, aber fuer Display 2 (CS2) - siehe renderClockFrame() in display.h
-                           // like firstRun, but for Display 2 (CS2) - see renderClockFrame() in display.h
+    extern bool firstRun;
+    extern bool firstRun2; // wie firstRun, aber fuer Display 2 (CS2) - siehe renderClockFrame() in display.cpp
+                           // like firstRun, but for Display 2 (CS2) - see renderClockFrame() in display.cpp
 
     // Rotation 0-3 (0/90/180/270 Grad) oder TFT_ROTATION_NA (Display nicht angeschlossen,
     // siehe config.h) - fuer n.a. wird kein Zifferblatt/Zeiger berechnet, Status-Meldungen
@@ -724,16 +776,16 @@
     // see config.h) - for n.a. no face/hands are calculated, but status messages still
     // run. Query via isDisplayConnected()/effectiveRotation(), never compare the value directly.
 
-    uint8_t tftRotation1 = TFT_ROTATION1_DEFAULT;
-    bool autoRotation = false; // Display 1 dreht sich nach dem Lagesensor (imu_rotation.h, nur S3)
-                               // display 1 turns according to the motion sensor (imu_rotation.h, S3 only)
-    uint8_t tftRotation2 = TFT_ROTATION2_DEFAULT; // Rotation von Display 2 (CS2) - eigener Wert, damit beide Displays
-                                                  // unterschiedlich ausgerichtet montiert sein koennen (siehe uhr4.ino/webserver_routes.h)
+    extern uint8_t tftRotation1;
+    extern bool autoRotation; // Display 1 dreht sich nach dem Lagesensor (imu_rotation.cpp, nur S3)
+                               // display 1 turns according to the motion sensor (imu_rotation.cpp, S3 only)
+    extern uint8_t tftRotation2; // Rotation von Display 2 (CS2) - eigener Wert, damit beide Displays
+                                                  // unterschiedlich ausgerichtet montiert sein koennen (siehe main.cpp/webserver_routes.cpp)
                                                   // rotation of Display 2 (CS2) - its own value, so both displays can be
-                                                  // mounted with a different orientation (see uhr4.ino/webserver_routes.h)
+                                                  // mounted with a different orientation (see main.cpp/webserver_routes.cpp)
 
 
-    uint16_t rowBuffer[CLOCK_MAX]; // Groesse fuer den groessten Displaytyp, genutzt werden CLOCK_WIDTH Eintraege
+    extern uint16_t rowBuffer[CLOCK_MAX]; // Groesse fuer den groessten Displaytyp, genutzt werden CLOCK_WIDTH Eintraege
                                    // sized for the largest display type, CLOCK_WIDTH entries are used
 
     // Steuert nur den GC9D01-Software-Rotations-Workaround (nicht "ist PSRAM
@@ -744,22 +796,22 @@
     // available" in general - psramFound() is called directly for that).
     // Only possible for display types with swRotation (DISPLAY_GEOMETRY).
 
-    static bool gc9d01SwRotation = false;
+    extern bool gc9d01SwRotation;
 
-    uint16_t* clockFaceBuffer = nullptr;
+    extern uint16_t* clockFaceBuffer;
 
     // Ohne PSRAM (ESP32-C6) kein Rohbild: das Zifferblatt als RLE-Daten im RAM (clockFaceRle, nur kleine
     // Dateien) oder direkt aus der Datei (clockFaceRlePath), "" = erzeugtes Standard-Zifferblatt. Siehe
-    // prepareClockFaceRle() in display.h.
+    // prepareClockFaceRle() in display.cpp.
 
     // Without PSRAM (ESP32-C6) no raw image: the clock face as RLE data in RAM (clockFaceRle, small files only)
     // or straight from the file (clockFaceRlePath), "" = generated default clock face. See prepareClockFaceRle()
-    // in display.h.
+    // in display.cpp.
 
-    uint8_t* clockFaceRle = nullptr;
-    size_t clockFaceRleSize = 0;
-    String clockFaceRlePath = "";
-    bool clockFaceRleReady = false;
+    extern uint8_t* clockFaceRle;
+    extern size_t clockFaceRleSize;
+    extern String clockFaceRlePath;
+    extern bool clockFaceRleReady;
 
     // Fertiges "Zifferblatt + Stunden-/Minutenzeiger" je Display als Sprite: nur bei Aenderung neu aufgebaut
     // (Zeiger per pushRotatedWithAA()), sonst per pushSprite() kopiert - spart Zeit fuer den Sekundenzeiger.
@@ -780,7 +832,7 @@
         bool hands = true;             // mit Stunden-/Minutenzeiger (false: nur Zifferblatt, Sekundenfeld)
                                        // with hour/minute hand (false: clock face only, seconds subdial)
     };
-    HandComposite handComposite[2]; // [0] = Display 1, [1] = Display 2
+    extern HandComposite handComposite[2]; // [0] = Display 1, [1] = Display 2
 
     // Zuletzt tatsaechlich gesendeter Frame pro Display - renderClockFrame()
     // ueberspringt Zeichnen + SPI-Push, solange sich keiner dieser Werte
@@ -804,7 +856,7 @@
         bool smoothSecond = false;
         uint32_t assetGeneration = 0;
     };
-    ClockFrameKey lastClockFrame[2]; // [0] = Display 1, [1] = Display 2
+    extern ClockFrameKey lastClockFrame[2]; // [0] = Display 1, [1] = Display 2
 
     // Teil-Aktualisierung: aendert sich nur der Sekundenzeiger, sendet renderClockFrame() nur das Rechteck um
     // alten und neuen Zeiger samt Nabe. Rechteck des letzten Frames - der Spiegelbetrieb schickt Display 2
@@ -813,17 +865,17 @@
     // Partial update: if only the second hand changes, renderClockFrame() sends just the rectangle around old
     // and new hand plus hub. Rectangle of the last frame - mirror mode sends display 2 the same one.
 
-    bool lastRenderPartial = false;
-    bool partialUpdateEnabled = true; // zur Diagnose abschaltbar: /api/partialUpdate?enabled=0 (nicht gespeichert)
+    extern bool lastRenderPartial;
+    extern bool partialUpdateEnabled; // zur Diagnose abschaltbar: /api/partialUpdate?enabled=0 (nicht gespeichert)
                                       // switchable for diagnosis: /api/partialUpdate?enabled=0 (not stored)
-    uint32_t compositeBuildCount = 0; // zaehlt Neuaufbauten des Zwischenbilds (buildHandComposite())
+    extern uint32_t compositeBuildCount; // zaehlt Neuaufbauten des Zwischenbilds (buildHandComposite())
                                       // counts composite rebuilds (buildHandComposite())
 
     // Bildrate/Zeichenzeit fuer die Statusseite (recordRenderFrame() in
-    // display.h): nur tatsaechlich gesendete Frames, alle 5 s ausgewertet.
+    // display.cpp): nur tatsaechlich gesendete Frames, alle 5 s ausgewertet.
 
     // Frame rate/render time for the status page (recordRenderFrame() in
-    // display.h): only frames actually sent, evaluated every 5 s.
+    // display.cpp): only frames actually sent, evaluated every 5 s.
 
     struct RenderStats {
         uint32_t windowStartMillis = 0;
@@ -833,8 +885,8 @@
         float fps = 0.0f, avgMs = 0.0f, maxMs = 0.0f, partialPercent = 0.0f; // zuletzt ausgewertetes Fenster
                                                                              // last evaluated window
     };
-    RenderStats renderStats;
-    int32_t lastRenderRect[4] = { 0, 0, 0, 0 }; // x, y, w, h
+    extern RenderStats renderStats;
+    extern int32_t lastRenderRect[4]; // x, y, w, h
 
     // Etwas anderes (Status-/Bootmeldung, Bestaetigungscode) hat aufs Display
     // gezeichnet - naechster Uhr-Frame muss voll neu gesendet werden, auch
@@ -844,7 +896,7 @@
     // display - the next clock frame must be sent in full, even if the hand
     // angles didn't change (see beginStatusDraw()).
 
-    bool clockFrameDirty[2] = { true, true };
+    extern bool clockFrameDirty[2];
 
     // Je Display: Streifen fuer Uhrzeit/Datum neben der Uhr (nur ILI9341, drawInfoStrips()) komplett neu
     // zeichnen - gesetzt, wenn eine Meldung das Display ueberschrieben hat.
@@ -852,32 +904,32 @@
     // Per display: redraw the time/date strip next to the clock (ILI9341 only, drawInfoStrips()) completely -
     // set when a message drew over the display.
 
-    bool infoStripDirty[2] = { true, true };
+    extern bool infoStripDirty[2];
 
     // Streifen fuer Uhrzeit/Datum, eingestellt im Zifferblatt-Designer: Farben als RGB888, Schriftart (Index in
-    // STRIP_FONTS, display.h) und Mitte der Zeilen im Streifen (hochkant) - -1 = automatisch. stripAuto* sind die
+    // STRIP_FONTS, display.cpp) und Mitte der Zeilen im Streifen (hochkant) - -1 = automatisch. stripAuto* sind die
     // zuletzt berechneten automatischen Positionen fuer den Designer.
 
     // Time/date strip, set in the clock face designer: colors as RGB888, font (index into STRIP_FONTS,
-    // display.h) and centre of the lines in the strip (portrait) - -1 = automatic. stripAuto* are the last
+    // display.cpp) and centre of the lines in the strip (portrait) - -1 = automatic. stripAuto* are the last
     // computed automatic positions for the designer.
 
-    uint32_t stripBgRgb = 0x000000;
-    uint32_t stripFgRgb = 0xFFFFFF;
-    uint8_t stripFont = 0;
-    bool stripBlink = true;   // Doppelpunkt der Uhrzeit "H:MM" blinkt im Sekundentakt
+    extern uint32_t stripBgRgb;
+    extern uint32_t stripFgRgb;
+    extern uint8_t stripFont;
+    extern bool stripBlink; // Doppelpunkt der Uhrzeit "H:MM" blinkt im Sekundentakt
                               // colon of the time "H:MM" blinks every second
-    bool stripBefore = false; // Streifen ueber der Uhr (quer: links davon) statt darunter (quer: rechts)
+    extern bool stripBefore; // Streifen ueber der Uhr (quer: links davon) statt darunter (quer: rechts)
                               // strip above the clock (landscape: left of it) instead of below (landscape: right)
-    int16_t stripTimeX = -1;
-    int16_t stripTimeY = -1;
-    int16_t stripDateX = -1;
-    int16_t stripDateY = -1;
-    int16_t stripAutoTimeY = 0;
-    int16_t stripAutoDateY = 0;
-    LGFX_Sprite infoStripSprite(&tft); // Streifen wird hier gezeichnet und in einem Stueck gesendet (kein Flackern)
+    extern int16_t stripTimeX;
+    extern int16_t stripTimeY;
+    extern int16_t stripDateX;
+    extern int16_t stripDateY;
+    extern int16_t stripAutoTimeY;
+    extern int16_t stripAutoDateY;
+    extern LGFX_Sprite infoStripSprite; // Streifen wird hier gezeichnet und in einem Stueck gesendet (kein Flackern)
                                        // the strip is drawn here and sent in one piece (no flicker)
-    bool infoStripSpriteCreated = false;
+    extern bool infoStripSpriteCreated;
 
     // Streifen-Grafik des aktiven Zifferblatts (strip_<Name>.bmp, hochkant, RGB565) - stripImageFor ist der
     // geladene Pfad, "?" = neu laden (nach Upload, Loeschen, Umbenennen).
@@ -885,8 +937,8 @@
     // Strip graphic of the active clock face (strip_<name>.bmp, portrait, RGB565) - stripImageFor is the loaded
     // path, "?" = reload (after upload, delete, rename).
 
-    uint16_t* stripImage = nullptr;
-    String stripImageFor = "?";
+    extern uint16_t* stripImage;
+    extern String stripImageFor;
 
     // Zeit- und Datumsformat des Streifens (PK_STRIP_TIME_FMT/PK_STRIP_DATE_FMT) und die VLW-Schriften aus dem
     // Designer (stripfont_time.vlw/stripfont_date.vlw im PSRAM, stripVlwStale = neu laden). stripVlwName und die
@@ -896,18 +948,18 @@
     // designer (stripfont_time.vlw/stripfont_date.vlw in PSRAM, stripVlwStale = reload). stripVlwName and the
     // sizes are only remembered for the designer.
 
-    uint8_t stripTimeFmt = 0;
-    uint8_t stripSeconds = 0; // Sekunden in der Uhrzeit: 0 = automatisch, 1 = ohne, 2 = mit
+    extern uint8_t stripTimeFmt;
+    extern uint8_t stripSeconds; // Sekunden in der Uhrzeit: 0 = automatisch, 1 = ohne, 2 = mit
                               // seconds in the time: 0 = automatic, 1 = without, 2 = with
-    uint8_t stripDateFmt = 0;
-    uint8_t stripWeekdayFmt = 0; // Wochentag: 0 = ausgeschrieben, 1 = kurz (Mo) / weekday: 0 = written out, 1 = short (Mon)
-    uint8_t* stripVlwTime = nullptr;
-    uint8_t* stripVlwDate = nullptr;
-    bool stripVlwStale = true;
-    uint32_t stripVlwGeneration = 0;
-    String stripVlwName = "";
-    uint8_t stripVlwTimeSize = 44;
-    uint8_t stripVlwDateSize = 22;
+    extern uint8_t stripDateFmt;
+    extern uint8_t stripWeekdayFmt; // Wochentag: 0 = ausgeschrieben, 1 = kurz (Mo) / weekday: 0 = written out, 1 = short (Mon)
+    extern uint8_t* stripVlwTime;
+    extern uint8_t* stripVlwDate;
+    extern bool stripVlwStale;
+    extern uint32_t stripVlwGeneration;
+    extern String stripVlwName;
+    extern uint8_t stripVlwTimeSize;
+    extern uint8_t stripVlwDateSize;
 
     // Groesse der eingebauten Streifen-Schrift in Prozent (STRIP_SCALE_MIN..MAX), getrennt fuer Uhrzeit und Datum.
     // VLW-Schriften haben stattdessen ihre Pixelgroesse (stripVlwTimeSize/stripVlwDateSize).
@@ -921,8 +973,8 @@
     // Pivot of the second hand on the clock face (trailer of the clock face file, see readFaceSecPivot()), -1 =
     // centre. faceSettingsFor: clock face whose settings are loaded ("?" = reload).
 
-    int16_t secPivotX = -1;
-    int16_t secPivotY = -1;
+    extern int16_t secPivotX;
+    extern int16_t secPivotY;
 
     // Drehpunkt von Stunden- und Minutenzeiger (zusammen) im Zifferblatt, -1 = Mitte, und Lage des Sekundenzeigers
     // (0 = automatisch: ueber den anderen Zeigern, wenn sein Drehpunkt gleich ist, sonst darunter; 1 = immer ueber,
@@ -932,10 +984,10 @@
     // (0 = automatic: over the other hands if its pivot is the same, otherwise below; 1 = always over, 2 = always
     // below the other hands) - also in the trailer of the clock face file.
 
-    int16_t hmPivotX = -1;
-    int16_t hmPivotY = -1;
-    uint8_t secOrder = 0;
-    String faceSettingsFor = "?";
+    extern int16_t hmPivotX;
+    extern int16_t hmPivotY;
+    extern uint8_t secOrder;
+    extern String faceSettingsFor;
 
     // Drehpunkte und Reihenfolge eines Zifferblatts (Anhang der Datei) / pivots and order of a clock face (file trailer)
     struct FacePivots {
@@ -944,8 +996,8 @@
         uint8_t order = 0;            // Lage des Sekundenzeigers / position of the second hand
     };
 
-    // Wo welcher Zeiger sitzt (in Zifferblatt-Pixeln, ohne Rotation): makeHandPlan() in display.h
-    // Where which hand sits (in clock face pixels, without rotation): makeHandPlan() in display.h
+    // Wo welcher Zeiger sitzt (in Zifferblatt-Pixeln, ohne Rotation): makeHandPlan() in display.cpp
+    // Where which hand sits (in clock face pixels, without rotation): makeHandPlan() in display.cpp
     struct HandPlan {
         float hmX, hmY, secX, secY;
         bool hmCustom;  // Drehpunkt von Stunde/Minute nicht in der Mitte / pivot of hour/minute not in the centre
@@ -953,12 +1005,12 @@
         bool secUnder;  // Sekundenzeiger unter den anderen Zeigern / second hand below the other hands
     };
 
-    String stripSettingsFor = "?"; // Zifferblatt, dessen Streifen-Einstellungen geladen sind ("?" = neu laden)
+    extern String stripSettingsFor; // Zifferblatt, dessen Streifen-Einstellungen geladen sind ("?" = neu laden)
                                    // clock face whose strip settings are loaded ("?" = reload)
-    uint8_t stripTimeScale = 100;
-    uint8_t stripDateScale = 100;
-    bool stripShowTime = true; // Uhrzeit bzw. Datum im Streifen ein-/ausgeschaltet
-    bool stripShowDate = true; // time or date in the strip switched on/off
+    extern uint8_t stripTimeScale;
+    extern uint8_t stripDateScale;
+    extern bool stripShowTime; // Uhrzeit bzw. Datum im Streifen ein-/ausgeschaltet
+    extern bool stripShowDate; // time or date in the strip switched on/off
 
     // Wochentag ausgeschrieben (Sprache der Weboberflaeche): ab Werk aus, eigene Groesse und Position. Die
     // VLW-Datei hat zusaetzlich die Buchstaben der Wochentage (stripVlwPath(size, true)).
@@ -966,14 +1018,14 @@
     // Weekday written out (language of the web interface): off by default, own size and position. The VLW
     // file additionally holds the letters of the weekdays (stripVlwPath(size, true)).
 
-    bool stripShowWeekday = false;
-    uint8_t stripWeekdayScale = 100;
-    uint8_t stripVlwWeekdaySize = 22;
-    int16_t stripWeekdayX = -1;
-    int16_t stripWeekdayY = -1;
-    int16_t stripAutoWeekdayY = 0;
-    uint8_t* stripVlwWeekday = nullptr;
-    int8_t stripWeekdayLine = -1; // quer: Zeile des Wochentags (stripContent()), -1 = keine
+    extern bool stripShowWeekday;
+    extern uint8_t stripWeekdayScale;
+    extern uint8_t stripVlwWeekdaySize;
+    extern int16_t stripWeekdayX;
+    extern int16_t stripWeekdayY;
+    extern int16_t stripAutoWeekdayY;
+    extern uint8_t* stripVlwWeekday;
+    extern int8_t stripWeekdayLine; // quer: Zeile des Wochentags (stripContent()), -1 = keine
                                   // landscape: line of the weekday (stripContent()), -1 = none
 
     // Uhrzeit, Datum und Wochentag direkt auf dem Zifferblatt (Displays ohne Streifen): infoOverlayRevision zaehlt
@@ -982,9 +1034,9 @@
     // Time, date and weekday directly on the clock face (displays without a strip): infoOverlayRevision counts
     // every change of the settings, infoOverlayAppliedKey is the state contained in the clock face cache.
 
-    uint32_t infoOverlayRevision = 0;
-    uint32_t infoOverlayAppliedKey = 0;
-    uint32_t infoOverlayRevApplied = 0;
+    extern uint32_t infoOverlayRevision;
+    extern uint32_t infoOverlayAppliedKey;
+    extern uint32_t infoOverlayRevApplied;
 
     // Rechtecke (x0, y0, x1, y1 im Zifferblatt, x1 < x0 = leer): Text im Cache, eben gezeichneter Text, und die
     // Flaeche, die der naechste Frame neu aufbauen muss (alter plus neuer Text).
@@ -992,10 +1044,10 @@
     // Rectangles (x0, y0, x1, y1 in the clock face, x1 < x0 = empty): text in the cache, text just drawn, and the
     // area the next frame has to rebuild (old plus new text).
 
-    int16_t infoOverlayBox[4] = { 0, 0, -1, -1 };
-    int16_t infoOverlayBoxNew[4] = { 0, 0, -1, -1 };
-    int16_t infoOverlayPending[4] = { 0, 0, -1, -1 };
-    int16_t stripPreviewBox[4] = { 0, 0, -1, -1 }; // Grenzen des Textes der letzten Vorschau / bounds of the text of the last preview
+    extern int16_t infoOverlayBox[4];
+    extern int16_t infoOverlayBoxNew[4];
+    extern int16_t infoOverlayPending[4];
+    extern int16_t stripPreviewBox[4]; // Grenzen des Textes der letzten Vorschau / bounds of the text of the last preview
 
     // Wird hochgezaehlt, sobald sich Zifferblatt, Zeigersatz oder Zeigerbreiten
     // aendern - macht jedes Zwischenbild ungueltig, ohne dass jede einzelne
@@ -1005,7 +1057,7 @@
     // invalidates every composite image without each individual change site
     // having to know about the composite itself.
 
-    uint32_t clockAssetGeneration = 1;
+    extern uint32_t clockAssetGeneration;
 
     // Cache: clockFaceBuffer bereits mit currentBrightness vorberechnet (siehe
     // loadClockFace()) - vermeidet die teure Pixel-Helligkeitsanpassung bei
@@ -1015,7 +1067,7 @@
     // loadClockFace()) - avoids the expensive per-pixel brightness adjustment
     // on every tick, even though brightness rarely changes in between.
 
-    uint16_t* clockFaceBrightBuffer = nullptr;
+    extern uint16_t* clockFaceBrightBuffer;
 
     // Je Display true, solange noch nicht passender Inhalt (Uhr/Meldung) darauf steht - ein "n.a."-Display
     // wird dann einmalig schwarz geloescht. Startwert true, da der Inhalt nach tft.init() undefiniert ist.
@@ -1023,7 +1075,7 @@
     // Per display true while content (clock/message) that no longer fits is still shown - an "n.a." display
     // is then cleared to black once. Initially true, since the content is undefined after tft.init().
 
-    bool displayNeedsBlank[2] = { true, true };
+    extern bool displayNeedsBlank[2];
 
     // Display 2 (am CS2-Pin) wird ueber seine Rotation "n.a." abgeschaltet, kein eigener Schalter. Danach:
     // Helligkeit / Fotowiderstand (ADC).
@@ -1031,17 +1083,17 @@
     // Display 2 (on the CS2 pin) is switched off via its rotation "n.a.", no separate toggle. Below:
     // brightness / photoresistor (ADC).
 
-    bool adcInverted = false; // Standardmäßig nicht invertiert
+    extern bool adcInverted; // Standardmäßig nicht invertiert
                               // Not inverted by default
 
-    bool useAdc = false;
-    bool photoresistorFound = false;
+    extern bool useAdc;
+    extern bool photoresistorFound;
 
-    uint8_t currentBrightness = 255;
-    uint8_t brightnessTestValue = 0;       // Wert des Helligkeitstests / value of the brightness test
-    unsigned long brightnessTestUntil = 0; // millis() am Ende des Tests, 0 = kein Test / millis() at the end of the test, 0 = no test
-    int16_t brightnessOverride = -1;       // /api/setbrightness: fester Wert 0-255 bis zum Neustart oder "auto", -1 = normale Regelung / fixed value 0-255 until restart or "auto", -1 = normal control
-    uint8_t lastAppliedBrightness = 255; // gehoert zum Zifferblatt-Cache und wird von loadClockFace() gepflegt
+    extern uint8_t currentBrightness;
+    extern uint8_t brightnessTestValue; // Wert des Helligkeitstests / value of the brightness test
+    extern unsigned long brightnessTestUntil; // millis() am Ende des Tests, 0 = kein Test / millis() at the end of the test, 0 = no test
+    extern int16_t brightnessOverride; // /api/setbrightness: fester Wert 0-255 bis zum Neustart oder "auto", -1 = normale Regelung / fixed value 0-255 until restart or "auto", -1 = normal control
+    extern uint8_t lastAppliedBrightness; // gehoert zum Zifferblatt-Cache und wird von loadClockFace() gepflegt
                                          // belongs to the clock face cache and is maintained by loadClockFace()
 
     // Eigener Vergleichswert fuer die Zeiger-Sprites (siehe updateBrightness()) -
@@ -1052,12 +1104,12 @@
     // must not share lastAppliedBrightness, or loadClockFace() would never
     // trigger the re-tinting.
 
-    uint8_t lastHandBrightness = 255;
-    uint8_t targetBrightness = 255;
-    int lowThreshold = 40;
-    int highThreshold = 60;
-    uint8_t minBrightness = 75;   //
-    uint8_t maxBrightness = 255;  // Obergrenze
+    extern uint8_t lastHandBrightness;
+    extern uint8_t targetBrightness;
+    extern int lowThreshold;
+    extern int highThreshold;
+    extern uint8_t minBrightness; //
+    extern uint8_t maxBrightness; // Obergrenze
                                   // Upper limit
 
     // Wird wahr, sobald das Zifferblatt zum ersten Mal gezeichnet wird. Davor (Start, Meldungen) gilt mit
@@ -1066,17 +1118,17 @@
     // Becomes true as soon as the clock face is drawn for the first time. Before (start, messages) maxBrightness
     // applies with a backlight control, afterwards minBrightness until the time is known.
 
-    bool startupFaceDrawn = false;
+    extern bool startupFaceDrawn;
 
     // Zeitabhängige Helligkeit
     // Time-dependent brightness
 
-    uint8_t brightStartHour = 8;       // inkl. (z.B. 8)
+    extern uint8_t brightStartHour; // inkl. (z.B. 8)
                                        // inclusive (e.g. 8)
-    uint8_t brightEndHour = 22;        // exkl. (z.B. 20)
+    extern uint8_t brightEndHour; // exkl. (z.B. 20)
                                        // exclusive (e.g. 20)
 
-    float gammaBrightness = 2.2f;  // Gamma-Korrektur für Helligkeit (nur mit Backlight wirksam)
+    extern float gammaBrightness; // Gamma-Korrektur für Helligkeit (nur mit Backlight wirksam)
                                    // Gamma correction for brightness (only effective with a backlight)
 
     // Helligkeit per PWM auf TFT_Backlight (Pin 3) statt dunklerer Pixel - Einstellung PK_USE_BACKLIGHT. Ab
@@ -1085,17 +1137,17 @@
     // Brightness via PWM on TFT_Backlight (pin 3) instead of darker pixels - setting PK_USE_BACKLIGHT.
     // Factory: on for GC9D01, off for GC9A01 (BACKLIGHT_DEFAULT). Switch via setBacklightMode().
 
-    bool useBacklight = false; // wird in setup() aus den Preferences geladen
+    extern bool useBacklight; // wird in setup() aus den Preferences geladen
                                // loaded from preferences in setup()
-    bool backlightAttached = false; // PWM-Kanal an TFT_Backlight angehaengt (ledcAttach())
+    extern bool backlightAttached; // PWM-Kanal an TFT_Backlight angehaengt (ledcAttach())
                                     // PWM channel attached to TFT_Backlight (ledcAttach())
 
 #define ADC_SMOOTHING 20
-    int adcHistory[ADC_SMOOTHING];
-    int adcIndex = 0;
-    int currentAdcAvg = 0;  // global definieren
+    extern int adcHistory[ADC_SMOOTHING];
+    extern int adcIndex;
+    extern int currentAdcAvg; // global definieren
                             // define globally
-    int currentLightPercent = 0;  // global speichern für Anzeige
+    extern int currentLightPercent; // global speichern für Anzeige
                                   // store globally for display
 
     // Mindestabstand zwischen zwei ADC-Abtastungen (siehe updateBrightness()) -
@@ -1107,7 +1159,7 @@
     // milliseconds on fast loop() iterations instead of one second.
 
 #define ADC_SAMPLE_INTERVAL_MS 50
-    unsigned long lastAdcSampleMillis = 0;
+    extern unsigned long lastAdcSampleMillis;
 
     // So lange muss eine Schwellwert-Ueberschreitung anhalten, bevor targetBrightness springt - filtert kurze
     // Einbrueche (z.B. WLAN-Sendeburst), die das Zifferblatt sonst fuer ein Bild umfaerben wuerden.
@@ -1116,9 +1168,9 @@
     // WiFi TX burst) that would otherwise re-tint the clock face for a frame.
 
 #define BRIGHTNESS_DEBOUNCE_MS 1500
-    int pendingBrightnessState = 0; // -1 = Kandidat fuer minBrightness, 1 = fuer maxBrightness, 0 = im Hysterese-Band
+    extern int pendingBrightnessState; // -1 = Kandidat fuer minBrightness, 1 = fuer maxBrightness, 0 = im Hysterese-Band
                                     // -1 = candidate for minBrightness, 1 = for maxBrightness, 0 = inside the hysteresis band
-    unsigned long brightnessThresholdSinceMillis = 0;
+    extern unsigned long brightnessThresholdSinceMillis;
 
 
     // Presets
@@ -1129,22 +1181,20 @@
         String name;
         String url;
     };
-    Preset presets[MAX_PRESETS];
+    extern Preset presets[MAX_PRESETS];
 
     // Datei-Upload / Wartung
     // File upload / maintenance
 
-    File uploadFile;
-    String uploadFilePath = "";
-    bool uploadSuccess = false;
+    extern File uploadFile;
+    extern String uploadFilePath;
+    extern bool uploadSuccess;
 
 
-
-    int lastResetWeek = -1;
-    int currentWeek = -1;
+    extern int lastResetWeek;
+    extern int currentWeek;
 
     // Uebersetzungen fuer verschiedene Sprachen
     // Translations for various languages
 
 #include "translation.h"
-

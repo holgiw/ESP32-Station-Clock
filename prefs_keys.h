@@ -17,9 +17,9 @@
     constexpr const char* PK_LOG_FILE_NUMBER   = "logFileNumber";
     constexpr const char* PK_LOGGING_START     = "loggingStart"; // Unix-Zeit, ab der das Logging laeuft (0 = noch unbekannt), fuer die 24-h-Abschaltung
     constexpr const char* PK_PREVIEW_SIZE      = "previewSize"; // Groesse der Web-Vorschau (/preview) in px,
-                                                                // vom Nutzer per Schieberegler eingestellt (siehe webserver_routes.h)
+                                                                // vom Nutzer per Schieberegler eingestellt (siehe webserver_routes.cpp)
                                                                 // size of the web preview (/preview) in px, set by the
-                                                                // user via a slider (see webserver_routes.h)
+                                                                // user via a slider (see webserver_routes.cpp)
 
     // WLAN
     // WiFi
@@ -46,8 +46,8 @@
 
     constexpr const char* PK_TFT_ROTATION1     = "tftRotation1"; // Rotation Display 1 (0-3, 4 = n.a.) - hiess vor Display-2-Support "tftRotation" (siehe LEGACY unten)
                                                                  // rotation of Display 1 (0-3, 4 = n.a.) - was called "tftRotation" before Display 2 support (see LEGACY below)
-    constexpr const char* PK_TFT_ROTATION_LEGACY = "tftRotation"; // Alter Key-Name - NUR fuer die einmalige Migration in uhr4.ino verwenden
-                                                                   // old key name - use ONLY for the one-time migration in uhr4.ino
+    constexpr const char* PK_TFT_ROTATION_LEGACY = "tftRotation"; // Alter Key-Name - NUR fuer die einmalige Migration in main.cpp verwenden
+                                                                   // old key name - use ONLY for the one-time migration in main.cpp
     constexpr const char* PK_AUTO_ROTATION     = "autoRotation"; // Display 1 per Lagesensor drehen (nur S3, Default false)
                                                                  // rotate display 1 via the motion sensor (S3 only, default false)
     constexpr const char* PK_IMU_ROT_OFFSET    = "imuRotOffset"; // Bezug Lage -> Rotation (imuCalibrate())
@@ -116,8 +116,8 @@
                                                                  // 0 = 24 h, 1 = 12 h with AM/PM, 2 = 12 h without
     constexpr const char* PK_STRIP_SECONDS     = "stripSeconds"; // 0 = automatisch (ohne Sekundenzeiger), 1 = ohne, 2 = mit
                                                                  // 0 = automatic (without second hand), 1 = without, 2 = with
-    constexpr const char* PK_STRIP_DATE_FMT    = "stripDateFmt"; // siehe stripDateText() in display.h
-                                                                 // see stripDateText() in display.h
+    constexpr const char* PK_STRIP_DATE_FMT    = "stripDateFmt"; // siehe stripDateText() in display.cpp
+                                                                 // see stripDateText() in display.cpp
     constexpr const char* PK_STRIP_VLW_NAME    = "stripVlwName"; // VLW-Schrift: Name und Groessen fuer den Designer
                                                                  // VLW font: name and sizes for the designer
     constexpr const char* PK_STRIP_VLW_TSIZE   = "stripVlwT";
@@ -129,18 +129,18 @@
     constexpr const char* PK_USE_BACKLIGHT     = "useBacklight"; // Hintergrundbeleuchtung per PWM auf Pin 3 (ersetzt Build GC9A01_WITH_BACKLIGHT)
                                                                  // backlight via PWM on pin 3 (replaces the GC9A01_WITH_BACKLIGHT build)
 
-    // Rocrail-Modellzeit (siehe rocrail_client.h)
-    // Rocrail model time (see rocrail_client.h)
+    // Rocrail-Modellzeit (siehe rocrail_client.cpp)
+    // Rocrail model time (see rocrail_client.cpp)
 
     constexpr const char* PK_ROCRAIL_ENABLED   = "rocrailEnabled";
 
     // PK_ROCRAIL_SERVER/PK_ROCRAIL_SRV_PORT: der aktuell aktive Server -
     // wird beim Speichern aus der Liste unten (dem angehakten Eintrag)
-    // uebernommen. rocrail_client.h kennt nur diese zwei Werte, nicht die Liste.
+    // uebernommen. rocrail_client.cpp kennt nur diese zwei Werte, nicht die Liste.
 
     // PK_ROCRAIL_SERVER/PK_ROCRAIL_SRV_PORT: the currently active server -
     // taken over from the list below (the checked entry) when saving.
-    // rocrail_client.h only knows these two values, not the list.
+    // rocrail_client.cpp only knows these two values, not the list.
 
     constexpr const char* PK_ROCRAIL_SERVER    = "rocrailServer";
     constexpr const char* PK_ROCRAIL_SRV_PORT  = "rocrailSrvPort";
@@ -184,21 +184,21 @@
 
     // Von uhr3 geschrieben: Displaytyp, fuer den uhr3 kompiliert wurde (z.B.
     // "GC9A01_WITH_BACKLIGHT"). uhr4 uebernimmt ihn beim Start und loescht ihn
-    // (adoptUhr3BuildDisplay() in display.h).
+    // (adoptUhr3BuildDisplay() in display.cpp).
 
     // Written by uhr3: display type uhr3 was compiled for (e.g.
     // "GC9A01_WITH_BACKLIGHT"). uhr4 takes it over at boot and deletes it
-    // (adoptUhr3BuildDisplay() in display.h).
+    // (adoptUhr3BuildDisplay() in display.cpp).
 
     constexpr const char* PK_UHR3_BUILD_DISPLAY = "buildDisplay";
 
     // Veraltete Schluessel frueherer Firmware, von keinem Code mehr gelesen: "ssid"/"pass" (ein WLAN im
     // Klartext), "tft_rotation", "pingServer", "useTouch" (Touch-Steuerung), "currentPreset" (Preset-Wechsel per
-    // Taste). setup() loescht sie, backup.h sichert sie nie.
+    // Taste). setup() loescht sie, backup.cpp sichert sie nie.
 
     // Obsolete keys of earlier firmware, no longer read by any code: "ssid"/"pass" (one WiFi in plain text),
     // "tft_rotation", "pingServer", "useTouch" (touch control), "currentPreset" (preset switching via the
-    // button). setup() deletes them, backup.h never backs them up.
+    // button). setup() deletes them, backup.cpp never backs them up.
 
     constexpr const char* OBSOLETE_PREF_KEYS[] = { "ssid", "pass", "tft_rotation", "pingServer", "useTouch", "currentPreset" };
 
@@ -257,10 +257,10 @@
     inline String pkPresetUrl(int i)    { return "preset" + String(i) + "_url"; }
 
     // HINWEIS: putStringVerified() ist absichtlich nicht hier definiert, da
-    // prefs_keys.h in uhr4.ino vor globals.h ("preferences") und config.h
-    // (DEBUG_PRINTLN) eingebunden wird; Implementierung siehe wifi_manager.h.
+    // prefs_keys.h in globals.h vor "preferences" und config.h
+    // (DEBUG_PRINTLN) eingebunden wird; Implementierung siehe wifi_manager.cpp.
 
     // NOTE: putStringVerified() is deliberately not defined here, since
-    // prefs_keys.h is included in uhr4.ino before globals.h ("preferences") and
-    // config.h (DEBUG_PRINTLN); see wifi_manager.h for the implementation.
+    // prefs_keys.h is included in globals.h before "preferences" and
+    // config.h (DEBUG_PRINTLN); see wifi_manager.cpp for the implementation.
 

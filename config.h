@@ -370,12 +370,12 @@
 #define TFT_DC    33  // Data/Command
 #define TFT_RST   5   // Reset
 
-    // SPI-CS Display 1 - manuell gesteuert (setCS1()/setCS2() in display.h),
+    // SPI-CS Display 1 - manuell gesteuert (setCS1()/setCS2() in display.cpp),
     // LovyanGFX bekommt pin_cs = -1 (lgfx_config.h). Beide Displays haengen
     // an einem Geraet, der CS-Wechsel waehlt nur den Chip aus.
 
     // SPI CS for display 1 - driven manually (setCS1()/setCS2() in
-    // display.h), LovyanGFX gets pin_cs = -1 (lgfx_config.h). Both displays
+    // display.cpp), LovyanGFX gets pin_cs = -1 (lgfx_config.h). Both displays
     // hang off one device, switching CS only selects the chip.
 
 #define CS_1    12
@@ -411,10 +411,10 @@
 #define LITTLEFS_PARTITION "spiffs"
 #endif
 
-    // Firmware-Update ueber WLAN (ota_update.h) nur mit zwei App-Partitionen, also nur auf dem ESP32-S3.
+    // Firmware-Update ueber WLAN (ota_update.cpp) nur mit zwei App-Partitionen, also nur auf dem ESP32-S3.
     // Haengt ein Update, startet die Uhr nach OTA_TIMEOUT_MS neu, statt stehen zu bleiben.
 
-    // Firmware update over WiFi (ota_update.h) only with two app partitions, so only on the ESP32-S3. If an
+    // Firmware update over WiFi (ota_update.cpp) only with two app partitions, so only on the ESP32-S3. If an
     // update hangs, the clock restarts after OTA_TIMEOUT_MS instead of standing still.
 
 #define HAS_OTA BOARD_S3_ANY
@@ -437,10 +437,10 @@
 #define OTA_TIMEOUT_MS (3 * WAIT_1m)
 #define OTA_PORT 3232 // ArduinoOTA (Visual Micro, Arduino IDE)
 
-    // Update von GitHub (ota_update.h, nur ESP32-S3): Dateien des neuesten Releases, uhr4-s3.txt (Zeile 1: Build-Zeit
+    // Update von GitHub (ota_update.cpp, nur ESP32-S3): Dateien des neuesten Releases, uhr4-s3.txt (Zeile 1: Build-Zeit
     // "YYYY-MM-DD HH:MM:SS", Zeile 2: SHA-256 der .bin) und uhr4-s3.bin. Erzeugt von build_uhr4/publish_s3_update.ps1.
 
-    // Update from GitHub (ota_update.h, ESP32-S3 only): files of the latest release, uhr4-s3.txt (line 1: build time
+    // Update from GitHub (ota_update.cpp, ESP32-S3 only): files of the latest release, uhr4-s3.txt (line 1: build time
     // "YYYY-MM-DD HH:MM:SS", line 2: SHA-256 of the .bin) and uhr4-s3.bin. Created by build_uhr4/publish_s3_update.ps1.
 
     // Das 480x480-Board (ESP32-S3-Touch-LCD-4) hat eine eigene Firmware: uhr4-s3lcd4.txt / uhr4-s3lcd4.bin
@@ -482,11 +482,11 @@
 #define ROTATION1_LAST (HAS_DISPLAY2 ? TFT_ROTATION_NA : TFT_ROTATION_NA - 1)
 
     // Auswahlwert "automatisch" fuer Display 1 (nur mit Lagesensor, HAS_IMU): gespeichert wird er nicht als
-    // Rotation, sondern als autoRotation (imu_rotation.h). IMU_ROTATION_DIR: Drehsinn des Sensors gegenueber
+    // Rotation, sondern als autoRotation (imu_rotation.cpp). IMU_ROTATION_DIR: Drehsinn des Sensors gegenueber
     // dem Display (1 oder -1, am Geraet pruefen), IMU_STABLE_MS: so lange muss eine neue Lage anliegen.
 
     // Selection value "automatic" for display 1 (only with a motion sensor, HAS_IMU): it is not stored as a
-    // rotation but as autoRotation (imu_rotation.h). IMU_ROTATION_DIR: turning direction of the sensor relative
+    // rotation but as autoRotation (imu_rotation.cpp). IMU_ROTATION_DIR: turning direction of the sensor relative
     // to the display (1 or -1, check on the device), IMU_STABLE_MS: a new position must last this long.
 
 #define TFT_ROTATION_AUTO 5
@@ -665,9 +665,9 @@ static_assert(displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_GC9A01]) &&
 #define DEBUG_PRINTF(...) { if (loggingEnabled) { char buffer[128]; snprintf(buffer, sizeof(buffer), __VA_ARGS__); Serial.print(buffer); logToFile(String(buffer));}}
 
     // Schwellwert fuer Heap-Warnungen (siehe checkHeapWarning() in
-    // system_utils.h) - loggt fruehzeitig statt erst spaeter ueber /status.
+    // system_utils.cpp) - loggt fruehzeitig statt erst spaeter ueber /status.
 
-    // Heap warning threshold (see checkHeapWarning() in system_utils.h) -
+    // Heap warning threshold (see checkHeapWarning() in system_utils.cpp) -
     // logs early instead of only being noticed later via /status.
 
 #define HEAP_WARNING_THRESHOLD 20480 // 20 KB
@@ -685,12 +685,12 @@ static_assert(displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_GC9A01]) &&
 #define PREVIEW_SIZE_DEFAULT 400
 
     // Fuehrt einen Zeichenblock fuer Display 1 und 2 aus, korrekt rotiert (beginStatusDraw()/endStatusDraw())
-    // - fuer BEIDE Displays, auch bei "n.a.", ausser das Board hat kein zweites. Makro, da schon vor display.h
-    // benutzt (wifi_manager.h).
+    // - fuer BEIDE Displays, auch bei "n.a.", ausser das Board hat kein zweites. Makro, weil der
+    // Zeichenblock als Argument uebergeben wird.
 
     // Runs a drawing block for display 1 and 2, correctly rotated (beginStatusDraw()/endStatusDraw()) - for
-    // BOTH displays, even with "n.a.", unless the board has no second one. Macro since it is used before
-    // display.h (wifi_manager.h).
+    // BOTH displays, even with "n.a.", unless the board has no second one. A macro because the drawing block
+    // is passed as an argument.
 
 #define DRAW_ON_BOTH_DISPLAYS(...) \
     do { \
@@ -704,10 +704,10 @@ static_assert(displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_GC9A01]) &&
     } while (0)
 
     // GitHub-Repository - zentral hier, damit ein Fork/Umzug nur diese
-    // Stelle statt mehrerer in webserver_routes.h aendern muss.
+    // Stelle statt mehrerer in webserver_routes.cpp aendern muss.
 
     // GitHub repository - kept centrally here, so a fork/move only needs
-    // changing this spot instead of several in webserver_routes.h.
+    // changing this spot instead of several in webserver_routes.cpp.
 
 #define GITHUB_REPO_OWNER "holgiw"
 #define GITHUB_REPO_NAME "ESP32-Station-Clock"
@@ -734,11 +734,11 @@ static_assert(displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_GC9A01]) &&
 #define NTP_SYNC_ATTEMPTS 2
 
     // Ab dieser Abweichung (Sekunden) wird die RTC bei einem NTP-/DCF77-Sync
-    // ueberhaupt geschrieben (siehe rtcDriftSec() in time_sync.h) - kleinere
+    // ueberhaupt geschrieben (siehe rtcDriftSec() in time_sync.cpp) - kleinere
     // Differenzen sind normale Rundung, kein unnoetiger I2C-Schreibzugriff.
 
     // Above this deviation (seconds) the RTC is actually written on an NTP/
-    // DCF77 sync (see rtcDriftSec() in time_sync.h) - smaller differences
+    // DCF77 sync (see rtcDriftSec() in time_sync.cpp) - smaller differences
     // are normal rounding, not worth an unnecessary I2C write.
 
 #define RTC_UPDATE_MIN_DRIFT_SEC 2
@@ -836,20 +836,20 @@ static_assert(sizeof(AP_PASSWORD) - 1 >= 8 && sizeof(AP_PASSWORD) - 1 <= 63, "AP
                                         // 5 seconds in milliseconds - runs in its own task, so this blocks nothing (see above)
 #define ROCRAIL_RECONNECT_INTERVAL_MS WAIT_1m
 #define ROCRAIL_LOG_THROTTLE_LIMIT 2 // gemeinsame Grenze fuer gedrosselte Rocrail-Logs (siehe
-                                     // shouldLogThrottled() in rocrail_client.h) - eine Stelle
+                                     // shouldLogThrottled() in rocrail_client.cpp) - eine Stelle
                                      // statt mehrfach wiederholtem Literal.
 
                                      // shared limit for throttled Rocrail logs (see
-                                     // shouldLogThrottled() in rocrail_client.h) - one spot
+                                     // shouldLogThrottled() in rocrail_client.cpp) - one spot
                                      // instead of a repeated literal.
 
     // Ab dieser Winkeldifferenz gilt ein Vorwaerts-Frame als abnormal
     // (verzoegerter Frame, z.B. durch eine blockierende Web-Anfrage) statt
-    // als normaler Tick - siehe Abfederung in renderClockFrame() (display.h).
+    // als normaler Tick - siehe Abfederung in renderClockFrame() (display.cpp).
 
     // Above this angle difference, a forward frame counts as abnormal (a
     // delayed frame, e.g. a blocking web request) instead of a normal tick
-    // - see the easing in renderClockFrame() (display.h).
+    // - see the easing in renderClockFrame() (display.cpp).
 
 #define SECOND_HAND_MAX_NORMAL_FORWARD_STEP_DEG 6.5f
 
