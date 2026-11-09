@@ -44,6 +44,7 @@ esptool.exe is not in this repository. The tools zip `uhr4_flash.zip` contains i
 `LICENSE`, the license text `esptool-LICENSE.txt` (GPL-2.0) and a note (`esptool-NOTICE.txt`) with the version and a link to the source code of that version. The source code of esptool is at https://github.com/espressif/esptool; it is also sent on request. The file contains Python and further libraries (for example pyserial, cryptography) under their own licenses.
 Programs and data sheets of other vendors (for example the Sprint-Layout viewer, data sheets, vendor pictures) are not part
 of this repository.
+
 ---
 
 ## LovyanGFX
