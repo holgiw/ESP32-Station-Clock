@@ -182,7 +182,7 @@ Die fertigen `.bin`-Dateien liegen im Repository (`build_uhr4/esp32*`, auch im Z
 
 uhr4 steht unter der GNU General Public License v3.0 (siehe [LICENSE](LICENSE)): Du darfst es nutzen, ändern und
 weitergeben – geänderte Versionen, auch als fertige Firmware, nur zusammen mit ihrem Quellcode und unter derselben
-Lizenz. Die Lizenzen der enthaltenen Bibliotheken und Schriften (LovyanGFX, RTClib, arduino-esp32, esptool, DejaVu,
+Lizenz. Die Lizenzen der enthaltenen Bibliotheken und Schriften (LovyanGFX, RTClib, Adafruit BusIO, arduino-esp32, esptool, DejaVu,
 FreeSans, Orbitron) stehen in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 Die HTTP-Schnittstellen der Uhr (Zeit, Steuerung, Firmware, Diagnose) stehen in [API.md](API.md).
@@ -384,7 +384,7 @@ The ready-made `.bin` files are in the repository (`build_uhr4/esp32*`, also in 
 
 uhr4 is licensed under the GNU General Public License v3.0 (see [LICENSE](LICENSE)): you may use, modify and
 share it – modified versions, including ready-made firmware, only together with their source code and under the
-same license. The licenses of the included libraries and fonts (LovyanGFX, RTClib, arduino-esp32, esptool, DejaVu,
+same license. The licenses of the included libraries and fonts (LovyanGFX, RTClib, Adafruit BusIO, arduino-esp32, esptool, DejaVu,
 FreeSans, Orbitron) are listed in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 The clock's HTTP interfaces (time, control, firmware, diagnostics) are described in [API.md](API.md).
