@@ -81,7 +81,9 @@ foreach ($b in $boards) {
     if (-not (Ask "COM$($b.Port) (ESP32-$($b.Chip)) mit dem Build aus build_uhr4 flashen / flash with the build from build_uhr4?")) { continue }
     # Mit -Yes ohne Rueckfragen, sonst fragt clocksetup.ps1 auch das WLAN ab
     # With -Yes without questions, otherwise clocksetup.ps1 also asks for the WiFi
-    $wifiArg = if ($Yes) { @() } else { @('-AskWifi') }
+    # Als Feld halten: eine einzelne Zeichenkette aus if/else wuerde beim Splatten (@wifiArg) einen Fehler ausloesen
+    # Keep it as an array: a single string from if/else would cause an error when splatted (@wifiArg)
+    $wifiArg = @(); if (-not $Yes) { $wifiArg = @('-AskWifi') }
     & powershell -NoProfile -ExecutionPolicy Bypass -File "$root\build_uhr4\clocksetup.ps1" -Flash -Port $b.Port -NoMonitor -Local @wifiArg
     if ($LASTEXITCODE -ne 0) { Write-Host "  Flashen fehlgeschlagen / flashing failed (COM$($b.Port))"; $failed++ }
 }
