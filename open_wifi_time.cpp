@@ -129,11 +129,13 @@
 
 
     // Uhrzeit ueber ein verbundenes offenes WLAN holen: NTP, dann HTTP ohne DNS (Gateway = meist die Anmeldeseite,
-    // 1.1.1.1), dann per Name, zuletzt einmal der Weiterleitung folgen (https:// per TLS, danach per HTTP).
+    // 1.1.1.1), dann per Name, dann HTTPS zu bekannten Hosts, zuletzt einmal der Weiterleitung folgen (https:// per
+    // TLS, danach per HTTP).
     // how = Weg fuers Log, 0 ohne Zeit.
 
     // Get the time via a connected open WiFi: NTP, then HTTP without DNS (gateway = usually the login page,
-    // 1.1.1.1), then by name, finally follow the redirect once (https:// via TLS, then via HTTP).
+    // 1.1.1.1), then by name, then HTTPS to well-known hosts, finally follow the redirect once (https:// via TLS,
+    // then via HTTP).
     // how = way for the log, 0 without a time.
 
     time_t openWifiQueryTime(const String& ssid, String& how) {
@@ -152,6 +154,21 @@
                           (location.length() ? " -> " + location.substring(0, 80) : String("")));
             if (epoch) return epoch;
             if (redirect.isEmpty()) redirect = location;
+        }
+
+        // HTTPS zu bekannten Hosts (TLS ohne Zertifikatspruefung, wie unten): manche Netze sperren NTP und Port 80,
+        // lassen aber Port 443 durch. 1.1.1.1 braucht keinen DNS-Namen.
+
+        // HTTPS to well-known hosts (TLS without certificate check, like below): some networks block NTP and port 80
+        // but let port 443 through. 1.1.1.1 needs no DNS name.
+
+        String httpsTargets[] = { "1.1.1.1", "www.google.com" };
+        for (const String& target : httpsTargets) {
+            how = "HTTPS Date " + target;
+            String note, location;
+            epoch = httpDateEpoch(target, "/", note, location, true);
+            DEBUG_PRINTLN("[OPEN-WIFI] '" + ssid + "': " + how + (epoch ? " answered: " : " - ") + note);
+            if (epoch) return epoch;
         }
 
         int scheme = redirect.indexOf("://");
@@ -182,7 +199,16 @@
     // WiFis (from -85 dBm) one after another, get the time, disconnect right away. After 60 s no new attempt
     // starts. Stored WiFis stay untouched. Can be switched off in the "NTP Timezone" tab. true = time set.
 
+    // Grund des letzten Fehlschlags von fetchTimeFromOpenWifi(): 0 = nicht versucht, 1 = kein offenes WLAN im Scan, 2 = mit
+    // keinem verbunden, 3 = verbunden, aber keine Zeit bekommen (fuer die Meldung auf dem Display).
+
+    // Reason for the last failure of fetchTimeFromOpenWifi(): 0 = not tried, 1 = no open WiFi in the scan, 2 = connected
+    // to none, 3 = connected but got no time (for the message on the display).
+
+    int openWifiFailReason = 0;
+
     bool fetchTimeFromOpenWifi(bool force) {
+        openWifiFailReason = 0;
         if (!force && !preferences.getBool(PK_OPEN_WIFI_TIME, true)) {
             DEBUG_PRINTLN("[OPEN-WIFI] Skipped - switched off in the settings");
             return false;
@@ -226,6 +252,7 @@
         }
         if (candidateCount == 0) {
             DEBUG_PRINTLN("[OPEN-WIFI] No open WiFi (from -85 dBm) in the scan - no time from open WiFis");
+            openWifiFailReason = 1;
             return false;
         }
         DEBUG_PRINTLN("[OPEN-WIFI] Trying to get the time from " + String(candidateCount) + " open WiFi(s)");
@@ -246,6 +273,7 @@
         showButtonMessage(TFT_GREEN, tftText(translate("Time from open WiFi")), "...", "", TFT_DARKGREY);
 
         unsigned long tryStart = millis();
+        bool connectedAny = false;
         for (int c = 0; c < candidateCount; c++) {
             if (millis() - tryStart >= TOTAL_MS) {
                 DEBUG_PRINTLN("[OPEN-WIFI] 60 s are over - no further attempts");
@@ -268,6 +296,7 @@
                 WiFi.disconnect();
                 continue;
             }
+            connectedAny = true;
             DEBUG_PRINTLN("[OPEN-WIFI] '" + ssid + "': connected, IP " + WiFi.localIP().toString() + ", gateway " +
                           WiFi.gatewayIP().toString());
 
@@ -282,5 +311,6 @@
             DEBUG_PRINTLN("[OPEN-WIFI] '" + ssid + "': no time (disconnected again)");
         }
         DEBUG_PRINTLN("[OPEN-WIFI] No time from open WiFis");
+        openWifiFailReason = connectedAny ? 3 : 2;
         return false;
     }

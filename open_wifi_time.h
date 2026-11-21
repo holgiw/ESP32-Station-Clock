@@ -8,3 +8,5 @@
     time_t openWifiQueryTime(const String& ssid, String& how) ;
     bool fetchTimeFromOpenWifi(bool force = false) ; // force: auch mit gueltiger Zeit/RTC/ausgeschaltet (Diagnose "UHR4 OPENWIFI")
                                                       // force: also with a valid time/RTC/switched off (diagnostic "UHR4 OPENWIFI")
+
+    extern int openWifiFailReason;

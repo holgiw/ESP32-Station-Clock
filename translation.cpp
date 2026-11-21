@@ -79,15 +79,10 @@
         { "not connected (n.a.)", "nicht angeschlossen (n.a.)" },
         { "Set a display that is not physically connected to n.a. - it then stays black and the clock face is neither drawn nor calculated for it. Boot, access point and code messages still appear on both displays until the clock takes over", "Ein nicht tats&auml;chlich angeschlossenes Display auf n.a. stellen - es bleibt dann schwarz und das Zifferblatt wird daf&uuml;r weder gezeichnet noch berechnet. Start-, Access-Point- und Code-Meldungen erscheinen bis zum Uhrstart weiterhin auf beiden Displays" },
 
-        // "2 Minuten" statt vormals "3 Minuten": muss zum tatsaechlichen WPS-
-        // Timeout passen (2 * WAIT_1m in startAP()/loop(), siehe main.cpp/
-        // wifi_manager.cpp) - der Text war seit dessen Aenderung veraltet.
+        // Die Dauer im Text muss zu WPS_TIMEOUT_MS (config.h) passen.
+        // The duration in the text has to match WPS_TIMEOUT_MS (config.h).
 
-        // "2 minutes" instead of the former "3 minutes": must match the actual
-        // WPS timeout (2 * WAIT_1m in startAP()/loop(), see main.cpp/
-        // wifi_manager.cpp) - the text was stale since that value was changed.
-
-        { "Adds a new network via WPS - press the WPS button on your router when prompted. The clock's connection may be lost for about 2 minutes while this happens", "F&uuml;gt ein neues Netzwerk per WPS hinzu - dr&uuml;cken Sie bei Aufforderung die WPS-Taste an Ihrem Router. Die Verbindung zur Uhr kann dabei f&uuml;r ca. 2 Minuten verloren gehen" },
+        { "Adds a new network via WPS - press the WPS button on your router when prompted. The clock's connection may be lost for about 30 seconds while this happens", "F&uuml;gt ein neues Netzwerk per WPS hinzu - dr&uuml;cken Sie bei Aufforderung die WPS-Taste an Ihrem Router. Die Verbindung zur Uhr kann dabei f&uuml;r ca. 30 Sekunden verloren gehen" },
         { "Scans for available WiFi networks again and refreshes the dropdown lists below", "Sucht erneut nach verf&uuml;gbaren WLAN-Netzwerken und aktualisiert die Auswahllisten darunter" },
         { "The clock can also be reached at http://&quot;hostname&quot;.local instead of its IP address, e.g.", "Die Uhr ist statt &uuml;ber die IP-Adresse auch &uuml;ber http://&quot;hostname&quot;.local erreichbar, z.B." },
         { "Up to", "Bis zu" },
@@ -439,7 +434,7 @@
         // compared exactly in webserver_routes.cpp (detects the WPS start) - if this text changes, update it
         // there too.
 
-        { "WPS active - press the WPS button on your router now. Connection to the clock may be lost for about 2 minutes while this happens", "WPS aktiv - jetzt die WPS-Taste am Router dr&uuml;cken. Die Verbindung zur Uhr kann dabei f&uuml;r ca. 2 Minuten unterbrochen werden" },
+        { "WPS active - press the WPS button on your router now. Connection to the clock may be lost for about 30 seconds while this happens", "WPS aktiv - jetzt die WPS-Taste am Router dr&uuml;cken. Die Verbindung zur Uhr kann dabei f&uuml;r ca. 30 Sekunden unterbrochen werden" },
         { "Reset WLan...", "WLAN zur&uuml;cksetzen..." },
         { "Saved as", "Gespeichert als" },
         { "Scaling successful", "Skalierung erfolgreich" },

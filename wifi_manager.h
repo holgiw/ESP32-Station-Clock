@@ -24,6 +24,10 @@
     void onWpsEvent(WiFiEvent_t event) ;
     void restorePreviousWpsConnection() ;
     void startAP() ;
+    void startAccessPoint() ; // Access Point samt Scan und Anzeige (siehe wifi_manager.cpp) / access point with scan and display (see wifi_manager.cpp)
+    bool getTimeFromOpenWifiNow(bool force) ; // Netze scannen, Zeit aus einem offenen WLAN holen / scan networks, get the time from an open WiFi
+    void getTimeFromOpenWifiAfterApTime() ; // einmal nach der Anzeigezeit des Access Points ohne Zeit (siehe loop()) / once after the access point display time without a time (see loop())
+    void abortAccessPointForOpenWifiTime() ; // Boot-Taste im Access-Point-Modus (siehe checkButton()) / boot button in access point mode (see checkButton())
     String buildLabel() ; // "Build " + Version fuer die WLAN-Anzeigen / "Build " + version for the WiFi screens
     void showStartScreen() ; // Build und WLAN gleich nach dem Panel-Start (siehe wifi_manager.cpp) / build and WiFi right after the panel start (see wifi_manager.cpp)
     void drawWifiSymbol(int cx, int cy, int lit) ; // WLAN-Symbol einmal zeichnen (siehe wifi_manager.cpp) / draw the WiFi symbol once (see wifi_manager.cpp)

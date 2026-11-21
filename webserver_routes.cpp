@@ -1036,14 +1036,14 @@
         }
 
         // Der WPS-Banner bleibt sichtbar, solange WPS tatsaechlich aktiv ist
-        // (bis 2 Min., per /api/wpsStatus-Polling statt fester Zeit) -
+        // (bis WPS_TIMEOUT_MS, per /api/wpsStatus-Polling statt fester Zeit) -
         // Notabschaltung nach 3 Min., falls das Polling selbst nicht mehr durchkommt.
 
         // The WPS banner stays visible as long as WPS is actually active (up
-        // to 2 min, via /api/wpsStatus polling instead of a fixed time) -
+        // to WPS_TIMEOUT_MS, via /api/wpsStatus polling instead of a fixed time) -
         // 3-minute safety cutoff in case polling itself can't get through.
 
-        bool isWpsBanner = (rawMsg == "WPS active - press the WPS button on your router now. Connection to the clock may be lost for about 2 minutes while this happens");
+        bool isWpsBanner = (rawMsg == "WPS active - press the WPS button on your router now. Connection to the clock may be lost for about 30 seconds while this happens");
 
         String html = "<div id='flashMsg' class='msg " + kind + "'>" + message + "</div>";
         if (isWpsBanner) {
@@ -2453,14 +2453,14 @@
 
         webserver.on("/api/startWPS", HTTP_GET, []() {
             wpsPreviousSsid = WiFi.isConnected() ? WiFi.SSID() : "";
-            redirectTo("/?tab=wlan&msg=WPS%20active%20-%20press%20the%20WPS%20button%20on%20your%20router%20now.%20Connection%20to%20the%20clock%20may%20be%20lost%20for%20about%202%20minutes%20while%20this%20happens");
+            redirectTo("/?tab=wlan&msg=WPS%20active%20-%20press%20the%20WPS%20button%20on%20your%20router%20now.%20Connection%20to%20the%20clock%20may%20be%20lost%20for%20about%2030%20seconds%20while%20this%20happens");
             wpsStartRequested = true;
             wpsStartRequestedAtMillis = millis();
             });
 
         webserver.on("/api/startWPS", HTTP_POST, []() {
             wpsPreviousSsid = WiFi.isConnected() ? WiFi.SSID() : "";
-            redirectTo("/?tab=wlan&msg=WPS%20active%20-%20press%20the%20WPS%20button%20on%20your%20router%20now.%20Connection%20to%20the%20clock%20may%20be%20lost%20for%20about%202%20minutes%20while%20this%20happens");
+            redirectTo("/?tab=wlan&msg=WPS%20active%20-%20press%20the%20WPS%20button%20on%20your%20router%20now.%20Connection%20to%20the%20clock%20may%20be%20lost%20for%20about%2030%20seconds%20while%20this%20happens");
             wpsStartRequested = true;
             wpsStartRequestedAtMillis = millis();
             });
@@ -5621,7 +5621,7 @@
 
             chunk += "<div class='tabpanel panel-wlan'>";
 
-            if (webserver.arg("msg") == "WPS active - press the WPS button on your router now. Connection to the clock may be lost for about 2 minutes while this happens") {
+            if (webserver.arg("msg") == "WPS active - press the WPS button on your router now. Connection to the clock may be lost for about 30 seconds while this happens") {
                 String hostnameTargetJs = pingHostname ? ("'http://" + String(hostname) + ".local/'") : "null";
                 chunk += "<script>";
                 chunk += "(function() {";
@@ -5700,7 +5700,7 @@
             chunk += "<form method='POST' action='/api/startWPS' style='margin:0;'>";
             chunk += "<button type='submit' style='width:170px;'>" + translate("Add Network via WPS") + "</button>";
             chunk += "</form>";
-            chunk += infoTip(translate("Adds a new network via WPS - press the WPS button on your router when prompted. The clock's connection may be lost for about 2 minutes while this happens"));
+            chunk += infoTip(translate("Adds a new network via WPS - press the WPS button on your router when prompted. The clock's connection may be lost for about 30 seconds while this happens"));
             chunk += "<button id='rescanBtn' type='button' style='width:170px;'>" + translate("Rescan Networks") + "</button>";
             chunk += infoTip(translate("Scans for available WiFi networks again and refreshes the dropdown lists below"));
             chunk += "</div><br>";

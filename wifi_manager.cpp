@@ -529,17 +529,12 @@
         // Draw the labels once; only the countdown is updated afterwards each second (without flicker)
 
         int lastSecondsShown = -1;
-        showButtonMessage(TFT_YELLOW, "WPS", "120 s", "then Access Point", TFT_DARKGREY);
+        showButtonMessage(TFT_YELLOW, "WPS", String(WPS_TIMEOUT_MS / WAIT_1s) + " s", "then Access Point", TFT_DARKGREY);
 
-        // 30s waren in der Praxis oft zu knapp fuer eine vollstaendige
-        // WPS-Aushandlung - auf 2 Minuten verlaengert, wie beim Web-Button-
-        // WPS-Weg (siehe loop() in main.cpp).
+        // Wartezeit wie beim Web-Button-WPS-Weg (WPS_TIMEOUT_MS in config.h, siehe loop() in main.cpp)
+        // Wait time like the web-button WPS path (WPS_TIMEOUT_MS in config.h, see loop() in main.cpp)
 
-        // 30s was often too short in practice for a full WPS negotiation -
-        // extended to 2 minutes, matching the web-button WPS path (see
-        // loop() in main.cpp).
-
-        unsigned long wpsTimeoutMs = 2 * WAIT_1m;
+        unsigned long wpsTimeoutMs = WPS_TIMEOUT_MS;
         long wpsWaitMillis = millis();
 
         // WICHTIG: WiFi.status() springt bei WPS-Erfolg in aktuellen
@@ -550,7 +545,16 @@
         // success in current arduino-esp32 versions (regression, see
         // arduino-esp32#11705) - so react to the flag set by onWpsEvent().
 
+        bool bootAbort = false;
         while (!wpsSuccessEvent && !wpsFailedEvent && (millis() - wpsWaitMillis) <= wpsTimeoutMs) {
+
+            // Boot-Taste: WPS abbrechen und die Uhrzeit aus einem offenen WLAN holen (siehe unten)
+            // Boot button: abort WPS and get the time from an open WiFi (see below)
+
+            if (pinIsLow(BOOT_BUTTON)) {
+                bootAbort = true;
+                break;
+            }
             int secondsLeft = (wpsTimeoutMs - (millis() - wpsWaitMillis)) / 1000;
             if (secondsLeft != lastSecondsShown) {
                 lastSecondsShown = secondsLeft;
@@ -564,6 +568,20 @@
             delay(100);
         }
         DEBUG_PRINTLN("[WPS] wait loop exited, success=" + String(wpsSuccessEvent) + ", failed=" + String(wpsFailedEvent));
+
+        // Abbruch per Boot-Taste: loslassen abwarten, WPS beenden und die Zeit aus einem offenen WLAN holen. Mit Zeit
+        // laeuft die Uhr ohne Access Point weiter, sonst geht es mit dem Access Point weiter.
+
+        // Aborted by the boot button: wait for the release, end WPS and get the time from an open WiFi. With a time
+        // the clock carries on without an access point, otherwise the access point follows.
+
+        if (bootAbort) {
+            DEBUG_PRINTLN("[WPS] Boot button pressed - WPS aborted");
+            while (pinIsLow(BOOT_BUTTON)) delay(10);
+            esp_wifi_wps_disable();
+            delay(WAIT_1s);
+            if (getTimeFromOpenWifiNow(true)) return;
+        }
 
         if (wpsSuccessEvent) {
             wpsSuccessEvent = false;
@@ -598,6 +616,18 @@
             wpsFailedEvent = false;
             DEBUG_PRINTLN("[WPS] WPS failed or timed out (event)");
         }
+
+        startAccessPoint();
+    }
+
+
+    // Access Point mit Captive-Portal starten, Netze scannen und die Zugangsdaten anzeigen - nach WPS ohne Erfolg
+    // und nach einem Abbruch, bei dem keine Zeit aus einem offenen WLAN kam.
+
+    // Start the access point with captive portal, scan the networks and show the credentials - after WPS without
+    // success and after an abort that got no time from an open WiFi.
+
+    void startAccessPoint() {
 
         // WPS deaktivieren und der WLAN-Firmware kurz Zeit geben, sich nach
         // dem abgebrochenen Handshake zu beruhigen, bevor der naechste
@@ -676,6 +706,78 @@
 
         ipAddress = WiFi.softAPIP().toString();
 
+    }
+
+
+    // Zeit aus einem offenen WLAN holen: Netze scannen (die Liste im Speicher kann alt oder leer sein), dann mit
+    // den staerksten offenen verbinden (fetchTimeFromOpenWifi()). force = auch bei ausgeschalteter Einstellung, mit RTC
+    // oder gueltiger Zeit (Boot-Taste). true = Zeit gesetzt.
+
+    // Get the time from an open WiFi: scan the networks (the list in memory can be old or empty), then connect to
+    // the strongest open ones (fetchTimeFromOpenWifi()). force = even with the setting off, with an RTC or a valid
+    // time (boot button). true = time set.
+
+    bool getTimeFromOpenWifiNow(bool force) {
+        WiFi.mode(WIFI_STA);
+        WiFi.disconnect();
+        showButtonMessage(TFT_YELLOW, "WiFi scan", "...", "", TFT_DARKGREY);
+        WiFi.scanNetworks(true);
+        int networkCount = WIFI_SCAN_RUNNING;
+        unsigned long scanStartMillis = millis();
+        while (networkCount == WIFI_SCAN_RUNNING && (millis() - scanStartMillis) < WAIT_10s) {
+            delay(100);
+            networkCount = WiFi.scanComplete();
+        }
+        if (networkCount < 0) networkCount = 0;
+        collectStrongestNetworks(networkCount);
+        WiFi.scanDelete();
+        bool ok = fetchTimeFromOpenWifi(force);
+        if (!ok) {
+            const char* reason = openWifiFailReason == 1 ? "no open WiFi" : (openWifiFailReason == 2 ? "no connection" : "no time");
+            showButtonMessage(TFT_YELLOW, "Open WiFi", reason, "", TFT_DARKGREY);
+        }
+        return ok;
+    }
+
+
+    // Boot-Taste im Access-Point-Modus: Access Point beenden und die Zeit aus einem offenen WLAN holen. Mit Zeit
+    // laeuft die Uhr ohne Access Point weiter (das gespeicherte WLAN wird spaeter wieder versucht, siehe
+    // checkWiFiReconnect()), ohne Zeit startet der Access Point wieder.
+
+    // Boot button in access point mode: end the access point and get the time from an open WiFi. With a time the
+    // clock carries on without an access point (the stored WiFi is tried again later, see checkWiFiReconnect()),
+    // without a time the access point starts again.
+
+    void abortAccessPointForOpenWifiTime() {
+        DEBUG_PRINTLN("[WiFi] Boot button in access point mode - leaving the access point, getting the time from an open WiFi");
+        dnsServer.stop();
+        WiFi.softAPdisconnect(true);
+        softAPIP = false;
+        if (getTimeFromOpenWifiNow(true)) return;
+        delay(WAIT_3s);
+        startAccessPoint();
+    }
+
+
+    // Nach Ablauf der Anzeigezeit des Access Points (AP_INFO_SHOW_MS, siehe loop() in main.cpp), wenn die Uhr noch keine
+    // Zeit hat (keine RTC, kein DCF77, nichts per USB gesetzt): einmal die Zeit aus einem offenen WLAN holen. Der
+    // Access Point ist dabei kurz weg und wird danach wieder gestartet, damit die Einrichtung moeglich bleibt.
+
+    // After the access point display time is over (AP_INFO_SHOW_MS, see loop() in main.cpp), if the clock has no time
+    // yet (no RTC, no DCF77, nothing set via USB): get the time from an open WiFi once. The access point is gone
+    // briefly meanwhile and started again afterwards, so the setup stays possible.
+
+    void getTimeFromOpenWifiAfterApTime() {
+        struct tm now;
+        if (!preferences.getBool(PK_OPEN_WIFI_TIME, true) || rtcOk == RTC_AVAILABLE || dcfTimeFound || getLocalTime(&now, 0)) return;
+        DEBUG_PRINTLN("[WiFi] Access point time is over and the clock has no time - trying an open WiFi");
+        dnsServer.stop();
+        getTimeFromOpenWifiNow(false);
+        WiFi.disconnect();
+        WiFi.softAP(AP_SSID, apPassword);
+        applyWifiTxPower();
+        dnsServer.start(53, "*", WiFi.softAPIP());
+        DEBUG_PRINTLN("[WiFi] Access point started again: " + String(AP_SSID));
     }
 
 

@@ -84,7 +84,38 @@ void connectWiFiAtBoot() {
                 break;
             }
         }
-        if (foundLastSSID == false) {
+        // Gespeichertes Netz im Scan suchen, das staerkste zuerst (availableNetworks ist nach Signal sortiert), ohne 'exclude'
+        // Look for a stored network in the scan, the strongest first (availableNetworks is sorted by signal), without 'exclude'
+
+        auto strongestStoredInScan = [&](int exclude) -> int {
+            for (int i = 0; i < MAX_WLAN; i++) {
+                if (availableNetworks[i].ssid == "") continue;
+                for (int j = 0; j < MAX_WLAN; j++) {
+                    if (j != exclude && trim(wifiSsid[j]) != "" && wifiSsid[j] == availableNetworks[i].ssid) return j;
+                }
+            }
+            return -1;
+        };
+
+        // Welches Netz zuerst drankommt: das zuletzt genutzte, wenn es im Scan steht, sonst sofort ein anderes
+        // gespeichertes aus dem Scan - es soll nicht hinter einem Netz warten, das gar nicht in Reichweite ist.
+
+        // Which network goes first: the last used one if it is in the scan, otherwise right away another stored
+        // one from the scan - it should not wait behind a network that is not even in range.
+
+        int firstSlot = (int)number;
+        if (!foundLastSSID) {
+            int visible = strongestStoredInScan((int)number);
+            if (visible >= 0) {
+                DEBUG_PRINTLN("[WiFi] Last connected SSID '" + wifiSsid[number] + "' not in the scan, but stored '" + wifiSsid[visible] + "' is - trying it first");
+                firstSlot = visible;
+            }
+        }
+
+        // Zweiter Scan nur, wenn gar kein gespeichertes Netz zu sehen ist
+        // Second scan only if no stored network is visible at all
+
+        if (!foundLastSSID && firstSlot == (int)number) {
             DEBUG_PRINTLN("[WiFi] Last connected SSID '" + wifiSsid[number] + "' not found in scan, starting new scan..");
             startWiFiScan();
             delay(100); // Kurze Verzögerung, damit der Scan starten kann
@@ -109,21 +140,26 @@ void connectWiFiAtBoot() {
                     break;
                 }
             }
+            if (!foundLastSSID) {
+                int visible = strongestStoredInScan((int)number);
+                if (visible >= 0) {
+                    DEBUG_PRINTLN("[WiFi] Stored '" + wifiSsid[visible] + "' found in second scan - trying it first");
+                    firstSlot = visible;
+                }
+            }
         }
 
-        // Zuletzt genutztes Netz IMMER direkt versuchen, auch ohne Scan-Treffer -
-        // WiFi.begin() braucht keinen Scan, das deckt auch versteckte SSIDs und
-        // Router ab, die beim Booten noch nicht bereit sind.
+        // Das erste Netz direkt versuchen. Das zuletzt genutzte auch ohne Scan-Treffer (WiFi.begin() braucht
+        // keinen Scan: versteckte SSIDs, Router noch nicht bereit) - aber erst nach den Netzen, die im Scan stehen.
 
-        // Always try the last used network directly, even without a scan hit -
-        // WiFi.begin() needs no scan match, covering hidden SSIDs and routers
-        // not yet ready at boot.
+        // Try the first network directly. The last used one even without a scan hit (WiFi.begin() needs no scan:
+        // hidden SSIDs, router not ready yet) - but only after the networks that are in the scan.
 
         bool lastSsidTried = false;
         int lastSsidResult = NOT_CONNECTED;
 
-        if (trim(wifiSsid[number]) != "") {
-            if (!foundLastSSID) {
+        if (trim(wifiSsid[firstSlot]) != "") {
+            if (!foundLastSSID && firstSlot == (int)number) {
                 DEBUG_PRINTLN("[WiFi] Last connected SSID '" + wifiSsid[number] + "' not found in scan - trying it anyway (may be hidden or router not up yet)");
             }
             lastSsidTried = true;
@@ -136,7 +172,7 @@ void connectWiFiAtBoot() {
             // single failure (e.g. the router being briefly busy) shouldn't
             // discard this network right away.
 
-            lastSsidResult = connectWiFiWithRetries(number, wifiSsid[number]);
+            lastSsidResult = connectWiFiWithRetries(firstSlot, wifiSsid[firstSlot]);
         }
 
         if (lastSsidResult == NOT_CONNECTED) {
@@ -158,7 +194,7 @@ void connectWiFiAtBoot() {
                     // Nur ueberspringen, wenn oben tatsaechlich versucht wurde.
                     // Only skip if it was actually attempted above.
 
-                    if (lastSsidTried && j == (int)number) continue;
+                    if (lastSsidTried && j == firstSlot) continue;
                     if (trim(wifiSsid[j]) == "") continue; // überspringe leere SSID
                                                            // skip empty SSID
 
@@ -184,6 +220,18 @@ void connectWiFiAtBoot() {
                         }
                     }
 
+                }
+            }
+
+            // Das zuletzt genutzte Netz steht nicht im Scan und kam deshalb noch nicht dran: jetzt trotzdem versuchen
+            // The last used network is not in the scan and has not had its turn yet: try it now anyway
+
+            if (firstSlot != (int)number && !foundLastSSID && trim(wifiSsid[number]) != "") {
+                DEBUG_PRINTLN("[WiFi] Last connected SSID '" + wifiSsid[number] + "' not found in scan - trying it now anyway (may be hidden or router not up yet)");
+                if (connectWiFiWithRetries(number, wifiSsid[number]) != NOT_CONNECTED) {
+                    DEBUG_PRINTLN("[WiFi] Connected to " + wifiSsid[number] + " using stored credentials");
+                    preferences.putInt(PK_LAST_WLAN, (int)number);
+                    return;
                 }
             }
 
@@ -1267,7 +1315,7 @@ void setup() {
 
                 restorePreviousWpsConnection();
             }
-            else if (millis() - wpsStartMillis > (2 * WAIT_1m)) {
+            else if (millis() - wpsStartMillis > WPS_TIMEOUT_MS) {
                 DEBUG_PRINTLN("[WPS] Timeout waiting for WPS button press - disabling WPS");
                 esp_wifi_wps_disable();
                 wpsPending = false;
@@ -1456,6 +1504,7 @@ void setup() {
             firstRun2 = true;
             clockFrameDirty[0] = true;
             clockFrameDirty[1] = true;
+            getTimeFromOpenWifiAfterApTime(); // ohne Zeit: einmal aus einem offenen WLAN holen / without a time: get it from an open WiFi once
         }
 
         if (WiFi.getMode() == WIFI_STA || rtcOk == RTC_AVAILABLE || dcfTimeFound || apClockDue) {

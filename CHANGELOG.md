@@ -2,6 +2,18 @@
 
 *English version below.*
 
+## 2026-11-21
+
+### Hinzugefügt
+- Boot-Taste bei WPS und im Access-Point-Modus: Ein kurzer Druck während der WPS-Anzeige oder im Access-Point-Modus bricht den Vorgang ab und holt die Zeit aus einem offenen WLAN (auch bei ausgeschalteter Einstellung „Uhrzeit aus offenen WLANs“). Mit Zeit läuft die Uhr ohne Access Point weiter (das gespeicherte WLAN wird später wieder versucht), ohne Zeit startet der Access Point wieder. Wird die Taste 10 Sekunden oder länger gehalten, gelten wie bisher die Stufen WLAN-Reset und Werksreset.
+- Nach Ablauf der Anzeigezeit des Access Points (2 Minuten) holt die Uhr, wenn sie noch keine Zeit hat (keine RTC, kein DCF77, nichts per USB gesetzt), einmal die Zeit aus einem offenen WLAN (mit der Einstellung „Uhrzeit aus offenen WLANs“). Der Access Point ist dabei kurz weg und startet danach wieder.
+
+### Geändert
+- WPS wartet 30 statt 120 Sekunden (beim Start mit Display-Anzeige und beim Web-Knopf; `WPS_TIMEOUT_MS` in `config.h`). Die Hinweistexte nennen „ca. 30 Sekunden“.
+- Start: Ist das zuletzt genutzte WLAN nicht im Scan, aber ein anderes gespeichertes, probiert die Uhr dieses sofort (das stärkste zuerst) statt zuerst das unsichtbare Netz. Ein zweiter Scan folgt nur, wenn gar kein gespeichertes WLAN zu sehen ist; das zuletzt genutzte Netz wird danach trotzdem noch versucht (versteckte SSID, Router noch nicht bereit).
+- Der Countdown auf dem Display (WPS, Tasterstufen) flimmert nicht mehr: Die Zeile wird mit schwarzem Hintergrund in einem Zug geschrieben statt vorher gelöscht.
+- Uhrzeit aus offenen WLANs: Liefern NTP und HTTP nichts, fragt die Uhr zuletzt noch per HTTPS bei `1.1.1.1` und `www.google.com` nach der Zeit (manche Netze sperren Port 80 und NTP, lassen aber 443 durch). Die Meldung auf dem Display nach einem Fehlschlag nennt den Grund: „no open WiFi“, „no connection“ oder „no time“.
+
 ## 2026-11-08
 
 ### Hinzugefügt
@@ -560,6 +572,18 @@
 ---
 
 # English Version
+
+## 2026-11-21
+
+### Added
+- Boot button during WPS and in access point mode: a short press during the WPS display or in access point mode aborts the process and gets the time from an open WiFi (also with the setting "Time from open WiFis" switched off). With a time the clock carries on without an access point (the stored WiFi is tried again later), without a time the access point starts again. Held for 10 seconds or longer, the WiFi reset and factory reset stages apply as before.
+- After the access point display time (2 minutes) is over, a clock that has no time yet (no RTC, no DCF77, nothing set via USB) gets the time from an open WiFi once (with the setting "Time from open WiFis"). The access point is gone briefly meanwhile and starts again afterwards.
+
+### Changed
+- WPS waits 30 instead of 120 seconds (at boot with the display and with the web button; `WPS_TIMEOUT_MS` in `config.h`). The hint texts say "about 30 seconds".
+- Start: if the last used WiFi is not in the scan but another stored one is, the clock tries that one right away (the strongest first) instead of the invisible network first. A second scan only follows if no stored WiFi is visible at all; the last used network is still tried afterwards (hidden SSID, router not ready yet).
+- The countdown on the display (WPS, button stages) no longer flickers: the row is written with a black background in one go instead of being cleared first.
+- Time from open WiFis: if NTP and HTTP deliver nothing, the clock finally asks for the time via HTTPS at `1.1.1.1` and `www.google.com` (some networks block port 80 and NTP but let 443 through). The message on the display after a failure names the reason: "no open WiFi", "no connection" or "no time".
 
 ## 2026-11-08
 

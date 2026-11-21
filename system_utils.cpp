@@ -20,11 +20,13 @@
 
     // Eine Textzeile zentriert auf Hoehe yShare (Anteil der Displayhoehe) zeichnen, in der ersten Schrift aus
     // fontList (Ende = nullptr), in der der Text Platz hat: Displaybreite, beim runden Display die Sehne des
-    // Kreises auf dieser Hoehe (mit Rand). clear = Zeile vorher schwarz loeschen (Countdown ohne Flackern).
+    // Kreises auf dieser Hoehe (mit Rand). clear = Zeile ersetzen: der Text wird mit schwarzem Hintergrund auf die
+    // ganze Zeilenbreite gezeichnet, ohne vorher zu loeschen (Countdown ohne Flackern).
 
     // Draw a text row centred at height yShare (share of the display height), in the first font from fontList
     // (end = nullptr) in which the text fits: display width, on a round display the chord of the circle at that
-    // height (with a margin). clear = blank the row first (countdown without flicker).
+    // height (with a margin). clear = replace the row: the text is drawn with a black background over the full
+    // row width, without clearing first (countdown without flicker).
 
     void drawTextRow(lgfx::LovyanGFX& g, float yShare, const String& text, uint16_t color, const lgfx::IFont* const* fontList, bool clear) {
         int w = statusWidth(), h = CLOCK_HEIGHT;
@@ -34,6 +36,7 @@
             float r = h / 2.0f, dy = fabsf(y - r) + h * 0.06f; // halbe Zeilenhoehe mitrechnen / count half a row height
             usable = dy < r ? 2.0f * sqrtf(r * r - dy * dy) * 0.9f : 0;
         }
+
         g.setTextSize(1);
         int chosen = 0;
         for (int i = 0; fontList[i]; i++) {
@@ -60,16 +63,21 @@
                 g.setTextSize(wide0 > 0 ? constrain(floorf(usable / wide0 * 2.0f) / 2.0f, 1.0f, 3.0f) : 1.0f);
             }
         }
-        if (clear) {
-            int fh = g.fontHeight();
-            g.fillRect(0, y - fh / 2 - 2, w, fh + 4, TFT_BLACK);
-        }
+
+        // Der Hintergrund wird zusammen mit dem Text geschrieben (Polster = Zeilenbreite): jeder Punkt der Zeile
+        // wird nur einmal gesetzt, es gibt kein schwarzes Zwischenbild.
+
+        // The background is written together with the text (padding = row width): every dot of the row is set
+        // only once, there is no black intermediate image.
+
+        g.setTextPadding(clear ? w : 0);
         g.setTextDatum(lgfx::middle_center);
         g.setTextColor(color, TFT_BLACK);
         g.drawString(text, w / 2, y);
 
         // Zustand wie der restliche Code ihn erwartet / state as the rest of the code expects it
 
+        g.setTextPadding(0);
         g.setTextDatum(lgfx::top_left);
         g.setFont(&fonts::Font0);
         g.setTextSize(1);
@@ -113,7 +121,25 @@
 
             const unsigned long WIFI_RESET_HOLD = 2 * WAIT_10s;
             const unsigned long FACTORY_RESET_HOLD = 3 * WAIT_10s;
-            unsigned long pressStart = millis();
+            unsigned long alreadyHeld = 0;
+
+            // Nur die Boot-Taste im Access-Point-Modus: ein kurzer Druck (unter 10 s) beendet den Access Point und holt
+            // die Zeit aus einem offenen WLAN. Wird sie laenger gehalten, gelten unten die Stufen wie sonst.
+
+            // Only the boot button in access point mode: a short press (below 10 s) ends the access point and gets
+            // the time from an open WiFi. Held longer, the stages below apply as usual.
+
+            if (softAPIP && pinIsLow(BOOT_BUTTON) && !pinIsHigh(BUTTON1) && !extraButtonDown()) {
+                unsigned long pressed = millis();
+                while (pinIsLow(BOOT_BUTTON) && millis() - pressed < WAIT_10s) delay(10);
+                if (!pinIsLow(BOOT_BUTTON)) {
+                    DEBUG_PRINTLN("[BUTTON] Boot button released - leaving the access point");
+                    abortAccessPointForOpenWifiTime();
+                    return;
+                }
+                alreadyHeld = millis() - pressed;
+            }
+            unsigned long pressStart = millis() - alreadyHeld;
             int shownStage = 0;   // 0 = WLAN-Anzeige, 1 = WLAN-Countdown, 2 = Werksreset-Countdown
                                   // 0 = WiFi info, 1 = WiFi countdown, 2 = factory reset countdown
             int shownSecs = -1;

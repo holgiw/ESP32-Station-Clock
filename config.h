@@ -762,6 +762,14 @@ static_assert(displayGeometryValid(DISPLAY_GEOMETRY[DISPLAY_TYPE_GC9A01]) &&
 
 #define AP_INFO_SHOW_MS (2 * WAIT_1m)
 
+    // So lange wartet WPS auf die Taste am Router - beim Start (Display-Ablauf in startAP()) und beim Web-Knopf (loop())
+    // gleich. Danach geht es weiter: Access Point bzw. der vorherige Betrieb.
+
+    // How long WPS waits for the button on the router - at boot (display flow in startAP()) and with the web button
+    // (loop()) alike. Afterwards it carries on: access point or the previous operation.
+
+#define WPS_TIMEOUT_MS (30 * WAIT_1s)
+
     // Versuche PRO WLAN-Netz beim Start (connectWiFiAtBoot()), bevor das naechste versucht bzw. aufgegeben
     // wird (WPS/AP) - ein einzelner Fehlversuch soll ein gefundenes Netz nicht gleich verwerfen.
 

@@ -28,10 +28,10 @@ Ohne WLAN-Daten versucht die Uhr beim Start automatisch zunächst **WPS**, bevor
 
 1. WLAN-Router griffbereit haben.
 2. Uhr mit Strom versorgen. Auf dem Display erscheint **„check for WPS.."**.
-3. Innerhalb der nächsten **2 Minuten** am Router die **WPS-Taste** drücken (Bezeichnung je nach Router z.B. „WPS", manchmal kombiniert mit der WLAN-Taste). Die Uhr zeigt währenddessen einen Countdown **„AP mode in …s"** an.
+3. Innerhalb der nächsten **30 Sekunden** am Router die **WPS-Taste** drücken (Bezeichnung je nach Router z.B. „WPS", manchmal kombiniert mit der WLAN-Taste). Die Uhr zeigt währenddessen einen Countdown **„AP mode in …s"** an.
 4. Findet die Uhr den Router per WPS, übernimmt sie SSID und Passwort automatisch, zeigt kurz den gefundenen Netzwerknamen und **„found WPS… reboot"** an und startet neu. Die Einrichtung ist damit abgeschlossen.
 
-Reagiert der Router nicht (kein WPS, WPS nicht aktiviert oder Zeit abgelaufen), geht die Uhr automatisch in den Accesspoint-Modus über (Schritt 1.2) – es ist keine weitere Aktion nötig.
+Reagiert der Router nicht (kein WPS, WPS nicht aktiviert oder Zeit abgelaufen), geht die Uhr automatisch in den Accesspoint-Modus über (Schritt 1.2) – es ist keine weitere Aktion nötig. Wer kein WPS und keinen Access Point braucht, drückt während der WPS-Anzeige oder im Access-Point-Modus kurz die **Boot-Taste**: Die Uhr holt dann die Zeit aus einem offenen WLAN.
 
 ### 1.2 Schritt 2: Falls WPS nicht klappt – der Accesspoint-Modus (AP)
 
@@ -59,7 +59,7 @@ Beides ist bei jeder Uhr gleich und fest in der Firmware hinterlegt – die Einr
 
 Ist die Uhr bereits mit dem Heim-WLAN verbunden, lässt sich jederzeit über die Weboberfläche (Tab **WLAN**) ein **weiteres** Netzwerk per WPS ergänzen, ohne das bisherige zu verlieren:
 
-- Button **„Netzwerk per WPS hinzufügen"** klicken, danach am Router die WPS-Taste drücken. Die Verbindung der Uhr kann dabei für bis zu ca. 2 Minuten kurz unterbrochen sein.
+- Button **„Netzwerk per WPS hinzufügen"** klicken, danach am Router die WPS-Taste drücken. Die Verbindung der Uhr kann dabei für bis zu ca. 30 Sekunden kurz unterbrochen sein.
 
 Soll die Uhr komplett neu eingerichtet werden (z.B. Umzug, neuer Router), gibt es zwei Wege:
 
@@ -185,10 +185,10 @@ Without WiFi data, the clock automatically tries **WPS** first at startup, befor
 
 1. Have your WiFi router within reach.
 2. Power on the clock. The display shows **"check for WPS.."**.
-3. Within the next **2 minutes**, press the **WPS button** on your router (labeled "WPS" on most routers, sometimes combined with the WiFi button). Meanwhile the clock shows a countdown, **"AP mode in …s"**.
+3. Within the next **30 seconds**, press the **WPS button** on your router (labeled "WPS" on most routers, sometimes combined with the WiFi button). Meanwhile the clock shows a countdown, **"AP mode in …s"**.
 4. If the clock finds the router via WPS, it takes over the SSID and password automatically, briefly shows the found network name and **"found WPS… reboot"**, then restarts. Setup is complete at this point.
 
-If the router doesn't respond (no WPS, WPS not enabled, or time ran out), the clock automatically switches to access point mode (step 1.2) - no further action is needed.
+If the router doesn't respond (no WPS, WPS not enabled, or time ran out), the clock automatically switches to access point mode (step 1.2) - no further action is needed. If you need neither WPS nor the access point, briefly press the **Boot button** during the WPS display or in access point mode: the clock then gets the time from an open WiFi.
 
 ### 1.2 Step 2: If WPS doesn't work – access point mode (AP)
 
@@ -216,7 +216,7 @@ Both are the same on every clock and fixed in the firmware - so setup also works
 
 Once the clock is connected to your home WiFi, you can add **another** network via WPS at any time through the web interface (tab **WLAN**), without losing the existing one:
 
-- Click the **"Add Network via WPS"** button, then press the WPS button on your router. The clock's connection may be briefly interrupted for up to about 2 minutes while this happens.
+- Click the **"Add Network via WPS"** button, then press the WPS button on your router. The clock's connection may be briefly interrupted for up to about 30 seconds while this happens.
 
 If the clock needs to be set up from scratch (e.g. a move, a new router), there are two ways:
 
