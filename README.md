@@ -35,7 +35,7 @@ Eine Firmware je ESP. Den Displaytyp wählt man im Tab „Uhr Einstellungen“ o
 
 ## 2. Anpassbare Zeiger und Zifferblätter
 
-- Stunden-, Minuten- und Sekundenzeiger und Zifferblätter lassen sich als BMP hochladen, z. B. im Layout der Deutschen Bahn oder anderer Gesellschaften, oder im Designer erstellen.
+- Stunden-, Minuten- und Sekundenzeiger und Zifferblätter lassen sich als BMP hochladen, z. B. im Layout der Deutschen Bahn oder anderer Gesellschaften, oder im Designer erstellen. **Hinweis:** Layouts der Deutschen Bahn und der Schweizer Bahn (SBB) werden aus lizenzrechtlichen Gründen nicht mitgeliefert; im Designer lassen sie sich einfach selbst erstellen.
 - Startpaket: Was davon fehlt, zeichnet die Uhr bei jedem Start selbst neu (nach dem ersten Flashen, einem Werksreset oder wenn es gelöscht wurde); Vorhandenes bleibt
   - vier Zifferblätter, weiß mit Rand, Stunden- und Minutenstrichen: `face_default.bmp` (12, 3, 6, 9), `face_numbers.bmp` (1–12), `face_roman.bmp` (I–XII), `face_subdial.bmp` (12, 3, 9 und ein Sekundenfeld im unteren Drittel),
   - vier Zeigersätze: Satz 0 mit schwarzen Balken und rotem Sekundenzeiger, Satz 1 ebenso mit schwarzem Sekundenzeiger, Satz 2 geschwungen, ein Satz wie Satz 0 mit kurzem rotem Sekundenzeiger samt Scheibe fürs Sekundenfeld,
@@ -237,7 +237,7 @@ One firmware per ESP. The display type is chosen in the "Clock Setup" tab or whe
 
 ## 2. Customizable Clock Hands and Faces
 
-- Hour, minute and second hands and clock faces can be uploaded as BMP files, e.g. in the layout of Deutsche Bahn or other companies, or created in the designer.
+- Hour, minute and second hands and clock faces can be uploaded as BMP files, e.g. in the layout of Deutsche Bahn or other companies, or created in the designer. **Note:** for licensing reasons, layouts of Deutsche Bahn and the Swiss railways (SBB) are not included; you can easily create them yourself in the designer.
 - Starter set: whatever of it is missing, the clock draws anew at every start (after the first flash, a factory reset or if it was deleted); existing items stay
   - four clock faces, white with a rim, hour and minute marks: `face_default.bmp` (12, 3, 6, 9), `face_numbers.bmp` (1–12), `face_roman.bmp` (I–XII), `face_subdial.bmp` (12, 3, 9 and a seconds subdial in the lower third),
   - four hand sets: set 0 with black bars and a red second hand, set 1 the same with a black second hand, set 2 curved, a set like set 0 with a short red second hand with its disc for the subdial,
