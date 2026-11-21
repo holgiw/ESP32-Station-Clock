@@ -19,7 +19,7 @@ Eine Firmware je ESP. Den Displaytyp wählt man im Tab „Uhr Einstellungen“ o
 - **ESP32-C6** (Waveshare, Display fest verbaut, Build `build_uhr4/esp32c6`, ohne PSRAM; BL geregelt; eigene Partitionstabelle mit 2,25 MB Programm und 1,6 MB Dateisystem – beim Selbstbauen `boards.local.txt` und `uhr4_c6.csv` in den Core-Ordner kopieren, siehe `boards.local.txt`; beim Wechsel von einer älteren Firmware vorher eine Sicherung ziehen, das Dateisystem wird neu angelegt):
   - ESP32-C6-LCD-1.47: ST7789 – rechteckig, 172 × 320; Uhr 172 × 172 und Streifen mit Uhrzeit und Datum
   - ESP32-C6-LCD-1.3: ST7789_240 – quadratisch, 240 × 240
-- **ESP32-S3** (Waveshare ESP32-S3-LCD-1.28, Display fest verbaut, Build `build_uhr4/esp32s3`, 16 MB Flash, 2 MB PSRAM; BL geregelt; noch nicht am Gerät erprobt):
+- **ESP32-S3** (Waveshare ESP32-S3-LCD-1.28, Display fest verbaut, Build `build_uhr4/esp32s3`, 16 MB Flash, 2 MB PSRAM; BL geregelt):
   - GC9A01 – rund, 240 × 240
   - Flash mit zwei App-Partitionen und 9,9 MB für Zifferblätter, Zeiger und Schriften
   - Firmware-Update über WLAN (siehe Abschnitt 10)
@@ -221,7 +221,7 @@ One firmware per ESP. The display type is chosen in the "Clock Setup" tab or whe
 - **ESP32-C6** (Waveshare, display built in, build `build_uhr4/esp32c6`, without PSRAM; BL controlled; own partition table with 2.25 MB program and 1.6 MB file system – when building yourself copy `boards.local.txt` and `uhr4_c6.csv` into the core folder, see `boards.local.txt`; when switching from an older firmware take a backup first, the file system is created anew):
   - ESP32-C6-LCD-1.47: ST7789 – rectangular, 172 × 320; clock 172 × 172 and a strip with time and date
   - ESP32-C6-LCD-1.3: ST7789_240 – square, 240 × 240
-- **ESP32-S3** (Waveshare ESP32-S3-LCD-1.28, display built in, build `build_uhr4/esp32s3`, 16 MB flash, 2 MB PSRAM; BL controlled; not yet tried on the device):
+- **ESP32-S3** (Waveshare ESP32-S3-LCD-1.28, display built in, build `build_uhr4/esp32s3`, 16 MB flash, 2 MB PSRAM; BL controlled):
   - GC9A01 – round, 240 × 240
   - flash with two app partitions and 9.9 MB for clock faces, hands and fonts
   - firmware update over WiFi (see section 10)
