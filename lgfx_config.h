@@ -862,20 +862,20 @@ public:
         p.timings.flags.pclk_active_neg = 0;
         p.timings.flags.pclk_idle_high = c.pclk_idle_high;
         p.data_width = 16;
-        p.bits_per_pixel = 16;
+        p.in_color_format = LCD_COLOR_FMT_RGB565;
         p.num_fbs = 0;
         p.dma_burst_size = 64;
-        p.hsync_gpio_num = c.pin_hsync;
-        p.vsync_gpio_num = c.pin_vsync;
-        p.de_gpio_num = c.pin_henable;
-        p.pclk_gpio_num = c.pin_pclk;
-        p.disp_gpio_num = -1;
+        p.hsync_gpio_num = (gpio_num_t)c.pin_hsync;
+        p.vsync_gpio_num = (gpio_num_t)c.pin_vsync;
+        p.de_gpio_num = (gpio_num_t)c.pin_henable;
+        p.pclk_gpio_num = (gpio_num_t)c.pin_pclk;
+        p.disp_gpio_num = GPIO_NUM_NC;
         p.flags.no_fb = 1;
 
         // LovyanGFX legt die Farbe byteweise vertauscht ab (hohes Byte zuerst): Datenleitung j traegt Farbbit (j + 8) % 16
         // LovyanGFX stores the colour byte-swapped (high byte first): data line j carries colour bit (j + 8) % 16
 
-        for (int j = 0; j < 16; j++) p.data_gpio_nums[j] = c.pin_data[(j + 8) & 15];
+        for (int j = 0; j < 16; j++) p.data_gpio_nums[j] = (gpio_num_t)c.pin_data[(j + 8) & 15];
 
         uint64_t totalPx = (uint64_t)(c.hsync_pulse_width + c.hsync_back_porch + 480 + c.hsync_front_porch) *
                            (c.vsync_pulse_width + c.vsync_back_porch + 480 + c.vsync_front_porch);

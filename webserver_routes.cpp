@@ -1010,6 +1010,43 @@
     }
 
 
+    // Logging ein- oder ausschalten (Formular im Tab Log, Route /setlogging): beim Einschalten die Startzeit merken,
+    // beim Ausschalten die Logdateien und die gepufferten Zeilen verwerfen.
+
+    // Switch logging on or off (form in the Log tab, route /setlogging): on switching on, remember the start time,
+    // on switching off, discard the log files and the buffered lines.
+
+    void applyLoggingSetting(bool enable) {
+        bool wasLoggingEnabled = preferences.getBool(PK_LOGGING_ENABLED, false);
+        loggingEnabled = enable;
+        preferences.putBool(PK_LOGGING_ENABLED, loggingEnabled);
+
+        // Beim Einschalten die Startzeit merken (Abschaltung nach 24 Stunden, checkLoggingExpiry()); 0 = noch keine
+        // gueltige Uhrzeit
+
+        // On switching on, remember the start time (switch-off after 24 hours, checkLoggingExpiry()); 0 = no valid
+        // time yet
+
+        if (loggingEnabled && !wasLoggingEnabled) preferences.putUInt(PK_LOGGING_START, timeTrusted() ? (uint32_t)time(nullptr) : 0);
+        if (!loggingEnabled) preferences.putUInt(PK_LOGGING_START, 0);
+
+        if (wasLoggingEnabled && !loggingEnabled) {
+            deleteAllLogFiles();
+
+            // Gepufferte Log-Zeilen verwerfen - ein spaeteres Leeren schriebe sie sonst in die gerade
+            // geloeschte Datei.
+
+            // Discard buffered log lines - a later flush would otherwise write them into the file just
+            // deleted.
+
+            if (logBufferMutex != nullptr && xSemaphoreTake(logBufferMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+                logLineBuffer = "";
+                xSemaphoreGive(logBufferMutex);
+            }
+        }
+    }
+
+
     // Zeigt nach einer Weiterleitung eine einheitliche Meldung (translate()-Schluessel): "msg" Erfolg, blendet
     // sich nach 4 s aus - "warn" Hinweis und "err" Fehler bleiben stehen.
 
@@ -3155,6 +3192,18 @@
             }
             });
 
+        // Logging ein- oder ausschalten (Formular im Tab Log), nur aus einem privaten Netz wie der Tab selbst
+        // Switch logging on or off (form in the Log tab), only from a private network like the tab itself
+
+        webserver.on("/setlogging", HTTP_POST, []() {
+            if (!isPrivateNetworkIp(webserver.client().remoteIP())) {
+                webserver.send(200, "text/html", simpleMessagePage(translate("Settings saved"), "<p>" + translate("This action is only available when accessing the clock from a private network") + ".</p>"));
+                return;
+            }
+            applyLoggingSetting(webserver.hasArg("loggingEnabled"));
+            redirectTo("/?tab=log&msg=Settings%20saved");
+            });
+
         // Anzeigeeinstellungen speichern
         // Save display settings
 
@@ -3202,34 +3251,6 @@
             touchEnabled = webserver.hasArg("touchOn");
             preferences.putBool(PK_TOUCH_ENABLED, touchEnabled);
 #endif
-
-            bool wasLoggingEnabled = preferences.getBool(PK_LOGGING_ENABLED, false);
-            loggingEnabled = webserver.hasArg("loggingEnabled");
-            preferences.putBool(PK_LOGGING_ENABLED, loggingEnabled);
-
-            // Beim Einschalten die Startzeit merken (Abschaltung nach 24 Stunden, checkLoggingExpiry()); 0 = noch keine
-            // gueltige Uhrzeit
-
-            // On switching on, remember the start time (switch-off after 24 hours, checkLoggingExpiry()); 0 = no valid
-            // time yet
-
-            if (loggingEnabled && !wasLoggingEnabled) preferences.putUInt(PK_LOGGING_START, timeTrusted() ? (uint32_t)time(nullptr) : 0);
-            if (!loggingEnabled) preferences.putUInt(PK_LOGGING_START, 0);
-
-            if (wasLoggingEnabled && !loggingEnabled) {
-                deleteAllLogFiles();
-
-                // Gepufferte Log-Zeilen verwerfen - ein spaeteres Leeren schriebe sie sonst in die gerade
-                // geloeschte Datei.
-
-                // Discard buffered log lines - a later flush would otherwise write them into the file just
-                // deleted.
-
-                if (logBufferMutex != nullptr && xSemaphoreTake(logBufferMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-                    logLineBuffer = "";
-                    xSemaphoreGive(logBufferMutex);
-                }
-            }
 
             // DCF77-LED nur speichern, wenn die Checkbox ueberhaupt gerendert
             // wurde (Hardware da + dcf77Confirmed) - sonst wuerde jedes Speichern
@@ -5479,6 +5500,14 @@
 
             String disabledAttr = loggingEnabled ? "" : " disabled";
 
+            // Haken "Logging aktivieren" mit eigenem Speichern-Knopf (Route /setlogging)
+            // "Enable Logging" checkbox with its own save button (route /setlogging)
+
+            chunk += "<form method='POST' action='/setlogging' style='max-width:900px;margin:0 auto 10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:center;'>";
+            chunk += checkboxRow("loggingEnabled", loggingEnabled, translate("Enable Logging"), translate("Writes up to 9 log files to LittleFS for troubleshooting, switches off after 24 hours"));
+            chunk += "<button type='submit' style='width:auto;margin:0;padding:4px 12px;font-size:.8rem;'>" + translate("Save") + "</button>";
+            chunk += "</form>";
+
             chunk += "<div class='card' style='max-width:900px;'>";
 
             // Obere Zeile der Karte: Dateiauswahl links, Knopf "Download" rechts oben. Er laedt die gewaehlte
@@ -5902,8 +5931,8 @@
 
             chunk += checkboxRow("rocrailEnabled", rocrailEnabled, translate("Rocrail"), translate("Take over the model time from a Rocrail server (model railroad control software) for the hands - unlocks the Rocrail tab, where the server address can then be entered"));
 
-            // Onboard-LED ganz abschalten (Default an); nur auf Boards mit LED (S2, C6). Zwischen Rocrail und Logging.
-            // Switch the onboard LED off completely (default on); only on boards with an LED (S2, C6). Between Rocrail and logging.
+            // Onboard-LED ganz abschalten (Default an); nur auf Boards mit LED (S2, C6). Nach Rocrail.
+            // Switch the onboard LED off completely (default on); only on boards with an LED (S2, C6). After Rocrail.
 
             if (LED_BOARD >= 0) {
                 chunk += checkboxRow("boardLed", boardLedEnabled, translate("Onboard LED"), translate("Unchecked, the LED on the board stays off completely: not at start, not on web access, not on DCF77 reception and not on WPS"));
@@ -5912,8 +5941,6 @@
 #if BOARD_WAVESHARE_S3_LCD4
             chunk += checkboxRow("touchOn", touchEnabled, translate("Touch control"), translate("Unchecked, all touch functions of the display are ignored and the hints in the corners are not shown"));
 #endif
-
-            chunk += checkboxRow("loggingEnabled", loggingEnabled, translate("Enable Logging"), translate("Writes up to 9 log files to LittleFS for troubleshooting, switches off after 24 hours"));
 
             // Nur sichtbar mit DCF77-Hardware UND dcf77Confirmed - ohne je
             // erkanntes Signal soll die Option gar nicht erst auftauchen.

@@ -27,7 +27,6 @@
     // restored on another clock.
 
 #include <nvs.h>
-#include <mbedtls/gcm.h>
 #include <esp_random.h>
 #include <algorithm>
 
@@ -251,18 +250,11 @@
             memset(key, 0, sizeof(key));
             return "";
         }
-        mbedtls_gcm_context gcm;
-        mbedtls_gcm_init(&gcm);
-        int rc = mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, key, 256);
-        if (rc == 0) {
-            rc = mbedtls_gcm_crypt_and_tag(&gcm, MBEDTLS_GCM_ENCRYPT, len, iv, sizeof(iv), nullptr, 0,
-                (const unsigned char*)plain.c_str(), cipher, sizeof(tag), tag);
-        }
-        mbedtls_gcm_free(&gcm);
+        bool encrypted = aesGcm256(true, key, iv, sizeof(iv), tag, (const unsigned char*)plain.c_str(), cipher, len);
         memset(key, 0, sizeof(key));
 
         String out;
-        if (rc == 0) {
+        if (encrypted) {
             out = "k1:" + backupHex(iv, sizeof(iv)) + ":" + backupHex(tag, sizeof(tag)) + ":" + backupHex(cipher, len);
         }
         free(cipher);
@@ -299,12 +291,8 @@
         bool ok = cipher && clear && backupUnhex(field[3], cipher, len) == (int)len && backupWifiKey(key);
         if (!ok) error = "encrypted WiFi data damaged";
         if (ok) {
-            mbedtls_gcm_context gcm;
-            mbedtls_gcm_init(&gcm);
-            int rc = mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, key, 256);
-            if (rc == 0) rc = mbedtls_gcm_auth_decrypt(&gcm, len, iv, sizeof(iv), nullptr, 0, tag, sizeof(tag), cipher, clear);
-            mbedtls_gcm_free(&gcm);
-            if (rc != 0) {
+            bool decrypted = aesGcm256(false, key, iv, sizeof(iv), tag, cipher, clear, len);
+            if (!decrypted) {
                 ok = false;
                 error = "WiFi data could not be decrypted (file modified or from a firmware with a different key)";
             }

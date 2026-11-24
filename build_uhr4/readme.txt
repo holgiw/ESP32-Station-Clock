@@ -301,6 +301,8 @@ esptool --port /dev/ttyACM0 erase_flash
 # Die Dateien stehen im Release als uhr4-esp32s2.zip, uhr4-esp32c6.zip und uhr4-esp32s3.zip (entpacken, die
 # Befehle im selben Ordner ausführen).
 # ESP32-S2 (uhr4-esp32s2.zip)
+# *** ACHTUNG / WICHTIG: Bei einer vorhandenen Uhr VORHER UNBEDINGT EINE SICHERUNG ZIEHEN! Die Partitionstabelle der
+# *** Firmware ist neu (2,25 MB Programm), das Dateisystem (Zifferblaetter, Zeiger, Presets) wird neu angelegt.
 esptool --chip esp32-s2 -p /dev/ttyACM0 -b 460800 write-flash 0x1000 uhr4.ino.bootloader.bin 0x8000 uhr4.ino.partitions.bin 0x10000 uhr4.ino.bin
 # ESP32-C6 (Waveshare, uhr4-esp32c6.zip) - kein Bootmodus nötig. Vorher bei einer vorhandenen Uhr eine
 # Sicherung ziehen: die Partitionstabelle der Firmware ist neu (2,25 MB Programm), das Dateisystem wird neu angelegt.
@@ -619,6 +621,8 @@ esptool --port /dev/ttyACM0 erase_flash
 # The files are in the release as uhr4-esp32s2.zip, uhr4-esp32c6.zip and uhr4-esp32s3.zip (unpack, run the
 # commands in the same folder).
 # ESP32-S2 (uhr4-esp32s2.zip)
+# *** ATTENTION / IMPORTANT: On an existing clock YOU MUST TAKE A BACKUP FIRST! The firmware's partition table is new
+# *** (2.25 MB program), the file system (clock faces, hands, presets) is created anew.
 esptool --chip esp32-s2 -p /dev/ttyACM0 -b 460800 write-flash 0x1000 uhr4.ino.bootloader.bin 0x8000 uhr4.ino.partitions.bin 0x10000 uhr4.ino.bin
 # ESP32-C6 (Waveshare, uhr4-esp32c6.zip) - no boot mode needed. Take a backup first on an existing
 # clock: the firmware's partition table is new (2.25 MB program), the file system is created anew.

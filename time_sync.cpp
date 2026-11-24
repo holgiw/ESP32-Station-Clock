@@ -1303,7 +1303,21 @@
                     DEBUG_PRINTLN("[NTP] No response from " + ntpServer + ", retrying (attempt " + String(attempt + 1) + "/" + String(NTP_SYNC_ATTEMPTS) + ")..");
                 }
                 configTzTime(timezoneSnapshot, ntpServerCStr);
-                if (getLocalTime(&ntpLocalTime, WAIT_3s)) {
+
+                // Zusaetzlich eine eigene UDP-Anfrage (ntpQueryEpoch()): der SNTP-Client des Cores setzt die Zeit
+                // ab Core 4.0.0 aus dem ungueltigen Stand nicht mehr zuverlaessig. Die Antwort setzt die Systemzeit
+                // direkt; spaetere kleine Korrekturen macht weiter der SNTP-Client im SMOOTH-Modus.
+
+                // Additionally an own UDP request (ntpQueryEpoch()): from core 4.0.0 on the core's SNTP client no
+                // longer sets the time reliably from the invalid state. The reply sets the system time directly;
+                // later small corrections are still made by the SNTP client in SMOOTH mode.
+
+                time_t queried = ntpQueryEpoch(ntpServer);
+                if (queried > 0) {
+                    struct timeval queriedTime = { queried, 0 };
+                    settimeofday(&queriedTime, nullptr);
+                }
+                if (getLocalTime(&ntpLocalTime, queried > 0 ? 0 : WAIT_3s)) {
                     ntpResponded = true;
                     break;
                 }

@@ -14,7 +14,7 @@ notices and license texts follow below.
 | RTClib (Adafruit) | MIT | https://github.com/adafruit/RTClib |
 | Adafruit BusIO (Abhängigkeit von RTClib / dependency of RTClib) | MIT | https://github.com/adafruit/Adafruit_BusIO |
 | Arduino core for ESP32 (arduino-esp32) | LGPL-2.1 | https://github.com/espressif/arduino-esp32 |
-| ESP-IDF (Espressif) | Apache-2.0 | https://github.com/espressif/esp-idf |
+| ESP-IDF (Espressif, enthält / includes mbedTLS) | Apache-2.0 | https://github.com/espressif/esp-idf |
 | Schrift / font DejaVu Sans (DejaVu18, DejaVu40) | Bitstream Vera License, Public Domain | https://dejavu-fonts.github.io/License.html |
 | Schrift / font FreeSans Bold, FreeSerif Bold (GNU FreeFont) | GPL-3.0 mit Font-Ausnahme / with font exception | https://www.gnu.org/software/freefont/license.html |
 | Schrift / font Orbitron Light (The Orbitron Project Authors) | SIL Open Font License 1.1 | https://github.com/theleagueof/orbitron |

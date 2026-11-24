@@ -12,7 +12,7 @@
 #include <ArduinoOTA.h>
 #include <Update.h>
 #include <HTTPClient.h>
-#include <mbedtls/sha256.h>
+#include <psa/crypto.h>
 
     bool arduinoOtaStarted = false;
     int otaShownPercent = -1;
@@ -378,9 +378,9 @@
         DEBUG_PRINTLN("[UPDATE] Installing " + build + " from GitHub, " + String(total) + " bytes");
         showOtaStatus("GitHub 0 %");
 
-        mbedtls_sha256_context sum;
-        mbedtls_sha256_init(&sum);
-        mbedtls_sha256_starts(&sum, 0);
+        psa_crypto_init();
+        psa_hash_operation_t sum = PSA_HASH_OPERATION_INIT;
+        psa_hash_setup(&sum, PSA_ALG_SHA_256);
         uint8_t* buffer = (uint8_t*)malloc(2048);
         WiFiClient* stream = http.getStreamPtr();
         int done = 0;
@@ -406,7 +406,7 @@
                     break;
                 }
             }
-            mbedtls_sha256_update(&sum, buffer, got);
+            psa_hash_update(&sum, buffer, got);
             if (Update.write(buffer, got) != (size_t)got) {
                 error = Update.errorString();
                 break;
@@ -419,8 +419,9 @@
         http.end();
 
         unsigned char hash[32];
-        mbedtls_sha256_finish(&sum, hash);
-        mbedtls_sha256_free(&sum);
+        size_t hashLen = 0;
+        psa_hash_finish(&sum, hash, sizeof(hash), &hashLen);
+        psa_hash_abort(&sum);
         if (error.length() == 0) {
             char hex[65];
             for (int i = 0; i < 32; i++) snprintf(hex + 2 * i, 3, "%02x", hash[i]);

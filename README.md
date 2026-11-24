@@ -12,7 +12,7 @@ uhr4 zeigt die Uhrzeit als Zifferblatt mit Zeigern auf einem TFT-Display. Die Ha
 
 Eine Firmware je ESP. Den Displaytyp wählt man im Tab „Uhr Einstellungen“ oder beim Flashen mit `flashESP`; beim Update von uhr3 wird er übernommen. Grafikbibliothek: LovyanGFX.
 
-- **ESP32-S2** (Lolin S2 Pico, Build `build_uhr4/esp32s2`):
+- **ESP32-S2** (Lolin S2 Pico, Build `build_uhr4/esp32s2`; eigene Partitionstabelle mit 2,25 MB Programm und 1,6 MB Dateisystem – beim Selbstbauen `boards.local.txt` und `uhr4_s2.csv` in den Core-Ordner kopieren, siehe `boards.local.txt`; **ACHTUNG – beim Wechsel von einer älteren Firmware vorher unbedingt eine Sicherung ziehen, das Dateisystem wird neu angelegt**):
   - GC9A01 – rund, 240 × 240; ohne oder mit geregelter Hintergrundbeleuchtung (BL)
   - GC9D01 – rund, 160 × 160; BL geregelt
   - ILI9341 – rechteckig, 240 × 320; Uhr 240 × 240 (Zifferblätter und Zeiger wie beim GC9A01) und Streifen mit Uhrzeit und Datum; feste Beleuchtung
@@ -157,7 +157,7 @@ Eine Firmware je ESP. Den Displaytyp wählt man im Tab „Uhr Einstellungen“ o
 - DCF77: Empfang auch bei schwachem oder gestörtem Signal. Die Uhr ordnet die Impulse einem Sekundenraster zu, ein fehlender Impuls verschiebt also nicht die folgenden Bits. Die Signalpolarität spielt keine Rolle. Ein gestörtes Telegramm setzt nie eine falsche Zeit.
 - Live-Seite `/dcf77`: Bit-Fortschritt des aktuellen und das zuletzt dekodierte Telegramm.
 - Optional blinkt eine LED während der Synchronisation, aber nur, wenn ein DCF77-Empfänger erkannt wurde.
-- Die blaue Onboard-LED (ESP32-S2, ESP32-C6) lässt sich im Tab „Uhr Einstellungen“ mit dem Haken „Onboard-LED“ (zwischen „Rocrail“ und „Logging aktivieren“, ab Werk an) ganz abschalten: Sie leuchtet dann weder beim Start noch bei Zugriffen auf die Weboberfläche, beim DCF77-Empfang oder bei WPS.
+- Die blaue Onboard-LED (ESP32-S2, ESP32-C6) lässt sich im Tab „Uhr Einstellungen“ mit dem Haken „Onboard-LED“ (nach „Rocrail“, ab Werk an) ganz abschalten: Sie leuchtet dann weder beim Start noch bei Zugriffen auf die Weboberfläche, beim DCF77-Empfang oder bei WPS.
 
 ---
 
@@ -214,7 +214,7 @@ uhr4 shows the time as a clock face with hands on a TFT display. The hardware is
 
 One firmware per ESP. The display type is chosen in the "Clock Setup" tab or when flashing with `flashESP`; an update from uhr3 keeps it. Graphics library: LovyanGFX.
 
-- **ESP32-S2** (Lolin S2 Pico, build `build_uhr4/esp32s2`):
+- **ESP32-S2** (Lolin S2 Pico, build `build_uhr4/esp32s2`; own partition table with 2.25 MB program and 1.6 MB file system – when building yourself copy `boards.local.txt` and `uhr4_s2.csv` into the core folder, see `boards.local.txt`; **ATTENTION – when coming from an older firmware you must take a backup first, the file system is created anew**):
   - GC9A01 – round, 240 × 240; without or with controlled backlight (BL)
   - GC9D01 – round, 160 × 160; BL controlled
   - ILI9341 – rectangular, 240 × 320; clock 240 × 240 (clock faces and hands as for the GC9A01) and a strip with time and date; fixed backlight
@@ -359,7 +359,7 @@ One firmware per ESP. The display type is chosen in the "Clock Setup" tab or whe
 - DCF77: reception even with a weak or disturbed signal. The clock places the pulses on a one-second grid, so a missing pulse does not shift the following bits. The signal polarity does not matter. A disturbed telegram never sets a wrong time.
 - Live page `/dcf77`: bit progress of the current telegram and the last decoded one.
 - Optional LED blink during synchronization, only if a DCF77 receiver was detected.
-- The blue onboard LED (ESP32-S2, ESP32-C6) can be switched off completely in the "Clock Setup" tab with the "Onboard LED" checkbox (between "Rocrail" and "Enable Logging", on by default): it then never lights up at start, on web access, on DCF77 reception or on WPS.
+- The blue onboard LED (ESP32-S2, ESP32-C6) can be switched off completely in the "Clock Setup" tab with the "Onboard LED" checkbox (after "Rocrail", on by default): it then never lights up at start, on web access, on DCF77 reception or on WPS.
 
 ---
 

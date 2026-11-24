@@ -1,6 +1,6 @@
 #include "uhr4.h"
 #include <nvs.h>
-#include <mbedtls/gcm.h>
+#include <psa/crypto.h>
 #include <esp_random.h>
 
     // WLAN: Verbindungsaufbau, Access-Point, Scan, Reconnect.
@@ -22,7 +22,7 @@
 
     void startWPS() {
         if (esp_wifi_wps_enable(&wps_config) == ESP_OK) {
-            if (esp_wifi_wps_start(0) == ESP_OK) {
+            if (esp_wifi_wps_start() == ESP_OK) {
                 DEBUG_PRINTLN("[WPS] WPS started. Please press the WPS button on the router");
             }
             else {
@@ -303,20 +303,50 @@
 
     static_assert(sizeof(WIFI_STORE_KEY) == 65, "WIFI_STORE_KEY (config.h) muss 64 Hex-Zeichen haben / must have 64 hex characters");
 
+    // AES-256-GCM ueber die PSA-Crypto-Schnittstelle (mbedTLS 4): tag = 16 Byte Pruefsumme, bei encrypt Ausgabe, bei
+    // decrypt Eingabe. in und out duerfen gleich sein. true = ok (bei decrypt: Pruefsumme stimmt).
+
+    // AES-256-GCM via the PSA crypto interface (mbedTLS 4): tag = 16-byte checksum, output when encrypting, input
+    // when decrypting. in and out may be the same. true = ok (when decrypting: checksum matches).
+
+    bool aesGcm256(bool encrypt, const uint8_t* key, const uint8_t* iv, size_t ivLen, uint8_t* tag, const uint8_t* in, uint8_t* out, size_t len) {
+        if (psa_crypto_init() != PSA_SUCCESS) return false;
+        psa_key_attributes_t attr = PSA_KEY_ATTRIBUTES_INIT;
+        psa_set_key_type(&attr, PSA_KEY_TYPE_AES);
+        psa_set_key_bits(&attr, 256);
+        psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_ENCRYPT | PSA_KEY_USAGE_DECRYPT);
+        psa_set_key_algorithm(&attr, PSA_ALG_GCM);
+        psa_key_id_t id = 0;
+        if (psa_import_key(&attr, key, 32, &id) != PSA_SUCCESS) return false;
+        bool ok = false;
+        uint8_t* buf = (uint8_t*)malloc(len + 16); // Chiffretext + Pruefsumme / ciphertext + checksum
+        if (buf) {
+            size_t outLen = 0;
+            if (encrypt) {
+                ok = psa_aead_encrypt(id, PSA_ALG_GCM, iv, ivLen, nullptr, 0, in, len, buf, len + 16, &outLen) == PSA_SUCCESS && outLen == len + 16;
+                if (ok) {
+                    memcpy(out, buf, len);
+                    memcpy(tag, buf + len, 16);
+                }
+            }
+            else {
+                memcpy(buf, in, len);
+                memcpy(buf + len, tag, 16);
+                ok = psa_aead_decrypt(id, PSA_ALG_GCM, iv, ivLen, nullptr, 0, buf, len + 16, out, len, &outLen) == PSA_SUCCESS && outLen == len;
+            }
+            memset(buf, 0, len + 16);
+            free(buf);
+        }
+        psa_destroy_key(id);
+        return ok;
+    }
+
     bool wifiStoreCrypt(bool encrypt, const uint8_t* iv, uint8_t* tag, const uint8_t* in, uint8_t* out, size_t len) {
         uint8_t key[32];
         if (backupUnhex(String(WIFI_STORE_KEY), key, sizeof(key)) != (int)sizeof(key)) return false;
-        mbedtls_gcm_context gcm;
-        mbedtls_gcm_init(&gcm);
-        int rc = mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, key, 256);
-        if (rc == 0) {
-            rc = encrypt
-                ? mbedtls_gcm_crypt_and_tag(&gcm, MBEDTLS_GCM_ENCRYPT, len, iv, 12, nullptr, 0, in, out, 16, tag)
-                : mbedtls_gcm_auth_decrypt(&gcm, len, iv, 12, nullptr, 0, tag, 16, in, out);
-        }
-        mbedtls_gcm_free(&gcm);
+        bool ok = aesGcm256(encrypt, key, iv, 12, tag, in, out, len);
         memset(key, 0, sizeof(key));
-        return rc == 0;
+        return ok;
     }
 
     String wifiPassEncrypt(const String& plain) {

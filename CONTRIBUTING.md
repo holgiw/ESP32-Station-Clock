@@ -10,15 +10,15 @@ Pull Requests deshalb fokussiert und möglichst klein, dann lassen sie sich viel
 ## Hardware und Build-Umgebung
 
 - Ziel: nur **ESP32-S2** (wenig RAM – siehe „Speichergrenzen“ unten)
-- Board: **LOLIN S2 PICO** (esp32-Arduino-Core, gebaut mit 3.3.12), Partition Scheme
-  **„No OTA (2MB APP/2MB SPIFFS)“**, USB CDC On Boot „Enabled“. PSRAM ist bei diesem Board immer an
+- Board: **LOLIN S2 PICO** (esp32-Arduino-Core, gebaut mit 4.0.0), Partition Scheme
+  **„uhr4 S2 (2.25MB APP/1.6MB SPIFFS)“** (`boards.local.txt` und `uhr4_s2.csv` in den Core-Ordner kopieren), USB CDC On Boot „Enabled“. PSRAM ist bei diesem Board immer an
   (`BOARD_HAS_PSRAM` in der Board-Definition, kein Menüpunkt).
 - Der Compiler-Schalter `-mtext-section-literals` ist nötig: Funktion und Literal sollen auch in den großen
   Quelldateien (`display.cpp`, `webserver_routes.cpp`) nebeneinander liegen, sonst bricht der Linker mit „dangerous
   relocation: l32r: literal target out of range“ ab. Visual Micro liest ihn aus
   `board.txt` im Projektordner; für Arduino IDE/arduino-cli `platform.local.txt` aus dem Projektordner neben die
   `platform.txt` des ESP32-Cores kopieren – unter Windows
-  `%LOCALAPPDATA%\Arduino15\packages\esp32\hardware\esp32\3.3.12\` (Pfade für Linux/macOS stehen in der Datei) – und
+  `%LOCALAPPDATA%\Arduino15\packages\esp32\hardware\esp32\4.0.0\` (Pfade für Linux/macOS stehen in der Datei) – und
   die IDE neu starten, oder den Schalter per `--build-property "compiler.cpp.extra_flags=-mtext-section-literals"`
   übergeben.
 - Release-Builds (`uhr4.ino.bin`, `.bootloader.bin`, `.partitions.bin`, `.merged.bin`) kommen direkt nach
@@ -171,15 +171,15 @@ that makes them much easier to review and merge.
 ## Hardware & Build Environment
 
 - Target: **ESP32-S2** only (limited RAM - see "Memory constraints" below)
-- Board: **LOLIN S2 PICO** (esp32 Arduino core, built with 3.3.12), partition
-  scheme: **"No OTA (2MB APP/2MB SPIFFS)"**, USB CDC On Boot "Enabled". PSRAM is always on for this
+- Board: **LOLIN S2 PICO** (esp32 Arduino core, built with 4.0.0), partition
+  scheme: **"uhr4 S2 (2.25MB APP/1.6MB SPIFFS)"** (copy `boards.local.txt` and `uhr4_s2.csv` into the core folder), USB CDC On Boot "Enabled". PSRAM is always on for this
   board (`BOARD_HAS_PSRAM` in the board definition, no menu option).
 - Compiler flag `-mtext-section-literals` is required: function and literal should lie next to each other even in the
   large source files (`display.cpp`, `webserver_routes.cpp`), otherwise the linker fails with "dangerous relocation:
   l32r: literal target out of range". Visual Micro picks it up from
   `board.txt` in the project folder; for Arduino IDE/arduino-cli copy `platform.local.txt` from the project
   folder next to the ESP32 core's `platform.txt` - on Windows
-  `%LOCALAPPDATA%\Arduino15\packages\esp32\hardware\esp32\3.3.12\` (Linux/macOS paths are in the file) - and
+  `%LOCALAPPDATA%\Arduino15\packages\esp32\hardware\esp32\4.0.0\` (Linux/macOS paths are in the file) - and
   restart the IDE, or pass the flag via `--build-property "compiler.cpp.extra_flags=-mtext-section-literals"`.
 - Release builds (`uhr4.ino.bin`, `.bootloader.bin`, `.partitions.bin`,
   `.merged.bin`) go directly into `build_uhr4/` - `flashESP.bat`/`flashESP.sh`

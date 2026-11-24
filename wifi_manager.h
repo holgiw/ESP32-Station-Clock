@@ -12,6 +12,7 @@
     void onWifiDisconnectEvent(arduino_event_id_t event, arduino_event_info_t info) ;
     bool checkWiFiReconnect() ;
     void wipeWifiDriverStorage() ;
+    bool aesGcm256(bool encrypt, const uint8_t* key, const uint8_t* iv, size_t ivLen, uint8_t* tag, const uint8_t* in, uint8_t* out, size_t len) ; // AES-256-GCM (PSA), siehe wifi_manager.cpp / AES-256-GCM (PSA), see wifi_manager.cpp
     bool wifiStoreCrypt(bool encrypt, const uint8_t* iv, uint8_t* tag, const uint8_t* in, uint8_t* out, size_t len) ;
     String wifiPassEncrypt(const String& plain) ;
     String wifiPassDecrypt(const String& stored) ;
