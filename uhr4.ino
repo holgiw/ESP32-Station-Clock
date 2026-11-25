@@ -5,7 +5,7 @@
     // WebServer, LittleFS, Preferences, DNSServer, ESPmDNS und Wire bringt der Core "esp32" 4.0.0 von
     // Espressif mit.
 
-    // Board: "LOLIN S2 PICO", Partition Scheme "uhr4 S2 (2.25MB APP/1.6MB SPIFFS)", USB CDC On Boot "Enabled"
+    // Board: "LOLIN S2 PICO", Partition Scheme "No OTA (2MB APP/2MB SPIFFS)", USB CDC On Boot "Enabled"
     // (Vorgabe); PSRAM ist bei diesem Board immer an.
 
     // Waveshare ESP32-C6-LCD-1.47 / -1.3 (eigenes Build): Board "ESP32C6 Dev Module", Partition Scheme "uhr4 C6
@@ -31,7 +31,7 @@
     // WebServer, LittleFS, Preferences, DNSServer, ESPmDNS and Wire come with the "esp32" core 4.0.0 by
     // Espressif.
 
-    // Board: "LOLIN S2 PICO", Partition Scheme "uhr4 S2 (2.25MB APP/1.6MB SPIFFS)", USB CDC On Boot "Enabled"
+    // Board: "LOLIN S2 PICO", Partition Scheme "No OTA (2MB APP/2MB SPIFFS)", USB CDC On Boot "Enabled"
     // (default); PSRAM is always on for this board.
 
     // Waveshare ESP32-C6-LCD-1.47 / -1.3 (separate build): board "ESP32C6 Dev Module", Partition Scheme "uhr4 C6

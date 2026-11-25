@@ -400,10 +400,10 @@
 #endif
 
     // Partition fuer LittleFS: ESP32-S3 mit Schema "16M Flash (3MB APP/9.9MB FATFS)" (zwei App-Partitionen fuer
-    // OTA) - die Datenpartition heisst dort "ffat", LittleFS nutzt sie trotzdem. S2/C6 mit ihrer eigenen Tabelle (uhr4_s2, uhr4_c6): "spiffs".
+    // OTA) - die Datenpartition heisst dort "ffat", LittleFS nutzt sie trotzdem. S2/C6 mit "No OTA": "spiffs".
 
     // Partition for LittleFS: ESP32-S3 with the scheme "16M Flash (3MB APP/9.9MB FATFS)" (two app partitions
-    // for OTA) - the data partition is called "ffat" there, LittleFS uses it anyway. S2/C6 with their own table (uhr4_s2, uhr4_c6): "spiffs".
+    // for OTA) - the data partition is called "ffat" there, LittleFS uses it anyway. S2/C6 with "No OTA": "spiffs".
 
 #if BOARD_S3_ANY
 #define LITTLEFS_PARTITION "ffat"

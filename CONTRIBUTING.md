@@ -11,7 +11,7 @@ Pull Requests deshalb fokussiert und möglichst klein, dann lassen sie sich viel
 
 - Ziel: nur **ESP32-S2** (wenig RAM – siehe „Speichergrenzen“ unten)
 - Board: **LOLIN S2 PICO** (esp32-Arduino-Core, gebaut mit 4.0.0), Partition Scheme
-  **„uhr4 S2 (2.25MB APP/1.6MB SPIFFS)“** (`boards.local.txt` und `uhr4_s2.csv` in den Core-Ordner kopieren), USB CDC On Boot „Enabled“. PSRAM ist bei diesem Board immer an
+  **„No OTA (2MB APP/2MB SPIFFS)“**, USB CDC On Boot „Enabled“. PSRAM ist bei diesem Board immer an
   (`BOARD_HAS_PSRAM` in der Board-Definition, kein Menüpunkt).
 - Der Compiler-Schalter `-mtext-section-literals` ist nötig: Funktion und Literal sollen auch in den großen
   Quelldateien (`display.cpp`, `webserver_routes.cpp`) nebeneinander liegen, sonst bricht der Linker mit „dangerous
@@ -172,7 +172,7 @@ that makes them much easier to review and merge.
 
 - Target: **ESP32-S2** only (limited RAM - see "Memory constraints" below)
 - Board: **LOLIN S2 PICO** (esp32 Arduino core, built with 4.0.0), partition
-  scheme: **"uhr4 S2 (2.25MB APP/1.6MB SPIFFS)"** (copy `boards.local.txt` and `uhr4_s2.csv` into the core folder), USB CDC On Boot "Enabled". PSRAM is always on for this
+  scheme: **"No OTA (2MB APP/2MB SPIFFS)"**, USB CDC On Boot "Enabled". PSRAM is always on for this
   board (`BOARD_HAS_PSRAM` in the board definition, no menu option).
 - Compiler flag `-mtext-section-literals` is required: function and literal should lie next to each other even in the
   large source files (`display.cpp`, `webserver_routes.cpp`), otherwise the linker fails with "dangerous relocation:

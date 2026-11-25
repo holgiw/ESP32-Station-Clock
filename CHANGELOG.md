@@ -6,7 +6,7 @@
 
 ### Geändert
 - Gebaut mit dem ESP32-Arduino-Core 4.0.0 (ESP-IDF 6, mbedTLS 4; vorher 3.3.12). Dafür angepasst: AES-256-GCM (verschlüsselte WLAN-Passwörter und Sicherung, Format unverändert) und SHA-256 (Update von GitHub) laufen über die PSA-Schnittstelle von mbedTLS 4, `esp_wifi_wps_start()` hat keinen Parameter mehr, und der RGB-Panel-Treiber des 480 × 480-Boards nutzt das neue Farbformat und `gpio_num_t`. Die Firmware wird mit dem neuen Core je nach Chip etwa 65 KB größer.
-- ESP32-S2: eigene Partitionstabelle `uhr4_s2` (2,25 MB Programm, 1,625 MB Dateisystem, wie beim C6), weil das Programm mit dem neuen Core nicht mehr in 2 MB passt. **ACHTUNG: Beim ersten Flashen auf eine vorhandene Uhr wird das Dateisystem neu angelegt (Zifferblätter, Zeiger, Presets, Dateien) – vorher unbedingt eine Sicherung ziehen!** Die Einstellungen im NVS bleiben. Beim Selbstbauen `boards.local.txt` und `uhr4_s2.csv` in den Core-Ordner kopieren (`buildAll.bat` macht das selbst).
+- ESP32-S2: Mit dem neuen Core passt die Firmware nur noch knapp in die 2-MB-Partition („No OTA“, unverändert; Dateisystem und Einstellungen bleiben beim Update erhalten). Dafür entfällt auf dem S2 der HTTPS-Weg der Zeitabfrage aus offenen WLANs (spart etwa 86 KB; NTP und HTTP bleiben).
 - Der Haken „Logging aktivieren“ steht jetzt im Tab „Log“ (mit eigenem Speichern-Knopf, Route `/setlogging`, nur aus einem privaten Netz) statt im Tab „Uhr Einstellungen“. Das Speichern der Uhr-Einstellungen schaltet das Logging nicht mehr ab oder an.
 
 ## 2026-11-21
@@ -584,7 +584,7 @@
 
 ### Changed
 - Built with the ESP32 Arduino core 4.0.0 (ESP-IDF 6, mbedTLS 4; before 3.3.12). Adapted for it: AES-256-GCM (encrypted WiFi passwords and backup, format unchanged) and SHA-256 (update from GitHub) now go through the PSA interface of mbedTLS 4, `esp_wifi_wps_start()` has no parameter any more, and the RGB panel driver of the 480 × 480 board uses the new colour format and `gpio_num_t`. With the new core the firmware is about 65 KB larger depending on the chip.
-- ESP32-S2: own partition table `uhr4_s2` (2.25 MB program, 1.625 MB file system, like the C6), because with the new core the program no longer fits into 2 MB. **ATTENTION: When flashing an existing clock for the first time the file system is created anew (clock faces, hands, presets, files) – you must take a backup first!** The settings in NVS stay. When building yourself copy `boards.local.txt` and `uhr4_s2.csv` into the core folder (`buildAll.bat` does that itself).
+- ESP32-S2: With the new core the firmware only just fits into the 2 MB partition ("No OTA", unchanged; file system and settings stay on update). For that the HTTPS way of the time query from open WiFis is dropped on the S2 (saves about 86 KB; NTP and HTTP remain).
 - The "Enable Logging" checkbox is now in the "Log" tab (with its own save button, route `/setlogging`, only from a private network) instead of the "Clock Setup" tab. Saving the clock settings no longer switches logging off or on.
 
 ## 2026-11-21

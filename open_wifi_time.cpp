@@ -1,6 +1,18 @@
 #include "uhr4.h"
 
+
+// Der ESP32-S2 laesst HTTPS weg: Seine Firmware muss in 2 MB passen, und der TLS-Client (mbedTLS, x509) kostet dort
+// ca. 50-100 KB. Ohne HTTPS bleiben NTP und HTTP.
+
+// The ESP32-S2 leaves out HTTPS: its firmware has to fit into 2 MB, and the TLS client (mbedTLS, x509) costs about
+// 50-100 KB there. Without HTTPS, NTP and HTTP remain.
+
+#if CONFIG_IDF_TARGET_ESP32S2
+#define OPEN_WIFI_HTTPS 0
+#else
+#define OPEN_WIFI_HTTPS 1
 #include <NetworkClientSecure.h>
+#endif
 
     // Uhrzeit aus einem offenen WLAN (fetchTimeFromOpenWifi()): beim Start, wenn kein gespeichertes WLAN verbunden
     // hat, keine RTC laeuft und die Uhr noch keine Zeit hat. Erst NTP, sonst der "Date:"-Kopf einer HTTP(S)-
@@ -108,6 +120,7 @@
 
     time_t httpDateEpoch(const String& target, const String& path, String& note, String& location, bool tls) {
         if (tls) {
+#if OPEN_WIFI_HTTPS
             NetworkClientSecure client;
             client.setInsecure();
             client.setHandshakeTimeout(8);
@@ -122,6 +135,10 @@
                 if (code) note += " (TLS error " + String(code) + (err[0] ? String(": ") + err : String("")) + ")";
             }
             return result;
+#else
+            note = "HTTPS not available on this chip";
+            return 0;
+#endif
         }
         WiFiClient client;
         return httpDateRequest(client, 80, target, path, note, location);
@@ -162,6 +179,7 @@
         // HTTPS to well-known hosts (TLS without certificate check, like below): some networks block NTP and port 80
         // but let port 443 through. 1.1.1.1 needs no DNS name.
 
+#if OPEN_WIFI_HTTPS
         String httpsTargets[] = { "1.1.1.1", "www.google.com" };
         for (const String& target : httpsTargets) {
             how = "HTTPS Date " + target;
@@ -170,6 +188,7 @@
             DEBUG_PRINTLN("[OPEN-WIFI] '" + ssid + "': " + how + (epoch ? " answered: " : " - ") + note);
             if (epoch) return epoch;
         }
+#endif
 
         int scheme = redirect.indexOf("://");
         if (scheme <= 0) return 0;
@@ -180,7 +199,7 @@
         String path = slash < 0 ? "/" : rest.substring(slash);
         int colon = host.indexOf(':');
         if (colon >= 0) host = host.substring(0, colon);
-        for (int pass = https ? 0 : 1; pass < 2; pass++) {
+        for (int pass = (https && OPEN_WIFI_HTTPS) ? 0 : 1; pass < 2; pass++) {
             bool tls = (pass == 0);
             how = String(tls ? "HTTPS" : "HTTP") + " Date " + host + " (redirect)";
             String note, location;

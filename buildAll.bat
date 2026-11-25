@@ -9,9 +9,9 @@ rem Nach jedem erfolgreichen Build werden die fertigen Dateien nach build_uhr4\e
 rem Die Zwischenstaende liegen in %TEMP%\uhr4-build\[chip] (spaetere Laeufe sind schneller), das Protokoll in
 rem %TEMP%\uhr4-build\[chip].log. Die Chips werden nacheinander gebaut; mit -parallel laufen sie gleichzeitig,
 rem jeder mit eigenem Cache (--build-cache-path), damit sie einander nicht stoeren. S2 und S3 brauchen -mtext-section-literals (sonst Linkerfehler "l32r: literal
-rem target out of range"). Der C6 und der S2 brauchen die Partitionstabellen uhr4_c6 und uhr4_s2: die Dateien boards.local.txt, uhr4_c6.csv und
-rem uhr4_s2.csv aus diesem Ordner werden dafuer bei Bedarf in den Arduino-Core kopiert. Beim S3 muss PSRAM an sein (PSRAM=enabled). Der S2 hat
-rem DebugLevel=none ("Core Debug Level: None" in Visual Micro): spart 56 KB, die S2-App liegt in einer Partition mit 2,25 MB (uhr4_s2).
+rem target out of range"). Der C6 braucht die Partitionstabelle uhr4_c6: die Datei boards.local.txt und uhr4_c6.csv aus
+rem diesem Ordner werden dafuer bei Bedarf in den Arduino-Core kopiert. Beim S3 muss PSRAM an sein (PSRAM=enabled). Der S2 hat
+rem DebugLevel=none ("Core Debug Level: None" in Visual Micro): spart 56 KB, die S2-App ist fast voll (2 MB).
 rem
 rem Builds the firmware with arduino-cli (from the Arduino IDE) for ESP32-S3, ESP32-S2, ESP32-C6 and the Waveshare 480x480 board one after another.
 rem   buildAll.bat              all four targets (order s3, s2, c6, s3lcd4)
@@ -23,9 +23,9 @@ rem After every successful build the finished files are copied to build_uhr4\esp
 rem The intermediate state is in %TEMP%\uhr4-build\[chip] (later runs are faster), the log in
 rem %TEMP%\uhr4-build\[chip].log. The chips are built one after another; with -parallel they run at the same time,
 rem each with its own cache (--build-cache-path) so they do not disturb each other. S2 and S3 need -mtext-section-literals (otherwise linker error "l32r:
-rem literal target out of range"). The C6 and the S2 need the partition tables uhr4_c6 and uhr4_s2: boards.local.txt, uhr4_c6.csv and
-rem uhr4_s2.csv from this folder are copied into the Arduino core if needed. On the S3 PSRAM must be on (PSRAM=enabled). The S2 has DebugLevel=none
-rem ("Core Debug Level: None" in Visual Micro): saves 56 KB, the S2 app lives in a partition of 2.25 MB (uhr4_s2).
+rem literal target out of range"). The C6 needs the partition table uhr4_c6: boards.local.txt and uhr4_c6.csv from this
+rem folder are copied into the Arduino core if needed. On the S3 PSRAM must be on (PSRAM=enabled). The S2 has DebugLevel=none
+rem ("Core Debug Level: None" in Visual Micro): saves 56 KB, the S2 app is almost full (2 MB).
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
@@ -53,24 +53,16 @@ for %%A in (%*) do (
 if "!WANT!"=="" set "WANT=s3 s2 c6 s3lcd4"
 call :now T0
 
-rem ESP32-C6 und ESP32-S2: Partitionstabellen uhr4_c6 und uhr4_s2 samt boards.local.txt in den Core kopieren, falls sie dort fehlen
-rem ESP32-C6 and ESP32-S2: copy the partition tables uhr4_c6 and uhr4_s2 plus boards.local.txt into the core if they are missing there
-echo !WANT! | findstr /i /c:"c6" /c:"s2" >nul
+rem ESP32-C6: Partitionstabelle uhr4_c6 in den Core kopieren, falls sie dort fehlt
+rem ESP32-C6: copy the partition table uhr4_c6 into the core if it is missing there
+echo !WANT! | findstr /i /c:"c6" >nul
 if not errorlevel 1 (
     for /d %%D in ("%LOCALAPPDATA%\Arduino15\packages\esp32\hardware\esp32\*") do (
         if not exist "%%D\tools\partitions\uhr4_c6.csv" (
             echo Partitionstabelle uhr4_c6 wird in den Core kopiert / copying partition table uhr4_c6 into the core: %%D
             copy /y "%~dp0uhr4_c6.csv" "%%D\tools\partitions\" >nul
         )
-        if not exist "%%D\tools\partitions\uhr4_s2.csv" (
-            echo Partitionstabelle uhr4_s2 wird in den Core kopiert / copying partition table uhr4_s2 into the core: %%D
-            copy /y "%~dp0uhr4_s2.csv" "%%D\tools\partitions\" >nul
-        )
-        if not exist "%%D\boards.local.txt" (
-            copy /y "%~dp0boards.local.txt" "%%D\" >nul
-        ) else (
-            findstr /c:"uhr4_s2" "%%D\boards.local.txt" >nul 2>&1 || copy /y "%~dp0boards.local.txt" "%%D\" >nul
-        )
+        if not exist "%%D\boards.local.txt" copy /y "%~dp0boards.local.txt" "%%D\" >nul
     )
 )
 
@@ -143,7 +135,7 @@ if /i "%CHIP%"=="s3" (
 )
 if /i "%CHIP%"=="s2" (
     set "DIR=esp32s2"
-    set "FQBN=esp32:esp32:lolin_s2_pico:CDCOnBoot=default,MSCOnBoot=default,DFUOnBoot=default,PartitionScheme=uhr4_s2,DebugLevel=none"
+    set "FQBN=esp32:esp32:lolin_s2_pico:CDCOnBoot=default,MSCOnBoot=default,DFUOnBoot=default,PartitionScheme=no_ota,DebugLevel=none"
     set "PROP=--build-property "compiler.cpp.extra_flags=-mtext-section-literals -ffile-prefix-map=%USERPROFILE%=""
 )
 if /i "%CHIP%"=="c6" (

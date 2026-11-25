@@ -12,7 +12,7 @@ uhr4 zeigt die Uhrzeit als Zifferblatt mit Zeigern auf einem TFT-Display. Die Ha
 
 Eine Firmware je ESP. Den Displaytyp wählt man im Tab „Uhr Einstellungen“ oder beim Flashen mit `flashESP`; beim Update von uhr3 wird er übernommen. Grafikbibliothek: LovyanGFX.
 
-- **ESP32-S2** (Lolin S2 Pico, Build `build_uhr4/esp32s2`; eigene Partitionstabelle mit 2,25 MB Programm und 1,6 MB Dateisystem – beim Selbstbauen `boards.local.txt` und `uhr4_s2.csv` in den Core-Ordner kopieren, siehe `boards.local.txt`; **ACHTUNG – beim Wechsel von einer älteren Firmware vorher unbedingt eine Sicherung ziehen, das Dateisystem wird neu angelegt**):
+- **ESP32-S2** (Lolin S2 Pico, Build `build_uhr4/esp32s2`):
   - GC9A01 – rund, 240 × 240; ohne oder mit geregelter Hintergrundbeleuchtung (BL)
   - GC9D01 – rund, 160 × 160; BL geregelt
   - ILI9341 – rechteckig, 240 × 320; Uhr 240 × 240 (Zifferblätter und Zeiger wie beim GC9A01) und Streifen mit Uhrzeit und Datum; feste Beleuchtung
@@ -214,7 +214,7 @@ uhr4 shows the time as a clock face with hands on a TFT display. The hardware is
 
 One firmware per ESP. The display type is chosen in the "Clock Setup" tab or when flashing with `flashESP`; an update from uhr3 keeps it. Graphics library: LovyanGFX.
 
-- **ESP32-S2** (Lolin S2 Pico, build `build_uhr4/esp32s2`; own partition table with 2.25 MB program and 1.6 MB file system – when building yourself copy `boards.local.txt` and `uhr4_s2.csv` into the core folder, see `boards.local.txt`; **ATTENTION – when coming from an older firmware you must take a backup first, the file system is created anew**):
+- **ESP32-S2** (Lolin S2 Pico, build `build_uhr4/esp32s2`):
   - GC9A01 – round, 240 × 240; without or with controlled backlight (BL)
   - GC9D01 – round, 160 × 160; BL controlled
   - ILI9341 – rectangular, 240 × 320; clock 240 × 240 (clock faces and hands as for the GC9A01) and a strip with time and date; fixed backlight
